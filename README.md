@@ -1,7 +1,8 @@
-
 # Machine Learning from Scratch
 
-This repository contains implementations of various machine learning algorithms developed from scratch for educational purposes. Each algorithm is implemented in Python and organized according to its category (Supervised, Unsupervised, or Reinforcement Learning). The code follows a clear structure, with each folder containing separate modules for the core algorithm and training routines.
+This repository contains implementations of various machine learning algorithms developed from scratch using only Python and Numpy for educational and entertainment purposes. Each algorithm is implemented in Python and organized according to its category (Supervised, Unsupervised, Reinforcement Learning, and Deep Learning). The code follows a clear structure, with each folder containing separate modules for the core algorithm and training routines.
+
+Unlike standard implementations using existing libraries, **every module (except for the Transformer and GPT-2 section) has been built entirely from scratch using only Python and NumPy**. This includes the implementation of a custom **Deep Learning framework** that allows users to create and train neural networks without relying on external deep learning libraries like TensorFlow or PyTorch. The challenge of manually implementing features such as training pipelines, automatic differentiation, optimization algorithms, activation functions, and backpropagation adds significant depth to this project.
 
 ---
 
@@ -15,13 +16,14 @@ This repository contains implementations of various machine learning algorithms 
   - [Reinforcement Learning](#reinforcement-learning)
   - [Supervised Learning](#supervised-learning)
   - [Unsupervised Learning](#unsupervised-learning)
+  - [Deep Learning](#deep-learning)
 - [Usage](#usage)
 
 ---
 
 ## Overview
 
-This repository serves as a comprehensive collection of foundational machine learning algorithms, with each algorithm implemented from scratch. Each model is accompanied by its training pipeline, allowing to test the algorithms on data.
+This repository serves as a comprehensive collection of foundational machine learning algorithms, with each algorithm implemented from scratch. Each model is accompanied by its training pipeline, allowing users to test the algorithms on data.
 
 ## Requirements
 
@@ -37,7 +39,7 @@ pip install -r requirements.txt
 
    ```bash
    git clone https://github.com/FrancescoMontanaro/Machine-learning-kit.git
-   cd repo-name
+   cd Machine-learning-kit
    ```
 
 2. Install dependencies:
@@ -51,60 +53,71 @@ pip install -r requirements.txt
 The project structure is organized into categories and subcategories for each algorithm, as shown below:
 
 ```plaintext
-├── Reinforcement Learning
-│   └── Multi Armed Bandit
-├── Supervised Learning
-│   ├── Classification
-│   │   ├── Logistic Regression
-│   │   ├── Naive Bayes
-│   │   └── Support Vector Machine
-│   ├── Regression
-│   │   └── Linear Regression
-│   ├── General Algorithms
-│   │   ├── K Nearest Neighbours
-│   │   ├── Perceptron
-│   │   └── Random Forests
-│   └── Deep Learning
-│       ├── Neural Networks
-│       └── Transformer
-├── Unsupervised Learning
-│   ├── Clustering
-│   │   └── K Means Clustering
-│   └── Dimensionality Reduction
-│       └── Principal Component Analysis
+├── Deep Learning
+│   ├── GPT-2
+│   ├── Neural Networks
+│   ├── Transformer
+│   └── common
+├── Machine Learning
+│   ├── Reinforcement Learning
+│   ├── Supervised Learning
+│   │   ├── Classification
+│   │   ├── General Algorithms
+│   │   ├── Regression
+│   ├── Unsupervised Learning
+│   │   ├── Clustering
+│   │   └── Dimensionality Reduction
+├── README.md
 └── requirements.txt
 ```
 
 ## Algorithms
+
+### Deep Learning
+
+1. **GPT-2**: A Transformer-based language model implementation using only the Pytorch libraries.
+2. **Neural Networks**: **Custom deep learning framework built from scratch** without external libraries but Numpy, implementing:
+   - **Fully connected layers**
+   - **Convolutional layers**
+   - **Pooling layers**
+   - **Normalization layers**
+   - **Custom optimizers and loss functions**
+   - **Backpropagation and automatic differentiation**
+3. **Transformer**: A custom transformer implementation for language modeling, including:
+   - **Attention Mechanism** (`attention_mechanism.py`)
+   - **Feed-Forward Network** (`feed_forward.py`)
+   - **Data Handling and Utilities** (`data_loader.py`, `utils.py`)
 
 ### Reinforcement Learning
 
 1. **Multi-Armed Bandit** - Implementations of algorithms for the Multi-Armed Bandit problem, such as:
    - **Upper Confidence Bound (UCB1)**: `ucb1.py`
    - **Thompson Sampling**: `thompson_sampling.py`
-   - Environment and utilities in `environment.py` and `utils.py`.
 
 ### Supervised Learning
 
-1. **K-Nearest Neighbours (KNN)**: An implementation of the K-Nearest Neighbors algorithm (`knn.py`).
-2. **Linear Regression**: Linear regression from scratch with closed-form solutions (`linear_regression.py`).
-3. **Logistic Regression**: Binary classification using logistic regression (`logistic_regression.py`).
-4. **Naive Bayes**: A Naive Bayes classifier for text or other categorical data (`naive_bayes.py`).
-5. **Perceptron**: A single-layer perceptron implementation for binary classification (`perceptron.py`).
-6. **Random Forest**: Ensemble method using multiple decision trees (`random_forest.py`).
-7. **Support Vector Machine (SVM)**: A linear SVM classifier using custom optimization (`svm.py`).
-8. **Neural Networks**: Feedforward neural network with different layers, activation functions, loss functions and  the implementation of the backpropagation algorithm (`neural_network.py`).
-9. **Transformer**: A custom transformer implementation for language modeling, including:
-   - **Attention Mechanism** (`attention_mechanism.py`)
-   - **Feed-Forward Network** (`feed_forward.py`)
-   - **Regularization** (`regularization.py`)
-   - **Data Handling and Utilities** (`data_loader.py`, `utils.py`)
+1. **K-Nearest Neighbours (KNN)** (`knn.py`)
+2. **Linear Regression** (`linear_regression.py`)
+3. **Logistic Regression** (`logistic_regression.py`)
+4. **Naive Bayes** (`naive_bayes.py`)
+5. **Perceptron** (`perceptron.py`)
+6. **Random Forest** (`random_forest.py`)
+7. **Support Vector Machine (SVM)** (`svm.py`)
 
 ### Unsupervised Learning
 
-1. **K-Means Clustering**: Basic implementation of the K-Means algorithm for clustering tasks (`k_means.py`).
-2. **Principal Component Analysis (PCA)**: Dimensionality reduction technique for data visualization and preprocessing (`pca.py`).
+1. **K-Means Clustering** (`k_means.py`)
+2. **Principal Component Analysis (PCA)** (`pca.py`)
 
 ## Usage
 
-Each algorithm comes with a `train.ipynb` notebook that can be used to train the model with sample data
+Each algorithm comes with a `train.ipynb` notebook that can be used to train the model with sample data.
+
+For example, to run the KNN algorithm:
+
+```bash
+python supervised_learning/classification/knn.py
+```
+
+For more details, refer to the specific algorithm folder and its documentation.
+
