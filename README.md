@@ -112,12 +112,3 @@ The project structure is organized into categories and subcategories for each al
 ## Usage
 
 Each algorithm comes with a `train.ipynb` notebook that can be used to train the model with sample data.
-
-For example, to run the KNN algorithm:
-
-```bash
-python supervised_learning/classification/knn.py
-```
-
-For more details, refer to the specific algorithm folder and its documentation.
-
