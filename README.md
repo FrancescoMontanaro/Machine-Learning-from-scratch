@@ -54,8 +54,8 @@ The project structure is organized into categories and subcategories for each al
 
 ```plaintext
 ├── Deep Learning
-│   ├── CNN
-│   └── MLP
+│   ├── Convolutional Neural Network (CNN)
+│   └── Multi-Layer Perceptron (MLP)
 ├── Machine Learning
 │   ├── Reinforcement Learning
 │   ├── Supervised Learning
