@@ -1,7 +1,4 @@
-regex
 numpy
-torch
 tensorflow
 matplotlib
 scikit-learn
-tiktoken

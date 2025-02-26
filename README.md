@@ -2,7 +2,7 @@
 
 This repository contains implementations of various machine learning algorithms developed from scratch using only Python and Numpy for educational and entertainment purposes. Each algorithm is implemented in Python and organized according to its category (Supervised, Unsupervised, Reinforcement Learning, and Deep Learning). The code follows a clear structure, with each folder containing separate modules for the core algorithm and training routines.
 
-Unlike standard implementations using existing libraries, **every module (except for the Transformer and GPT-2 section) has been built entirely from scratch using only Python and NumPy**. This includes the implementation of a custom **Deep Learning framework** that allows users to create and train neural networks without relying on external deep learning libraries like TensorFlow or PyTorch. The challenge of manually implementing features such as training pipelines, automatic differentiation, optimization algorithms, activation functions, and backpropagation adds significant depth to this project.
+Unlike standard implementations using existing libraries, **every module has been built entirely from scratch using only Python and NumPy**. This includes the implementation of a custom **Deep Learning framework** that allows users to create and train neural networks without relying on external deep learning libraries like TensorFlow or PyTorch. The challenge of manually implementing features such as training pipelines, automatic differentiation, optimization algorithms, activation functions, and backpropagation adds has been a great educational and fun experience.
 
 ---
 
@@ -38,8 +38,8 @@ pip install -r requirements.txt
 1. Clone this repository:
 
    ```bash
-   git clone https://github.com/FrancescoMontanaro/Machine-learning-kit.git
-   cd Machine-learning-kit
+   git clone https://github.com/FrancescoMontanaro/Machine-Learning-from-scratch
+   cd Machine-Learning-from-scratch
    ```
 
 2. Install dependencies:
@@ -54,10 +54,8 @@ The project structure is organized into categories and subcategories for each al
 
 ```plaintext
 ├── Deep Learning
-│   ├── GPT-2
-│   ├── Neural Networks
-│   ├── Transformer
-│   └── common
+│   ├── CNN
+│   └── MLP
 ├── Machine Learning
 │   ├── Reinforcement Learning
 │   ├── Supervised Learning
@@ -75,24 +73,25 @@ The project structure is organized into categories and subcategories for each al
 
 ### Deep Learning
 
-1. **GPT-2**: A Transformer-based language model implementation using only the Pytorch libraries.
-2. **Neural Networks**: **Custom deep learning framework built from scratch** without external libraries but Numpy, implementing:
+1. **Custom deep learning framework built from scratch** without external libraries but Numpy, implementing:
    - **Fully connected layers**
    - **Convolutional layers**
    - **Pooling layers**
    - **Normalization layers**
    - **Custom optimizers and loss functions**
    - **Backpropagation and automatic differentiation**
-3. **Transformer**: A custom transformer implementation for language modeling, including:
-   - **Attention Mechanism** (`attention_mechanism.py`)
-   - **Feed-Forward Network** (`feed_forward.py`)
-   - **Data Handling and Utilities** (`data_loader.py`, `utils.py`)
+   
+   The main modules implemented so far are:
+   - **Multi-Layer Perceptron (MLP)**: `mlp.py`
+   - **Convolutional Neural Network (CNN)**: `cnn.py`
+
 
 ### Reinforcement Learning
 
-1. **Multi-Armed Bandit** - Implementations of algorithms for the Multi-Armed Bandit problem, such as:
-   - **Upper Confidence Bound (UCB1)**: `ucb1.py`
-   - **Thompson Sampling**: `thompson_sampling.py`
+1. **Multi-Armed Bandit** 
+   - Implementations of algorithms for the Multi-Armed Bandit problem, such as:
+      - **Upper Confidence Bound (UCB1)**: `ucb1.py`
+      - **Thompson Sampling**: `thompson_sampling.py`
 
 ### Supervised Learning
 
@@ -111,4 +110,4 @@ The project structure is organized into categories and subcategories for each al
 
 ## Usage
 
-Each algorithm comes with a `train.ipynb` notebook that can be used to train the model with sample data.
+Each algorithm comes with a training notebook with the extension `.ipynb`, that can be used to train the model with sample data.
