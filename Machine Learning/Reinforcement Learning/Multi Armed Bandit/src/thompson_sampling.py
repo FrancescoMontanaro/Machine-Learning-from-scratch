@@ -1,5 +1,6 @@
 import numpy as np
-from learner import Learner
+
+from .learner import Learner
 
 class ThompsonSampling(Learner):
     
