@@ -1,6 +1,9 @@
 import numpy as np
+from tqdm import tqdm
 from collections import Counter
-from decision_tree import DecisionTree
+
+from .decision_tree import DecisionTree
+
 
 class RandomForest:
 
@@ -39,10 +42,7 @@ class RandomForest:
         self.trees = []
 
         # Iterating over the number of trees
-        for _ in range(self.n_trees):
-            # Print status
-            print(f"Training tree {_ + 1}/{self.n_trees}", end="\r")
-
+        for _ in tqdm(range(self.n_trees), desc="Training trees"):
             # Creating the decision tree
             tree = DecisionTree(
                 max_depth = self.max_depth, 

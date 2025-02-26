@@ -1,6 +1,8 @@
 import numpy as np
-from node import Node
 from collections import Counter
+
+from .node import Node
+
 
 class DecisionTree:
 
