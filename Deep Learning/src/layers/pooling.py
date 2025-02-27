@@ -75,37 +75,43 @@ class MaxPool2D(Layer):
         stride_height, stride_width = self.stride
         
         # Apply the padding
-        if self.padding == "same":            
-            # Calcola padding per l'altezza
-            top_padding = int(np.floor(self.padding_height / 2))
-            bottom_padding = int(np.ceil(self.padding_height / 2))
-            
-            # Calcola padding per la larghezza
-            left_padding = int(np.floor(self.padding_width / 2))
-            right_padding = int(np.ceil(self.padding_width / 2))
-            
+        if self.padding == "same":
             # Pad the input data
-            x = np.pad(x, ((0, 0), (top_padding, bottom_padding), (left_padding, right_padding), (0, 0)), mode="constant")
+            x = np.pad(
+                x, 
+                (
+                    (0, 0), 
+                    (self.top_padding, self.bottom_padding), 
+                    (self.left_padding, self.right_padding), 
+                    (0, 0)
+                ), 
+                mode="constant"
+            )
             
-        # Cache for max positions
-        self.cache = np.zeros_like(x, dtype=bool) 
+        # Save the input data for the backward pass
+        self.x = x
         
-        # Initialize the output
-        output = np.zeros((batch_size, output_height, output_width, n_channels))
+        # Extract the patches from the input data
+        patches = np.lib.stride_tricks.sliding_window_view(
+            x, 
+            window_shape = (pool_height, pool_width), 
+            axis = (1, 2)  # type: ignore
+        )
         
-        # Iterate over the input data
-        for i in range(output_height):
-            # Iterate over the width
-            for j in range(output_width):
-                # Extract the current pooling region
-                x_slice = x[:, i * stride_height : i * stride_height + pool_height, j * stride_width : j * stride_width + pool_width, :]
-                
-                # Compute the max value and the mask
-                max_mask = (x_slice == np.max(x_slice, axis=(1, 2), keepdims=True))
-                output[:, i, j, :] = np.max(x_slice, axis=(1, 2))
-                
-                # Save the mask in the cache
-                self.cache[:, i * stride_height : i * stride_height + pool_height, j * stride_width : j * stride_width + pool_width, :] |= max_mask
+        # Apply the stride to the patches
+        patches = patches[:, ::stride_height, ::stride_width, :, :, :]
+        
+        # Reshape the patches to have dimensions: (batch_size, output_height, output_width, pool_height, pool_width, n_channels)
+        patches = patches.transpose(0, 1, 2, 4, 5, 3)
+
+        # For each patch, compute the max value
+        output = np.max(patches, axis=(3, 4)) # shape: (batch_size, output_height, output_width, n_channels)
+
+        # Reshape the patches to have dimensions: (batch_size, output_height, output_width, pool_height * pool_width, n_channels)
+        flat_patches = patches.reshape(batch_size, output_height, output_width, pool_height * pool_width, n_channels)
+        
+        # Save the indices of the max values for the backward pass
+        self.cache = np.argmax(flat_patches, axis=3) 
                 
         return output
     
@@ -122,24 +128,50 @@ class MaxPool2D(Layer):
         """
         
         # Extract the required dimensions for better readability
-        _, output_height, output_width, _ = loss_gradient.shape
-        pool_height, pool_width = self.size
+        batch_size, output_height, output_width, n_channels = loss_gradient.shape
+        _, pool_width = self.size
         stride_height, stride_width = self.stride
         
-        # Initialize the gradient of the input with zeros
-        d_input = np.zeros(self.input_shape)
+        # Initialize the gradient of the loss with respect to the input
+        d_input = np.zeros_like(self.x)
         
-        # Iterate over the height dimension
-        for i in range(output_height):
-            # Iterate over the width dimension
-            for j in range(output_width):
-                # Create a slice of the cached mask for the current pooling region
-                mask_slice = self.cache[:, i * stride_height : i * stride_height + pool_height, j * stride_width : j * stride_width + pool_width, :]
-                
-                # Distribute the gradient only to the positions that were the max in the forward pass
-                d_input[:, i * stride_height : i * stride_height + pool_height, j * stride_width : j * stride_width + pool_width, :] += mask_slice * loss_gradient[:, i, j, :][:, np.newaxis, np.newaxis, :]
-           
-        return d_input # dL/dX_i ≡ dL/dO_{i-1}
+        # Flatten cache to have shape (batch_size*out_height*out_width, n_channels)
+        argmax_flat = self.cache.reshape(-1, n_channels)
+        
+        # Decompose that offset into (row_offset, col_offset) and flatten them
+        row_offset = (argmax_flat // pool_width).ravel()
+        col_offset = (argmax_flat %  pool_width).ravel()
+
+        # Create coordinate grids for the batch, output height, and output width and flatten them
+        b_idx, oh_idx, ow_idx = np.indices((batch_size, output_height, output_width), sparse=False)
+        b_idx, oh_idx, ow_idx = b_idx.ravel(), oh_idx.ravel(), ow_idx.ravel()
+
+        # Replicate the batch index for each channel
+        b_expanded  = np.repeat(b_idx,  n_channels)
+        oh_expanded = np.repeat(oh_idx, n_channels)
+        ow_expanded = np.repeat(ow_idx, n_channels)
+
+        # The final row, col in the padded d_input
+        row_idx = oh_expanded * stride_height + row_offset
+        col_idx = ow_expanded * stride_width  + col_offset
+
+        # Replicate the channel index for each batch, output height, and output width
+        c_expanded = np.tile(np.arange(n_channels), b_idx.shape[0])
+
+        # Flatten the gradient and add the values to the correct indices
+        grad_flat = loss_gradient.reshape(-1, n_channels).ravel()
+        np.add.at(d_input, (b_expanded, row_idx, col_idx, c_expanded), grad_flat)
+
+        # Remove padding if applied during the forward pass
+        if self.padding == "same":
+            d_input = d_input[
+                :, 
+                self.top_padding : d_input.shape[1] - self.bottom_padding,
+                self.left_padding: d_input.shape[2] - self.right_padding,
+                :
+            ]
+        
+        return d_input
         
         
     def output_shape(self) -> tuple:
@@ -165,12 +197,19 @@ class MaxPool2D(Layer):
         
         if self.padding == "same":
             # Compute the padding
-            self.padding_height = (np.ceil((input_height - pool_height) / stride_height) * stride_height + pool_height - input_height) / 2
-            self.padding_width = (np.ceil((input_width - pool_width) / stride_width) * stride_width + pool_width - input_width) / 2
+            padding_height = (np.ceil((input_height - pool_height) / stride_height) * stride_height + pool_height - input_height) / 2
+            padding_width = (np.ceil((input_width - pool_width) / stride_width) * stride_width + pool_width - input_width) / 2
             
             # Compute the output shape with padding
-            output_height = int(((input_width - pool_height + 2 * self.padding_height) / stride_height) + 1)
-            output_width = int(((input_width - pool_width + 2 * self.padding_width) / stride_width) + 1)
+            output_height = int(((input_width - pool_height + 2 * padding_height) / stride_height) + 1)
+            output_width = int(((input_width - pool_width + 2 * padding_width) / stride_width) + 1)
+            
+            # Compute the padding values
+            self.top_padding = int(np.floor(padding_height / 2))
+            self.bottom_padding = int(np.ceil(padding_height / 2))
+            self.left_padding = int(np.floor(padding_width / 2))
+            self.right_padding = int(np.ceil(padding_width / 2))
+            
         else:
             # Compute the output shape without padding
             output_height = (input_height - pool_height) // stride_height + 1

@@ -121,6 +121,7 @@ class Conv2D(Layer):
         assert self.bias is not None, "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
         # Extract the required dimensions for a better interpretation
+        self.output_shape() # Compute the output shape of the Conv2D layer
         kernel_height, kernel_width = self.kernel_size # Shape of the kernel
         stride_height, stride_width = self.stride # Stride of the kernel
         
