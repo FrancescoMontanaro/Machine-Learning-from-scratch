@@ -121,7 +121,6 @@ class Conv2D(Layer):
         assert self.bias is not None, "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
         # Extract the required dimensions for a better interpretation
-        _, output_height, output_width, num_filters = self.output_shape() # Shape of the output data
         kernel_height, kernel_width = self.kernel_size # Shape of the kernel
         stride_height, stride_width = self.stride # Stride of the kernel
         
@@ -141,32 +140,22 @@ class Conv2D(Layer):
         
         # Save the input data
         self.x = x
-        
-        # Extract the dimensions of the input data
-        batch_size, input_height, input_width, _ = x.shape # Shape of the input data
-        
-        # Initialize the output data
-        output = np.zeros((batch_size, output_height, output_width, num_filters))
-        
-        # Iterate over the height of the input data, the step size is the stride along the height
-        for i in range(output_height):
-            # Extract the indices for the current window along the height
-            h_start = i * stride_height
-            h_end = h_start + kernel_height
-            
-            # Iterate over the width of the input data, the step size is the stride along the width
-            for j in range(output_width):
-                # Extract the indices for the current window along the width
-                w_start = j * stride_width
-                w_end = w_start + kernel_width
                 
-                # Extract the windows of the input data
-                window = x[:, h_start:h_end, w_start:w_end, :]
-                
-                # Iterate over the filters
-                for k in range(num_filters):
-                    # Compute the convolution
-                    output[:, i, j, k] = np.sum(window * self.filters[k], axis=(1, 2, 3)) + self.bias[k]
+        # Extract the patches from the input data
+        self.patches = np.lib.stride_tricks.sliding_window_view(
+            x,
+            window_shape = (kernel_height, kernel_width),
+            axis = (1, 2) # type: ignore
+        )
+        
+        # Apply the stride
+        self.patches = self.patches[:, ::stride_height, ::stride_width, :, :, :]
+        
+        # Transpose the patches to have shape: (batch_size, output_height, output_width, kernel_height, kernel_width, num_channels)
+        self.patches = self.patches.transpose(0, 1, 2, 4, 5, 3)
+
+        # Compute the output of the Conv2D layer by applying the convolution operation
+        output = np.tensordot(self.patches, self.filters, axes=([3, 4, 5], [1, 2, 3])) + self.bias
                 
         # Save the feature maps for backpropagation
         self.feature_maps = output        
@@ -207,44 +196,53 @@ class Conv2D(Layer):
         
         # Extract dimensions
         batch_size, input_height, input_width, num_channels = self.x.shape
-        _, output_height, output_width, num_filters = gradient.shape
+        _, output_height, output_width, _ = gradient.shape
         kernel_height, kernel_width = self.kernel_size
         stride_height, stride_width = self.stride
         
-        # Initialize gradients
-        grad_filters = np.zeros_like(self.filters)
-        grad_bias = np.zeros_like(self.bias)
-        grad_input = np.zeros((batch_size, input_height, input_width, num_channels))
+        # Create an empty array to store the gradients with respect to the input
+        grad_input = np.zeros_like(self.x)
         
-        # Compute gradients with respect to the bias
+        # Compute the gradients with respect to the bias
         grad_bias = np.sum(gradient, axis=(0, 1, 2)) # dL/db_i
-            
-        # Iterate over the height of the output
-        for i in range(output_height):
-            # Extract the indices of the input region along the height
-            h_start = i * stride_height
-            h_end = h_start + kernel_height
-            
-            # Iterate over the width of the output
-            for j in range(output_width):
-                # Extract the indices of the input region along the width
-                w_start = j * stride_width
-                w_end = w_start + kernel_width
-                
-                # Define the region of the input that corresponds to the current output position
-                input_region = self.x[:, h_start:h_end, w_start:w_end, :]
-    
-                # Iterate over the filters
-                for k in range(num_filters):
-                    # Gradient with respect to the filter
-                    grad_filters[k] += np.sum(
-                        input_region * gradient[:, i:i+1, j:j+1, k:k+1],
-                        axis=0
-                    )
-                    # Gradient with respect to the input
-                    grad_input[:, h_start:h_end, w_start:w_end, :] += (
-                        self.filters[k] * gradient[:, i:i+1, j:j+1, k:k+1]
-                    )
+        
+        # Compute the gradients with respect to the input patches
+        grad_input_patches = np.tensordot(gradient, self.filters, axes=([3], [0]))
+        
+        # Extract the indices of the output patches and flatten them
+        out_i, out_j = np.meshgrid(np.arange(output_height), np.arange(output_width), indexing='ij')
+        out_i, out_j = out_i.ravel(), out_j.ravel()
+        
+        # Extract the indices of the kernel
+        k_i = np.repeat(np.arange(kernel_height), kernel_width)
+        k_j = np.tile(np.arange(kernel_width), kernel_height)
+        
+        # Compute the indices of the input patches
+        rows = (out_i[:, None] * stride_height + k_i[None, :]).ravel()
+        cols = (out_j[:, None] * stride_width  + k_j[None, :]).ravel()
+        
+        # Compute the global indices
+        flat_idx = rows * input_width + cols
+        
+        # Compute the batch offsets
+        batch_offsets = np.arange(batch_size) * (input_height * input_width) 
+        
+        # Compute the global indices
+        global_idx = (batch_offsets[:, None] + flat_idx[None, :]).ravel()
+        
+        # Flatten the gradient patches
+        grad_patches_flat = grad_input_patches.reshape(batch_size, -1, num_channels).reshape(-1, num_channels)
+        
+        # Compute the gradient with respect to the input and reshape it
+        grad_input_flat = grad_input.reshape(-1, num_channels)
+        np.add.at(grad_input_flat, global_idx, grad_patches_flat)
+
+        # Reshape the gradient with respect to the input
+        grad_input = grad_input_flat.reshape(batch_size, input_height, input_width, num_channels)
+        
+        # Compute the gradient with respect to the filters
+        grad_filters = np.tensordot(self.patches, gradient, axes=([0,1,2], [0,1,2]))
+        grad_filters = grad_filters.transpose(3, 0, 1, 2)
     
         # Update the filters
         self.filters = self.optimizer.update(

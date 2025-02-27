@@ -122,7 +122,7 @@ class MaxPool2D(Layer):
         """
         
         # Extract the required dimensions for better readability
-        batch_size, output_height, output_width, n_channels = loss_gradient.shape
+        _, output_height, output_width, _ = loss_gradient.shape
         pool_height, pool_width = self.size
         stride_height, stride_width = self.stride
         
