@@ -117,6 +117,10 @@ class FeedForward:
         - dict[str, np.ndarray]: Dictionary containing the training and validation losses
         """
         
+        #######################
+        ### Initializations ###
+        #######################
+        
         # Initialize the control variables
         self.history = {
             "loss": np.array([]),
@@ -124,9 +128,9 @@ class FeedForward:
             "val_loss": np.array([]),
             **{f"val_{metric.__name__}": np.array([]) for metric in metrics}
         }
-        self.stop_training = False
-        self.epoch = 0
-        n_steps = X_train.shape[0] // batch_size if batch_size < X_train.shape[0] else 1
+        self.epoch, self.stop_training = 0, False
+        n_training_steps = X_train.shape[0] // batch_size if batch_size < X_train.shape[0] else 1
+        n_valid_steps = X_valid.shape[0] // batch_size if batch_size < X_valid.shape[0] else 1
         
         # Execute a first forward pass in evaluation mode to initialize the parameters and their shapes
         self(X_train[:1])
@@ -134,11 +138,17 @@ class FeedForward:
         # Add the optimizer to the layers
         for layer in self.layers:
             layer.optimizer = optimizer
+            
+        ################################
+        ### Start main training loop ###
+        ################################
         
         # Iterate over the epochs
         while self.epoch < epochs and not self.stop_training:
             
-            ### Training phase ###
+            ############################
+            ### Start training phase ###
+            ############################
             
             # Set the model in training mode
             self.train()
@@ -147,51 +157,78 @@ class FeedForward:
             X_train_shuffled, Y_train_shuffled = shuffle_data(X_train, y_train)
             
             # Iterate over the batches
-            epoch_loss = 0.0
-            for step in range(n_steps):
+            training_epoch_loss = 0.0
+            train_metrics = {metric.__name__: 0.0 for metric in metrics}
+            for training_step in range(n_training_steps):
                 # Get the current batch of data
-                X_batch = X_train_shuffled[step * batch_size:(step + 1) * batch_size]
-                y_batch = Y_train_shuffled[step * batch_size:(step + 1) * batch_size]
+                X_training_batch = X_train_shuffled[training_step * batch_size:(training_step + 1) * batch_size]
+                y_training_batch = Y_train_shuffled[training_step * batch_size:(training_step + 1) * batch_size]
                 
                 # Forward pass: Compute the output of the model
-                batch_output = self.forward(X_batch)
+                training_batch_output = self.forward(X_training_batch)
                 
                 # Loss: Compute the error of the model
-                loss = loss_fn(y_batch, batch_output)
+                training_loss = loss_fn(y_training_batch, training_batch_output)
                 
                 # Loss gradient: Compute the gradient of the loss with respect to the output of the model
-                loss_grad = loss_fn.gradient(y_batch, batch_output)
+                training_loss_grad = loss_fn.gradient(y_training_batch, training_batch_output)
                 
                 # Backward pass: Propagate the gradient through the model and update the parameters
-                self.backward(loss_grad)
+                self.backward(training_loss_grad)
                 
                 # Update the epoch loss
-                epoch_loss += loss
+                training_epoch_loss += training_loss
+                
+                # Compute the metrics
+                for metric in metrics:
+                    train_metrics[metric.__name__] += metric(y_training_batch, training_batch_output)
                 
                 # Display epoch progress
-                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((step + 1)/n_steps)*100), 2)}%) --> loss: {loss:.4f}", end="")
-                
-            ### Validation phase ###
+                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) --> loss: {training_loss:.4f}", end="")
+            
+            ##############################
+            ### Start validation phase ###
+            ##############################
                     
             # Set the model in evaluation mode
             self.eval()
             
-            # Evaluate the model on the validation set
-            validation_output = self.forward(X_valid)
+            # Iterate over the validation steps
+            valid_epoch_loss = 0.0
+            valid_metrics = {metric.__name__: 0.0 for metric in metrics}
+            for valid_step in range(n_valid_steps):
+                # Get the current batch of validation data
+                X_valid_batch = X_valid[valid_step * batch_size:(valid_step + 1) * batch_size]
+                y_valid_batch = y_valid[valid_step * batch_size:(valid_step + 1) * batch_size]
             
-            # Store the training and validation losses
-            self.history["loss"] = np.append(self.history["loss"], epoch_loss / (X_train.shape[0] // batch_size))
-            self.history["val_loss"] = np.append(self.history["val_loss"], loss_fn(y_valid, validation_output))
-            
-            # Compute the metrics
-            for metric in metrics:
-                # Compute the metric on the training set and validation set
-                train_metric = metric(y_train, self.forward(X_train))
-                valid_metric = metric(y_valid, validation_output)
+                # Compute the output of the model for the current validation batch
+                valid_batch_output = self.forward(X_valid_batch)
                 
-                # Store the metrics
-                self.history[metric.__name__] = np.append(self.history[metric.__name__], train_metric)
-                self.history[f"val_{metric.__name__}"] = np.append(self.history[f"val_{metric.__name__}"], valid_metric)
+                # Compute the loss of the model for the current validation batch
+                # and update the validation epoch loss
+                valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output)
+                
+                # Compute the metrics
+                for metric in metrics:
+                    valid_metrics[metric.__name__] += metric(y_valid_batch, valid_batch_output)
+                
+            ##########################
+            ### Store the results  ###
+            ##########################
+                  
+            # Store the training and validation losses
+            self.history["loss"] = np.append(self.history["loss"], training_epoch_loss / n_training_steps)
+            self.history["val_loss"] = np.append(self.history["val_loss"], valid_epoch_loss / n_valid_steps)
+            
+            # Compute the average metrics
+            for metric in metrics:
+                # Compute the average of the metrics for the training and validation sets and store them
+                self.history[metric.__name__] = np.append(self.history[metric.__name__], train_metrics[metric.__name__] / n_training_steps)
+                self.history[f"val_{metric.__name__}"] = np.append(self.history[f"val_{metric.__name__}"], valid_metrics[metric.__name__] / n_valid_steps) 
+            
+            #############################
+            ### Display the progress  ###
+            #############################
             
             # Display progress with metrics
             print(
@@ -205,6 +242,10 @@ class FeedForward:
                     [f"- Validation {metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'][-1]:.4f}" for metric in metrics]
                 )
             )
+            
+            #############################
+            ### Execute the callbacks ###
+            #############################
             
             # Execute the callbacks
             for callback in callbacks:
