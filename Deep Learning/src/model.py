@@ -1,4 +1,6 @@
 import re
+import time
+import math
 import numpy as np
 from itertools import count
 from typing import Callable, Union, Optional
@@ -41,8 +43,6 @@ class Model:
         self.stop_training = False
         self.history = {}
         self.epoch = 0
-        self.modules_outputs = {}
-        self.modules_grads = {}
         self.name = name if name else f"model_{self.id}"
         
         # Set the name of the layers
@@ -57,12 +57,14 @@ class Model:
             raise ValueError("Moduels names must be unique!")
         
         
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: np.ndarray, batch_size: Optional[int] = None, verbose: bool = False) -> np.ndarray:
         """
         Call method to initialize and execute the forward pass of the neural network
         
         Parameters:
-        - x (np.ndarray): Input data. Shape: (Batch size, ...)
+        - x (np.ndarray): Input data.
+        - batch_size (Optional[int]): Number of samples to use for each batch
+        - verbose (bool): Flag to display the progress
         
         Returns:
         - np.ndarray: Output of the neural network
@@ -82,7 +84,11 @@ class Model:
         self.eval()
         
         # Execute a first forward pass to initialize the parameters
-        return self.forward(x)
+        return self.forward(
+            x = x,
+            batch_size = batch_size,
+            verbose = verbose
+        )
         
         
     ### Public methods ###      
@@ -131,8 +137,8 @@ class Model:
             **{f"val_{metric.__name__}": np.array([]) for metric in metrics}
         }
         self.epoch, self.stop_training = 0, False
-        n_training_steps = X_train.shape[0] // batch_size if batch_size < X_train.shape[0] else 1
-        n_valid_steps = X_valid.shape[0] // batch_size if batch_size < X_valid.shape[0] else 1
+        n_training_steps = math.ceil(X_train.shape[0] / batch_size) if batch_size < X_train.shape[0] else 1
+        n_valid_steps = math.ceil(X_valid.shape[0] / batch_size) if batch_size < X_valid.shape[0] else 1
         
         # Execute a first forward pass in evaluation mode to initialize the parameters and their shapes
         self(X_train[:1])
@@ -158,9 +164,12 @@ class Model:
             X_train_shuffled, Y_train_shuffled = shuffle_data(X_train, y_train)
             
             # Iterate over the batches
-            training_epoch_loss = 0.0
+            training_epoch_loss, elapsed_time = 0.0, 0.0
             train_metrics = {metric.__name__: 0.0 for metric in metrics}
             for training_step in range(n_training_steps):
+                # Store the start time
+                start_time = time.time()
+                
                 # Get the current batch of data
                 X_training_batch = X_train_shuffled[training_step * batch_size:(training_step + 1) * batch_size]
                 y_training_batch = Y_train_shuffled[training_step * batch_size:(training_step + 1) * batch_size]
@@ -183,9 +192,18 @@ class Model:
                 # Compute the metrics
                 for metric in metrics:
                     train_metrics[metric.__name__] += metric(y_training_batch, training_batch_output)
+                    
+                # Store the end time
+                end_time = time.time()
+                
+                # Update the elapsed time
+                elapsed_time += (end_time - start_time)
+                
+                # Compute the milliseconds per step
+                ms_per_step = elapsed_time / (training_step + 1) * 1000
                 
                 # Display epoch progress
-                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) --> loss: {training_loss:.4f}", end="")
+                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {round(ms_per_step, 2)} ms/step --> loss: {training_loss:.4f}", end="")
             
             ##############################
             ### Start validation phase ###
@@ -260,33 +278,62 @@ class Model:
         return self.history
         
         
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: np.ndarray, batch_size: Optional[int] = None, verbose: bool = False) -> np.ndarray:
         """
         Forward pass of the model
         
         Parameters:
         - x (np.ndarray): Features of the dataset
+        - batch_size (Optional[int]): Number of samples to use for each batch
+        - verbose (bool): Flag to display the progress
         
         Returns:
         - np.ndarray: Output of the neural network
         """
         
-        # create a dictionary to store the output of each module
-        self.modules_outputs = {}
+        # Compute the number of steps to iterate over the batches
+        # If the batch size is not provided, set it to 1
+        num_steps = (math.ceil(x.shape[0] / batch_size) if batch_size < x.shape[0] else 1) if batch_size else 1
         
-        # Copy the input
-        out = np.copy(x)
+        # List to store the outputs of each module
+        outputs = []
         
-        # Iterate over the modules
-        for module in self.modules:
-            # Compute the output of the module and pass it to the next one
-            out = module(out)
+        # Variable to store the time per step
+        elapsed_time = 0.0
+        
+        # Iterate over the batches
+        for step in range(num_steps):
+            # Store the start time
+            start = time.time()
             
-            # Store the output of the module
-            self.modules_outputs[module.name] = out
+            # Get the current batch
+            batch_out = x[step * batch_size:(step + 1) * batch_size] if batch_size else x
             
-        # Return the output of each module
-        return out
+            # Iterate over the modules
+            for module in self.modules:
+                # Compute the output of the module and pass it to the next one
+                batch_out = module(batch_out)
+                
+            # Append the output of the batch
+            outputs.append(batch_out)
+            
+            # Store the end time
+            end = time.time()
+            
+            # Update the elapsed time
+            elapsed_time += (end - start)
+            
+            # Display the progress if specified and the number of steps is greater than 1
+            # (i.e., there are batches)
+            if verbose and num_steps > 1:
+                # Compute the time statistics
+                ms_per_step = elapsed_time / (step + 1) * 1000
+
+                # Display the progress
+                print(f"\rProcessing batch {step + 1}/{num_steps} - {round(ms_per_step, 2)} ms/step", end="")
+            
+        # Concatenate the outputs of the batches to form an unique output and return it
+        return np.concatenate(outputs, axis=0)
     
     
     def backward(self, loss_grad: np.ndarray) -> np.ndarray:
@@ -300,14 +347,8 @@ class Model:
         - np.ndarray: Gradient of the loss with respect to the input
         """
         
-        # Create a dictionary to store the gradient of each module
-        self.modules_grads = {}
-        
         # Iterate over the modules in reverse order
         for module in reversed(self.modules):
-            # Store the gradient of the module
-            self.modules_grads[module.name] = loss_grad
-            
             # Compute the gradient of the loss with respect to the input of the module
             loss_grad = module.backward(loss_grad)
         
