@@ -4,7 +4,7 @@ from typing import Optional
 from .base import Layer
 
 
-class Input(Layer):
+class Reshape(Layer):
     
     ### Magic methods ###
     
@@ -14,10 +14,10 @@ class Input(Layer):
         name: Optional[str] = None
     ) -> None:
         """
-        Class constructor for Input layer.
+        Class constructor for Reshape layer.
         
         Parameters:
-        - shape (tuple): shape of the input data
+        - shape (tuple): target shape of the input data
         - name (str): name of the layer
         """
         
@@ -25,12 +25,15 @@ class Input(Layer):
         super().__init__(name)
         
         # Initializing the input shape
-        self.input_shape = shape
+        self.input_shape = None
+        
+        # Save the target shape
+        self.target_shape = shape
     
         
     def __call__(self, x: np.ndarray) -> np.ndarray:
         """
-        Function to compute the forward pass of the Input layer.
+        Function to compute the forward pass of the Reshape layer.
         It initializes the filters if not initialized and computes the forward pass.
         
         Parameters:
@@ -56,7 +59,7 @@ class Input(Layer):
     
     def forward(self, x: np.ndarray) -> np.ndarray:
         """
-        Function to compute the forward pass of the Input layer.
+        Function to compute the forward pass of the Reshape layer.
         
         Parameters:
         - x (np.ndarray): input data
@@ -65,23 +68,33 @@ class Input(Layer):
         - np.ndarray: output data
         """
         
-        # Return the input data as it is
-        return x
+        # Extract the batch size
+        batch = x.shape[0]
+        
+        # Reshape the input data to the target shape
+        # The batch size is kept the same
+        return x.reshape((batch, *self.target_shape))
     
     
     def backward(self, loss_gradient: np.ndarray) -> np.ndarray:
         """
-        Backward pass of the Input layer
+        Backward pass of the Reshape layer
         
         Parameters:
         - loss_gradient (np.ndarray): Gradient of the loss with respect to the output of the layer: dL/dO_i
         
         Returns:
         - np.ndarray: Gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
+        
+        Raises:
+        - AssertionError: if the input shape is not set
         """
         
-        # Return the loss gradient as it is
-        return loss_gradient
+        # Check if the input shape is set
+        assert self.input_shape is not None, "Input shape is not set. Please call the layer with some input data to set the input shape."
+        
+        # Reshape the loss gradient to the input shape and return it
+        return loss_gradient.reshape(self.input_shape)
     
     
     def output_shape(self) -> tuple:
@@ -90,6 +103,17 @@ class Input(Layer):
         
         Returns:
         - tuple: output shape of the layer
+        
+        Raises:
+        - AssertionError: if the input shape is not set
         """
         
-        return self.input_shape
+        # Assert that the input shape is set
+        assert self.input_shape is not None, "Input shape is not set. Please call the layer with some input data to set the input shape."
+        
+        # Extract the batch size
+        batch = self.input_shape[0]
+        
+        # Return the output shape
+        # The batch size is kept the same
+        return (batch, *self.target_shape)
