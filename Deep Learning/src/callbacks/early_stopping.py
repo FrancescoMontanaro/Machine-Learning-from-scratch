@@ -2,7 +2,7 @@ import numpy as np
 from typing import Literal
 
 from .base import Callback
-from ..neural_networks import FeedForward
+from ..model import Model
 
 
 class EarlyStopping(Callback):
@@ -30,13 +30,13 @@ class EarlyStopping(Callback):
         self.counter = 0
         
     
-    def __call__(self, model_instance: FeedForward) -> bool:
+    def __call__(self, model_instance: Model) -> bool:
         """
         Method to call the callback. This method will check if the training should be stopped by
         setting the stop_training attribute of the model instance.
         
         Parameters:
-        - model_instance (FeedForward): The model instance that is being trained.
+        - model_instance (Model): The model instance that is being trained.
         
         Returns:
         - bool: True if the training should be stopped, False otherwise.

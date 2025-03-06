@@ -150,3 +150,39 @@ def one_hot_encoding(y: np.ndarray, n_classes: int) -> np.ndarray:
     
     # Return the one-hot encoded target variable
     return one_hot.astype(int)
+
+
+def format_summary_output(value: str, width: int) -> str:
+    """
+    Formats the summary output to fit within a specified width, splitting lines if necessary.
+    
+    Parameters:
+    - value (str): The value to format
+    - width (int): The width of the formatted output in characters
+    
+    Returns:
+    - str: The formatted output
+    """
+    
+    # Split the value by spaces to handle word wrapping
+    words = value.split()
+    formatted_lines = []
+    current_line = ""
+
+    # Iterate over the words
+    for word in words:
+        # Check if adding the word exceeds the width
+        if len(current_line) + len(word) + 1 > width:  # +1 for space
+            # Add the current line to the list of lines
+            formatted_lines.append(current_line)
+            current_line = word
+        else:
+            # Add the word to the current line
+            current_line += (" " + word) if current_line else word
+    
+    # Add the last line
+    if current_line:
+        formatted_lines.append(current_line)
+        
+    # Format each line to fit the specified width
+    return "\n".join(line.ljust(width) for line in formatted_lines)

@@ -1,2 +1,4 @@
 from .base import Optimizer
-from .optimizers import SGD, Adam
+
+from .adam import Adam
+from .sgd import SGD

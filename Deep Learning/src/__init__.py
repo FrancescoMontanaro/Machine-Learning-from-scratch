@@ -1,1 +1,1 @@
-from .neural_networks import FeedForward
+from .model import Model

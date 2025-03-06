@@ -1,7 +1,7 @@
 import re
 import numpy as np
 from itertools import count
-from typing import Callable
+from typing import Callable, Union, Optional
 
 from .utils import *
 from .layers import Layer
@@ -9,7 +9,7 @@ from .optimizers import Optimizer
 from .loss_functions import LossFn
 
 
-class FeedForward:
+class Model:
     
     ### Static attributes ###
     
@@ -18,41 +18,43 @@ class FeedForward:
     
     ### Magic methods ###
     
-    def __init__(self, layers: list[Layer]) -> None:
+    def __init__(self, modules: list[Union[Layer, 'Model']], name: Optional[str] = None) -> None:
         """
         Class constructor
         
         Parameters:
-        - layers (list[_AbstractLayer]): List of Dense layers
+        - modules (list[Union[Layer, 'Model']]): List of modules (layers or models themselves) to be added to the model
+        - name (Optional[str]): Name of the model
         
         Raises:
-        - ValueError: If the layer names are not unique
+        - ValueError: If the modules names are not unique
         """
         
-        # List of layers
-        self.layers = layers
+        # Get the count of how many NeuralNetwork instances have been created
+        self.id = next(self._ids)
+        
+        # List of modules (layers or models) in the neural network
+        self.modules = modules
         
         # Model settings
         self.training = False
         self.stop_training = False
         self.history = {}
         self.epoch = 0
-        self.layers_outputs = {}
-        self.layers_grads = {}
-        
-        # Get the count of how many NeuralNetwork instances have been created
-        self.id = next(self._ids)
+        self.modules_outputs = {}
+        self.modules_grads = {}
+        self.name = name if name else f"model_{self.id}"
         
         # Set the name of the layers
-        for i, layer in enumerate(self.layers):
+        for i, module in enumerate(self.modules):
             # Set the layer name if it is not set
-            if not layer.name:
+            if not module.name and isinstance(module, Layer):
                 # Get the class name of the layer
-                layer.name = f"{re.sub(r'(?<!^)(?=[A-Z0-9])', '_', layer.__class__.__name__).lower()}_{i+1}"
+                module.name = f"{re.sub(r'(?<!^)(?=[A-Z0-9])', '_', module.__class__.__name__).lower()}_{i+1}"
                 
-        # Check if the layers have unique names
-        if len(set([layer.name for layer in self.layers])) != len(self.layers):
-            raise ValueError("Layer names must be unique!")
+        # Check if the modules have unique names
+        if len(set([module.name for module in self.modules])) != len(self.modules):
+            raise ValueError("Moduels names must be unique!")
         
         
     def __call__(self, x: np.ndarray) -> np.ndarray:
@@ -66,12 +68,12 @@ class FeedForward:
         - np.ndarray: Output of the neural network
         
         Raises:
-        - ValueError: If the number of layers is 0
+        - ValueError: If the number of modules is 0
         """
         
-        # Check if the number of layers is greater than 0
-        if len(self.layers) == 0:
-            raise ValueError("No layers in the neural network. Add layers to the model!")
+        # Check if the number of modules is greater than 0
+        if len(self.modules) == 0:
+            raise ValueError("No modules in the neural network. Add modules to the model!")
         
         # Save the input dimension
         self.input_shape = x.shape
@@ -135,9 +137,8 @@ class FeedForward:
         # Execute a first forward pass in evaluation mode to initialize the parameters and their shapes
         self(X_train[:1])
         
-        # Add the optimizer to the layers
-        for layer in self.layers:
-            layer.optimizer = optimizer
+        # Set the optimizer of the model
+        self.set_optimizer(optimizer)
             
         ################################
         ### Start main training loop ###
@@ -247,13 +248,13 @@ class FeedForward:
             ### Execute the callbacks ###
             #############################
             
+            # Increment the epoch counter
+            self.epoch += 1
+                    
             # Execute the callbacks
             for callback in callbacks:
                 # Call the callback
                 callback(self)
-            
-            # Increment the epoch counter
-            self.epoch += 1
          
         # Return the history of the training   
         return self.history
@@ -261,7 +262,7 @@ class FeedForward:
         
     def forward(self, x: np.ndarray) -> np.ndarray:
         """
-        Forward pass of the neural network
+        Forward pass of the model
         
         Parameters:
         - x (np.ndarray): Features of the dataset
@@ -270,45 +271,45 @@ class FeedForward:
         - np.ndarray: Output of the neural network
         """
         
-        # create a dictionary to store the output of each layer
-        self.layers_outputs = {}
+        # create a dictionary to store the output of each module
+        self.modules_outputs = {}
         
         # Copy the input
         out = np.copy(x)
         
-        # Iterate over the layers
-        for layer in self.layers:
-            # Compute the output of the layer and pass it to the next one
-            out = layer(out)
+        # Iterate over the modules
+        for module in self.modules:
+            # Compute the output of the module and pass it to the next one
+            out = module(out)
             
-            # Store the output of the layer
-            self.layers_outputs[layer.name] = out
+            # Store the output of the module
+            self.modules_outputs[module.name] = out
             
-        # Return the output of each layer of the neural network
+        # Return the output of each module
         return out
     
     
     def backward(self, loss_grad: np.ndarray) -> np.ndarray:
         """
-        Backward pass of the neural network
+        Backward pass of the model
         
         Parameters:
-        - loss_grad (np.ndarray): Gradient of the loss with respect to the output of the neural network
+        - loss_grad (np.ndarray): Gradient of the loss with respect to the output
         
         Returns:
-        - np.ndarray: Gradient of the loss with respect to the input of the neural network
+        - np.ndarray: Gradient of the loss with respect to the input
         """
         
-        # Create a dictionary to store the gradient of each layer
-        self.layers_grads = {}
+        # Create a dictionary to store the gradient of each module
+        self.modules_grads = {}
         
-        # Iterate over the layers in reverse order
-        for layer in reversed(self.layers):
-            # Store the gradient of the layer
-            self.layers_grads[layer.name] = loss_grad
+        # Iterate over the modules in reverse order
+        for module in reversed(self.modules):
+            # Store the gradient of the module
+            self.modules_grads[module.name] = loss_grad
             
-            # Compute the gradient of the loss with respect to the input of the layer
-            loss_grad = layer.backward(loss_grad)
+            # Compute the gradient of the loss with respect to the input of the module
+            loss_grad = module.backward(loss_grad)
         
         # Return the gradient
         return loss_grad
@@ -322,10 +323,10 @@ class FeedForward:
         # Set the training flag to True
         self.training = True
         
-        # Iterate over the layers
-        for layer in self.layers:
-            # Set the layer in training mode
-            layer.training = True
+        # Iterate over the modules
+        for module in self.modules:
+            # Set the module in training mode
+            module.training = True
 
         
     def eval(self) -> None:
@@ -336,69 +337,37 @@ class FeedForward:
         # Set the training flag to False
         self.training = False
         
-        # Iterate over the layers
-        for layer in self.layers:
-            # Set the layer in evaluation mode
-            layer.training = False
+        # Iterate over the modules
+        for module in self.modules:
+            # Set the module in evaluation mode
+            module.training = False
             
             
     def summary(self) -> None:
         """
-        Method to display the summary of the neural network
+        Method to display the summary of the model
         """
         
-        def format_output(value: str, width: int) -> str:
-            """
-            Formats the output to fit within a specified width, splitting lines if necessary.
-            
-            Parameters:
-            - value (str): The value to format
-            - width (int): The width of the formatted output in characters
-            
-            Returns:
-            - str: The formatted output
-            """
-            
-            # Split the value by spaces to handle word wrapping
-            words = value.split()
-            formatted_lines = []
-            current_line = ""
-
-            # Iterate over the words
-            for word in words:
-                # Check if adding the word exceeds the width
-                if len(current_line) + len(word) + 1 > width:  # +1 for space
-                    # Add the current line to the list of lines
-                    formatted_lines.append(current_line)
-                    current_line = word
-                else:
-                    # Add the word to the current line
-                    current_line += (" " + word) if current_line else word
-            
-            # Add the last line
-            if current_line:
-                formatted_lines.append(current_line)
-                
-            # Format each line to fit the specified width
-            return "\n".join(line.ljust(width) for line in formatted_lines)
+        # Regular expression pattern to check if the model name is the default one
+        model_name_pattern = re.compile(r'^model_\d+$')
         
         # Display the header
-        print(f"\nNeural Network (ID: {self.id})\n")
-        header = f"{'Layer (type)':<40}{'Output Shape':<20}{'Trainable params #':<20}"
+        print(f"\n{'Model' if re.match(model_name_pattern, self.name) else self.name} (ID: {self.id})\n")
+        header = f"{'Module (type)':<40}{'Output Shape':<20}{'Trainable params #':<20}"
         print(f"{'-' * len(header)}")
         print(header)
         print(f"{'=' * len(header)}")
 
-        # Iterate over the layers
-        for idx, layer in enumerate(self.layers):
-            # Composing the layer name
-            layer_name = f"{layer.name} ({layer.__class__.__name__})"
+        # Iterate over the modules
+        for idx, module in enumerate(self.modules):
+            # Composing the module name
+            module_name = f"{module.name} ({module.__class__.__name__})"
             
             # Composing the output shape
             output_shape = "?"
             try:
-                # Get the output shape of the layer
-                output_shape = layer.output_shape() 
+                # Get the output shape of the module
+                output_shape = module.output_shape() 
                 
                 # Format the output shape
                 output_shape = f"({', '.join(str(dim) for dim in output_shape)})"
@@ -408,25 +377,25 @@ class FeedForward:
             # Composing the number of parameters
             num_params = "?"
             try:
-                # Get the number of parameters of the layer
-                num_params = layer.count_params()
+                # Get the number of parameters of the module
+                num_params = module.count_params()
             except:
                 pass
             
             # format the output
-            layer_name = format_output(layer_name, 40)
-            output_shape = format_output(str(output_shape), 20)
-            num_params = format_output(str(num_params), 20)
+            module_name = format_summary_output(module_name, 40)
+            output_shape = format_summary_output(str(output_shape), 20)
+            num_params = format_summary_output(str(num_params), 20)
             
-            # Display the layer information
-            print(f"{layer_name:<40}{str(output_shape):<20}{str(num_params):<20}")
-            if idx < len(self.layers) - 1 : print(f"{'-' * len(header)}")
+            # Display the module information
+            print(f"{module_name:<40}{str(output_shape):<20}{str(num_params):<20}")
+            if idx < len(self.modules) - 1 : print(f"{'-' * len(header)}")
             
         # Compute the total number of parameters
         total_params = "?"
         try:
             # Get the total number of parameters
-            total_params = sum([layer.count_params() for layer in self.layers])
+            total_params = self.count_params()
         except:
             pass
         
@@ -434,3 +403,43 @@ class FeedForward:
         print(f"{'=' * len(header)}")
         print(f"Total trainable parameters: {total_params}")
         print(f"{'-' * len(header)}")
+        
+        
+    def set_optimizer(self, optimizer: Optimizer) -> None:
+        """
+        Method to set the optimizer of the model
+        
+        Parameters:
+        - optimizer (Optimizer): Optimizer to update the parameters of the model
+        """
+        
+        # Iterate over the modules of the model
+        for module in self.modules:
+            # Recursively set the optimizer of the module
+            module.set_optimizer(optimizer)
+                
+                
+    def count_params(self) -> int:
+        """
+        Method to count the number of parameters of the model
+        
+        Returns:
+        - int: Number of parameters of the model
+        """
+        
+        # Get the number of parameters of each module
+        return sum([module.count_params() for module in self.modules])
+    
+    
+    def output_shape(self) -> tuple:
+        """
+        Method to get the output shape of the model
+        
+        Returns:
+        - tuple[int]: Output shape of the model
+        """
+        
+        # Get the output shape of the last module by calling the output_shape method
+        # This will evetually be called recursively until the last the module is a layer
+        # which returns the output shape
+        return self.modules[-1].output_shape()

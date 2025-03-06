@@ -1,2 +1,6 @@
 from .base import Activation
-from .activations import ReLU, Sigmoid, Softmax, Tanh
+
+from .relu import ReLU
+from .sigmoid import Sigmoid
+from .softmax import Softmax
+from .tanh import Tanh

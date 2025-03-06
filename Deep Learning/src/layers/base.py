@@ -166,3 +166,15 @@ class Layer:
         
         # Set the flag to True to indicate that the layer is initialized
         self.initialized = True
+        
+        
+    def set_optimizer(self, optimizer: Optimizer) -> None:
+        """
+        Method to set the optimizer for updating the parameters of the layer
+        
+        Parameters:
+        - optimizer (Optimizer): Instance of the optimizer
+        """
+        
+        # Set the optimizer
+        self.optimizer = optimizer
