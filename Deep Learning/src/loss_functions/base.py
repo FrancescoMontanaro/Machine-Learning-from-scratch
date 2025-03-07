@@ -3,7 +3,7 @@ import numpy as np
 
 class LossFn:
     
-    epsilon = 1e-12  # Small constant for numerical stability
+    epsilon = 1e-7  # Small constant for numerical stability
     
     
     ### Magic methods ###

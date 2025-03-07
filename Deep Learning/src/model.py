@@ -101,7 +101,8 @@ class Model:
         y_valid: np.ndarray,
         optimizer: Optimizer,
         loss_fn: LossFn,
-        batch_size: int = 8, 
+        batch_size: int = 8,
+        gradient_accumulation_steps: int = 1,
         epochs: int = 10,
         metrics: list[Callable] = [],
         callbacks: list[Callable] = []
@@ -116,7 +117,8 @@ class Model:
         - y_valid (np.ndarray): Labels of the validation dataset. Shape: (samples, ...)
         - optimizer (Optimizer): Optimizer to update the parameters of the model
         - loss_fn (LossFn): Loss function to compute the error of the model
-        - batch_size (int): Number of samples to use for each batch. Default is 32
+        - batch_size (int): Number of samples to use for each batch. Default is 8
+        - gradient_accumulation_steps (int): Number of steps to accumulate the gradients before updating the parameters. Default is 1
         - epochs (int): Number of epochs to train the model. Default is 10
         - metrics (list[Callable]): List of metrics to evaluate the model. Default is an empty list
         - callbacks (list[Callback]): List of callbacks to execute
@@ -137,8 +139,8 @@ class Model:
             **{f"val_{metric.__name__}": np.array([]) for metric in metrics}
         }
         self.epoch, self.stop_training = 0, False
-        n_training_steps = math.ceil(X_train.shape[0] / batch_size) if batch_size < X_train.shape[0] else 1
-        n_valid_steps = math.ceil(X_valid.shape[0] / batch_size) if batch_size < X_valid.shape[0] else 1
+        n_training_steps = max(1, X_train.shape[0] // batch_size)
+        n_valid_steps = max(1, X_valid.shape[0] // batch_size)
         
         # Execute a first forward pass in evaluation mode to initialize the parameters and their shapes
         self(X_train[:1])
@@ -165,6 +167,7 @@ class Model:
             
             # Iterate over the batches
             training_epoch_loss, elapsed_time = 0.0, 0.0
+            accumulation_counter, accumulated_grad = 0, None
             train_metrics = {metric.__name__: 0.0 for metric in metrics}
             for training_step in range(n_training_steps):
                 # Store the start time
@@ -183,8 +186,21 @@ class Model:
                 # Loss gradient: Compute the gradient of the loss with respect to the output of the model
                 training_loss_grad = loss_fn.gradient(y_training_batch, training_batch_output)
                 
-                # Backward pass: Propagate the gradient through the model and update the parameters
-                self.backward(training_loss_grad)
+                # Accumulate the gradients and update the counter
+                accumulated_grad = training_loss_grad if accumulated_grad is None else accumulated_grad + training_loss_grad
+                accumulation_counter += 1
+                
+                # If the number of accumulation steps is reached or it is the last step, update the parameters
+                if accumulation_counter == gradient_accumulation_steps or training_step == n_training_steps - 1:
+                    # Compute the average gradient
+                    average_grad = accumulated_grad / accumulation_counter
+                    
+                    # Backward pass: Propagate the gradient through the model and update the parameters
+                    self.backward(average_grad)
+                    
+                    # Reset the accumulation counter and the accumulated gradient
+                    accumulation_counter = 0
+                    accumulated_grad = None
                 
                 # Update the epoch loss
                 training_epoch_loss += training_loss
@@ -293,7 +309,7 @@ class Model:
         
         # Compute the number of steps to iterate over the batches
         # If the batch size is not provided, set it to 1
-        num_steps = (math.ceil(x.shape[0] / batch_size) if batch_size < x.shape[0] else 1) if batch_size else 1
+        num_steps = max(1, x.shape[0] // batch_size) if batch_size else 1
         
         # List to store the outputs of each module
         outputs = []
@@ -382,7 +398,7 @@ class Model:
         for module in self.modules:
             # Set the module in evaluation mode
             module.training = False
-            
+
             
     def summary(self) -> None:
         """
