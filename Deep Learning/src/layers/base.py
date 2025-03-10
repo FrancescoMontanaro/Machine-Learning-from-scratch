@@ -1,8 +1,7 @@
-import numpy as np
 from functools import wraps
 from typing import Optional, Callable
 
-from ..optimizers import Optimizer
+from ..core import Tensor
 
 
 class Layer:
@@ -17,18 +16,17 @@ class Layer:
         self.name = name # Name of the layer
         self.training = True # Flag to check if the layer is in training mode
         self.initialized = False # Flag to check if the layer is initialized
-        self.optimizer: Optional[Optimizer] = None # Instance of the optimizer to be used for updating the parameters
     
     
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: Tensor) -> Tensor:
         """
         Abstract method to set the input shape of the layer.
         
         Parameters:
-        - x (np.ndarray): Input data
+        - x (Tensor): Input tensor
         
         Returns:
-        - np.ndarray: Output of the layer after the forward pass
+        - Tensor: Output of the layer after the forward pass
         
         Raises:
         - NotImplementedError: If the method is not implemented
@@ -76,32 +74,19 @@ class Layer:
         
         # Return the wrapper function
         return wrapper
-    
-    
-    def parameters(self) -> dict:
-        """
-        Abstract method to return the parameters of the layer. 
-        The implementation should be done in the child classes
-        
-        Returns:
-        - dict: Parameters of the layer.
-        """
-        
-        # If the layer does not have any parameters, return an empty dictionary
-        return {}
 
     
     @check_initialization
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: Tensor) -> Tensor:
         """
         Abstract method to compute the output of the layer. 
         The implementation should be done in the child classes
         
         Parameters:
-        - x (np.ndarray): Features of the dataset
+        - x (Tensor): Input tensor
         
         Returns:
-        - np.ndarray: Output of the layer
+        - Tensor: Output of the layer
         
         Raises:
         - NotImplementedError: If the method is not implemented
@@ -109,25 +94,6 @@ class Layer:
         
         # Raise an error if the method is not implemented
         raise NotImplementedError("The method 'forward' is not implemented.")
-    
-    
-    @check_initialization
-    def backward(self, grad_output: np.ndarray) -> np.ndarray:
-        """
-        Abstract method to compute the gradient of the loss with respect to the input of the layer. 
-        The implementation should be done in the child classes
-        
-        Parameters:
-        - grad_output (np.ndarray): Gradient of the loss with respect to the output of the layer
-        
-        Returns:
-        - np.ndarray: Gradient of the loss with respect to the input of the layer
-        
-        Raises:
-        - NotImplementedError: If the method is not implemented
-        """
-        
-        raise NotImplementedError("The method 'backward' is not implemented.")
 
     
     @check_initialization
@@ -158,7 +124,20 @@ class Layer:
         return 0
     
     
-    def init_params(self, *args, **kwargs) -> None:
+    def parameters(self) -> dict:
+        """
+        Abstract method to return the parameters of the layer. 
+        The implementation should be done in the child classes
+        
+        Returns:
+        - dict: Parameters of the layer.
+        """
+        
+        # If the layer does not have any parameters, return an empty dictionary
+        return {}
+    
+    
+    def init_params(self) -> None:
         """
         Abstract method to initialize the parameters of the layer. 
         The implementation should be done in the child classes
@@ -166,15 +145,3 @@ class Layer:
         
         # Set the flag to True to indicate that the layer is initialized
         self.initialized = True
-        
-        
-    def set_optimizer(self, optimizer: Optimizer) -> None:
-        """
-        Method to set the optimizer for updating the parameters of the layer
-        
-        Parameters:
-        - optimizer (Optimizer): Instance of the optimizer
-        """
-        
-        # Set the optimizer
-        self.optimizer = optimizer

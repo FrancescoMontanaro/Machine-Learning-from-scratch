@@ -5,7 +5,7 @@ from ..core import Tensor
 from ..core.constants import *
     
     
-class CrossEntropy(LossFn):
+class CategoricalCrossEntropy(LossFn):
         
     ### Magic methods ###
     
@@ -38,13 +38,13 @@ class CrossEntropy(LossFn):
         # Check if the input is logits
         if self.from_logits:
             # Convert logits to probabilities
-            y_pred = y_pred.softmax()
+            y_pred_log = y_pred.log_softmax(axis=1)
         else:
             # Clip values for numerical stability
-            y_pred = y_pred.clip(EPSILON, 1 - EPSILON)
+            y_pred_log = y_pred.clip(EPSILON, 1 - EPSILON).log()
 
-        # Compute the cross-entropy loss
-        loss = - (y_true * y_pred.log())
+        # Compute the loss
+        loss = - ((y_true * y_pred_log).sum(axis=1))
         
         # Apply the reduction method
         if self.reduction == "sum":

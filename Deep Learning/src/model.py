@@ -1,14 +1,14 @@
 import re
 import time
-import math
 import numpy as np
 from itertools import count
 from typing import Callable, Union, Optional
 
 from .utils import *
-from .layers import Layer
+from .core import Tensor, Module
 from .optimizers import Optimizer
 from .loss_functions import LossFn
+from .core.context_manager import no_grad
 
 
 class Model:
@@ -20,12 +20,12 @@ class Model:
     
     ### Magic methods ###
     
-    def __init__(self, modules: list[Union[Layer, 'Model']], name: Optional[str] = None) -> None:
+    def __init__(self, modules: list[Union[Module, 'Model']], name: Optional[str] = None) -> None:
         """
         Class constructor
         
         Parameters:
-        - modules (list[Union[Layer, 'Model']]): List of modules (layers or models themselves) to be added to the model
+        - modules (list[Union[Module, 'Model']]): List of modules (modules or models themselves) to be added to the model
         - name (Optional[str]): Name of the model
         
         Raises:
@@ -48,7 +48,7 @@ class Model:
         # Set the name of the layers
         for i, module in enumerate(self.modules):
             # Set the layer name if it is not set
-            if not module.name and isinstance(module, Layer):
+            if not module.name and isinstance(module, Module):
                 # Get the class name of the layer
                 module.name = f"{re.sub(r'(?<!^)(?=[A-Z0-9])', '_', module.__class__.__name__).lower()}_{i+1}"
                 
@@ -57,28 +57,18 @@ class Model:
             raise ValueError("Moduels names must be unique!")
         
         
-    def __call__(self, x: np.ndarray, batch_size: Optional[int] = None, verbose: bool = False) -> np.ndarray:
+    def __call__(self, x: Tensor, batch_size: Optional[int] = None, verbose: bool = False) -> Tensor:
         """
         Call method to initialize and execute the forward pass of the neural network
         
         Parameters:
-        - x (np.ndarray): Input data.
+        - x (Tensor): Input data.
         - batch_size (Optional[int]): Number of samples to use for each batch
         - verbose (bool): Flag to display the progress
         
         Returns:
-        - np.ndarray: Output of the neural network
-        
-        Raises:
-        - ValueError: If the number of modules is 0
+        - Tensor: Output of the neural network
         """
-        
-        # Check if the number of modules is greater than 0
-        if len(self.modules) == 0:
-            raise ValueError("No modules in the neural network. Add modules to the model!")
-        
-        # Save the input dimension
-        self.input_shape = x.shape
         
         # Set the model in evaluation mode
         self.eval()
@@ -95,10 +85,10 @@ class Model:
 
     def fit(
         self, 
-        X_train: np.ndarray, 
-        y_train: np.ndarray,
-        X_valid: np.ndarray,
-        y_valid: np.ndarray,
+        X_train: Tensor, 
+        y_train: Tensor,
+        X_valid: Tensor,
+        y_valid: Tensor,
         optimizer: Optimizer,
         loss_fn: LossFn,
         batch_size: int = 8,
@@ -111,10 +101,10 @@ class Model:
         Method to train the neural network
         
         Parameters:
-        - X_train (np.ndarray): Features of the training dataset. Shape: (samples, ...)
-        - y_train (np.ndarray): Labels of the training dataset. Shape: (samples, ...)
-        - X_valid (np.ndarray): Features of the validation dataset. Shape: (samples, ...)
-        - y_valid (np.ndarray): Labels of the validation dataset. Shape: (samples, ...)
+        - X_train (Tensor): Features of the training dataset. Shape: (samples, ...)
+        - y_train (Tensor): Labels of the training dataset. Shape: (samples, ...)
+        - X_valid (Tensor): Features of the validation dataset. Shape: (samples, ...)
+        - y_valid (Tensor): Labels of the validation dataset. Shape: (samples, ...)
         - optimizer (Optimizer): Optimizer to update the parameters of the model
         - loss_fn (LossFn): Loss function to compute the error of the model
         - batch_size (int): Number of samples to use for each batch. Default is 8
@@ -139,14 +129,14 @@ class Model:
             **{f"val_{metric.__name__}": np.array([]) for metric in metrics}
         }
         self.epoch, self.stop_training = 0, False
-        n_training_steps = max(1, X_train.shape[0] // batch_size)
-        n_valid_steps = max(1, X_valid.shape[0] // batch_size)
+        n_training_steps = max(1, X_train.shape()[0] // batch_size)
+        n_valid_steps = max(1, X_valid.shape()[0] // batch_size)
         
         # Execute a first forward pass in evaluation mode to initialize the parameters and their shapes
         self(X_train[:1])
         
-        # Set the optimizer of the model
-        self.set_optimizer(optimizer)
+        # Set the parameters of the optimizer
+        optimizer.set_parameters(self.parameters())
             
         ################################
         ### Start main training loop ###
@@ -163,11 +153,12 @@ class Model:
             self.train()
             
             # Shuffle the dataset at the beginning of each epoch
-            X_train_shuffled, Y_train_shuffled = shuffle_data(X_train, y_train)
+            X_train_shuffled, Y_train_shuffled = self.shuffle_data(X_train, y_train)
             
             # Iterate over the batches
-            training_epoch_loss, elapsed_time = 0.0, 0.0
-            accumulation_counter, accumulated_grad = 0, None
+            elapsed_time = 0.0
+            training_epoch_loss = Tensor(data=0.0)
+            n_micro_steps, accumulated_loss = 0, None
             train_metrics = {metric.__name__: 0.0 for metric in metrics}
             for training_step in range(n_training_steps):
                 # Store the start time
@@ -177,37 +168,40 @@ class Model:
                 X_training_batch = X_train_shuffled[training_step * batch_size:(training_step + 1) * batch_size]
                 y_training_batch = Y_train_shuffled[training_step * batch_size:(training_step + 1) * batch_size]
                 
+                # Zero the gradients of the parameters
+                optimizer.zero_grad()
+                
                 # Forward pass: Compute the output of the model
                 training_batch_output = self.forward(X_training_batch)
                 
-                # Loss: Compute the error of the model
+                # Loss: Compute the loss of the model
                 training_loss = loss_fn(y_training_batch, training_batch_output)
                 
-                # Loss gradient: Compute the gradient of the loss with respect to the output of the model
-                training_loss_grad = loss_fn.gradient(y_training_batch, training_batch_output)
-                
                 # Accumulate the gradients and update the counter
-                accumulated_grad = training_loss_grad if accumulated_grad is None else accumulated_grad + training_loss_grad
-                accumulation_counter += 1
+                accumulated_loss = training_loss if accumulated_loss is None else accumulated_loss + training_loss
+                n_micro_steps += 1
                 
                 # If the number of accumulation steps is reached or it is the last step, update the parameters
-                if accumulation_counter == gradient_accumulation_steps or training_step == n_training_steps - 1:
+                if n_micro_steps == gradient_accumulation_steps or training_step == n_training_steps - 1:
                     # Compute the average gradient
-                    average_grad = accumulated_grad / accumulation_counter
+                    average_loss = accumulated_loss / n_micro_steps
                     
-                    # Backward pass: Propagate the gradient through the model and update the parameters
-                    self.backward(average_grad)
+                    # Compute the gradients of the parameters
+                    average_loss.backward()
+                    
+                    # Update the parameters of the model
+                    optimizer.update()
                     
                     # Reset the accumulation counter and the accumulated gradient
-                    accumulation_counter = 0
-                    accumulated_grad = None
+                    n_micro_steps = 0
+                    accumulated_loss = None
                 
                 # Update the epoch loss
                 training_epoch_loss += training_loss
                 
                 # Compute the metrics
                 for metric in metrics:
-                    train_metrics[metric.__name__] += metric(y_training_batch, training_batch_output)
+                    train_metrics[metric.__name__] += metric(y_training_batch, training_batch_output).data
                     
                 # Store the end time
                 end_time = time.time()
@@ -219,41 +213,43 @@ class Model:
                 ms_per_step = elapsed_time / (training_step + 1) * 1000
                 
                 # Display epoch progress
-                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {round(ms_per_step, 2)} ms/step --> loss: {training_loss:.4f}", end="")
+                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {round(ms_per_step, 2)} ms/step --> loss: {training_loss.data:.4f}", end="")
             
             ##############################
             ### Start validation phase ###
             ##############################
-                    
+            
             # Set the model in evaluation mode
             self.eval()
             
-            # Iterate over the validation steps
-            valid_epoch_loss = 0.0
-            valid_metrics = {metric.__name__: 0.0 for metric in metrics}
-            for valid_step in range(n_valid_steps):
-                # Get the current batch of validation data
-                X_valid_batch = X_valid[valid_step * batch_size:(valid_step + 1) * batch_size]
-                y_valid_batch = y_valid[valid_step * batch_size:(valid_step + 1) * batch_size]
-            
-                # Compute the output of the model for the current validation batch
-                valid_batch_output = self.forward(X_valid_batch)
+            # Disable automatic gradient computation
+            with no_grad(): 
+                # Iterate over the validation steps
+                valid_epoch_loss = Tensor(data=0.0)
+                valid_metrics = {metric.__name__: 0.0 for metric in metrics}
+                for valid_step in range(n_valid_steps):
+                    # Get the current batch of validation data
+                    X_valid_batch = X_valid[valid_step * batch_size:(valid_step + 1) * batch_size]
+                    y_valid_batch = y_valid[valid_step * batch_size:(valid_step + 1) * batch_size]
                 
-                # Compute the loss of the model for the current validation batch
-                # and update the validation epoch loss
-                valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output)
-                
-                # Compute the metrics
-                for metric in metrics:
-                    valid_metrics[metric.__name__] += metric(y_valid_batch, valid_batch_output)
+                    # Compute the output of the model for the current validation batch
+                    valid_batch_output = self.forward(X_valid_batch)
+                    
+                    # Compute the loss of the model for the current validation batch
+                    # and update the validation epoch loss
+                    valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output)
+                    
+                    # Compute the metrics
+                    for metric in metrics:
+                        valid_metrics[metric.__name__] += metric(y_valid_batch, valid_batch_output).data
                 
             ##########################
             ### Store the results  ###
             ##########################
                   
             # Store the training and validation losses
-            self.history["loss"] = np.append(self.history["loss"], training_epoch_loss / n_training_steps)
-            self.history["val_loss"] = np.append(self.history["val_loss"], valid_epoch_loss / n_valid_steps)
+            self.history["loss"] = np.append(self.history["loss"], training_epoch_loss.data / n_training_steps)
+            self.history["val_loss"] = np.append(self.history["val_loss"], valid_epoch_loss.data / n_valid_steps)
             
             # Compute the average metrics
             for metric in metrics:
@@ -292,26 +288,32 @@ class Model:
          
         # Return the history of the training   
         return self.history
+
         
-        
-    def forward(self, x: np.ndarray, batch_size: Optional[int] = None, verbose: bool = False) -> np.ndarray:
+    def forward(self, x: Tensor, batch_size: Optional[int] = None, verbose: bool = False) -> Tensor:
         """
         Forward pass of the model
         
         Parameters:
-        - x (np.ndarray): Features of the dataset
+        - x (Tensor): Features of the dataset
         - batch_size (Optional[int]): Number of samples to use for each batch
         - verbose (bool): Flag to display the progress
         
         Returns:
-        - np.ndarray: Output of the neural network
+        - Tensor: Output of the neural network
+        
+        Raises:
+        - Assert: If no modules are added to the model
         """
+             
+        # Check if the number of modules is greater than 0
+        assert len(self.modules) > 0, "No modules in the neural network. Add modules to the model!"
         
         # Compute the number of steps to iterate over the batches
         # If the batch size is not provided, set it to 1
-        num_steps = max(1, x.shape[0] // batch_size) if batch_size else 1
+        num_steps = max(1, x.shape()[0] // batch_size) if batch_size else 1
         
-        # List to store the outputs of each module
+        # Initialize the list of outputs
         outputs = []
         
         # Variable to store the time per step
@@ -348,28 +350,34 @@ class Model:
                 # Display the progress
                 print(f"\rProcessing batch {step + 1}/{num_steps} - {round(ms_per_step, 2)} ms/step", end="")
             
-        # Concatenate the outputs of the batches to form an unique output and return it
-        return np.concatenate(outputs, axis=0)
-    
-    
-    def backward(self, loss_grad: np.ndarray) -> np.ndarray:
-        """
-        Backward pass of the model
+        # Concatenate the outputs
+        out = Tensor.concat(outputs, axis=0)
         
-        Parameters:
-        - loss_grad (np.ndarray): Gradient of the loss with respect to the output
+        # Return the output tensor
+        return out
+    
+    
+    def parameters(self) -> list[Tensor]:
+        """
+        Method to get the parameters of the model
         
         Returns:
-        - np.ndarray: Gradient of the loss with respect to the input
+        - list[Tensor]: List of parameters of the model
         """
         
-        # Iterate over the modules in reverse order
-        for module in reversed(self.modules):
-            # Compute the gradient of the loss with respect to the input of the module
-            loss_grad = module.backward(loss_grad)
+        # Initialize the parameters list
+        params = []
         
-        # Return the gradient
-        return loss_grad
+        # Iterate over the modules
+        for module in self.modules:
+            # Get the parameters of the module
+            module_params = module.parameters()
+            
+            # Add the parameters to the dictionary
+            params.extend(module_params)
+            
+        # Return the parameters
+        return params
     
     
     def train(self) -> None:
@@ -383,9 +391,9 @@ class Model:
         # Iterate over the modules
         for module in self.modules:
             # Set the module in training mode
-            module.training = True
+            module.train()
 
-        
+
     def eval(self) -> None:
         """
         Method to set the model in evaluation mode
@@ -397,7 +405,7 @@ class Model:
         # Iterate over the modules
         for module in self.modules:
             # Set the module in evaluation mode
-            module.training = False
+            module.eval()
 
             
     def summary(self) -> None:
@@ -427,7 +435,7 @@ class Model:
                 output_shape = module.output_shape() 
                 
                 # Format the output shape
-                output_shape = f"({', '.join(str(dim) for dim in output_shape)})"
+                output_shape = f"({', '.join(str(dim) for dim in output_shape)})" if output_shape else "?"
             except:
                 pass
             
@@ -460,20 +468,6 @@ class Model:
         print(f"{'=' * len(header)}")
         print(f"Total trainable parameters: {total_params}")
         print(f"{'-' * len(header)}")
-        
-        
-    def set_optimizer(self, optimizer: Optimizer) -> None:
-        """
-        Method to set the optimizer of the model
-        
-        Parameters:
-        - optimizer (Optimizer): Optimizer to update the parameters of the model
-        """
-        
-        # Iterate over the modules of the model
-        for module in self.modules:
-            # Recursively set the optimizer of the module
-            module.set_optimizer(optimizer)
                 
                 
     def count_params(self) -> int:
@@ -488,15 +482,42 @@ class Model:
         return sum([module.count_params() for module in self.modules])
     
     
-    def output_shape(self) -> tuple:
+    def output_shape(self) -> Optional[tuple]:
         """
         Method to get the output shape of the model
         
         Returns:
-        - tuple[int]: Output shape of the model
+        - tuple[int]: Output shape of the model if available, None otherwise
         """
         
         # Get the output shape of the last module by calling the output_shape method
         # This will evetually be called recursively until the last the module is a layer
         # which returns the output shape
         return self.modules[-1].output_shape()
+    
+    
+    @staticmethod
+    def shuffle_data(X: Tensor, y: Tensor) -> tuple[Tensor, Tensor]:
+        """
+        Method to shuffle the dataset
+        
+        Parameters:
+        - X (Tensor): Features of the dataset
+        - y (Tensor): Target of the dataset
+        
+        Returns:
+        - tuple[Tensor, Tensor]: Shuffled features and target
+        """
+        
+        # Get the number of samples
+        n_samples = X.shape()[0]
+        
+        # Generate random indices
+        indices = np.random.permutation(n_samples)
+        
+        # Shuffle the dataset
+        X_shuffled = X[indices]
+        y_shuffled = y[indices]
+        
+        # Return the shuffled dataset
+        return X_shuffled, y_shuffled

@@ -2,32 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def shuffle_data(X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Method to shuffle the dataset
-    
-    Parameters:
-    - X (np.ndarray): Features of the dataset
-    - y (np.ndarray): Target of the dataset
-    
-    Returns:
-    - tuple[np.ndarray, np.ndarray]: Shuffled features and target
-    """
-    
-    # Get the number of samples
-    n_samples = X.shape[0]
-    
-    # Generate random indices
-    indices = np.random.permutation(n_samples)
-    
-    # Shuffle the dataset
-    X_shuffled = X[indices]
-    y_shuffled = y[indices]
-    
-    # Return the shuffled dataset
-    return X_shuffled, y_shuffled
-
-
 def plot_data(datasets: list[dict], title: str, xlabel: str, ylabel: str) -> None:
     """
     Method to plot multiple sets of samples in a 2D space, with options for scatter and line plots.
@@ -186,3 +160,30 @@ def format_summary_output(value: str, width: int) -> str:
         
     # Format each line to fit the specified width
     return "\n".join(line.ljust(width) for line in formatted_lines)
+
+
+def unbroadcast(arr: np.ndarray, shape: tuple) -> np.ndarray:
+    """
+    Unbroadcasts an array to a specified shape.
+    
+    Parameters:
+    - arr (np.ndarray): Array to unbroadcast
+    - shape (tuple): Shape to unbroadcast to
+    
+    Returns:
+    - np.ndarray: Unbroadcasted array
+    """
+    
+    # If the array has more dimensions than the specified shape, sum along the first axis until the number of dimensions match
+    while len(arr.shape) > len(shape):
+        arr = arr.sum(axis=0)
+        
+    # Iterate over the dimensions and sum along the axis if the dimension is 1
+    for axis, dim in enumerate(shape):
+        # If the dimension is 1, sum along the axis
+        if dim == 1 and arr.shape[axis] != 1:
+            # Sum along the axis
+            arr = arr.sum(axis=axis, keepdims=True)
+        
+    # Return the unbroadcasted array  
+    return arr

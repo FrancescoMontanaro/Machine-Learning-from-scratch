@@ -1,22 +1,21 @@
-import numpy as np
-from typing import Literal
+from typing import Literal, Optional
 
 from .base import LossFn
-from ..activations import Sigmoid
-
+from ..core import Tensor
+from ..core.constants import *
 
 
 class BinaryCrossEntropy(LossFn):
             
     ### Magic methods ###
     
-    def __init__(self, from_logits: bool = False, reduction: Literal["sum", "sum_over_batch_size"] = "sum_over_batch_size") -> None:
+    def __init__(self, from_logits: bool = False, reduction: Optional[Literal["sum", "mean"]] = "mean") -> None:
         """
         Initialize the binary cross-entropy loss function.
         
         Parameters:
         - from_logits (bool): Whether the input is logits or probabilities. Default is False
-        - reduction (Literal["sum", "sum_over_batch_size"]): Reduction method. Default is "sum_over_batch_size"
+        - reduction (Literal["sum", "mean"]): Reduction method. Default is "mean"
         """
         
         # Store the attributes
@@ -24,63 +23,36 @@ class BinaryCrossEntropy(LossFn):
         self.reduction = reduction
         
 
-    def __call__(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    def __call__(self, y_true: Tensor, y_pred: Tensor) -> Tensor:
         """
         Compute the binary cross-entropy loss.
         
         Parameters:
-        - y_true (np.ndarray): True target variable
-        - y_pred (np.ndarray): Predicted target variable
+        - y_true (Tensor): True target variable
+        - y_pred (Tensor): Predicted target variable
         
         Returns:
-        - float: Loss value
+        - Tensor: the binary cross-entropy loss
         """
-                
-        # Extract the batch size
-        batch_size = y_true.shape[0]
         
+        # Check if the input is logits
         if self.from_logits:
             # Convert logits to probabilities
-            y_pred = Sigmoid()(y_pred)
+            y_pred = y_pred.softmax()
         else:
             # Clip values for stability
-            y_pred = np.clip(y_pred, self.epsilon, 1 - self.epsilon)
+            y_pred = y_pred.clip(EPSILON, 1 - EPSILON)
         
-        # Compute and return the binary cross-entropy loss
-        loss = float(-np.sum(y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred)) / batch_size)
+        # Compute the binary cross-entropy loss
+        loss = - (y_true * y_pred.log() + (1 - y_true) * (1 - y_pred).log())
         
         # Apply the reduction method
         if self.reduction == "sum":
+            # Return the sum loss
+            return loss.sum()
+        elif self.reduction == "mean":
+            # Return the mean loss
+            return loss.mean()
+        else:
+            # Return the per-sample loss
             return loss
-        else:
-            return loss / batch_size
-
-
-    ### Public methods ###
-
-    def gradient(self, y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
-        """
-        Compute the gradient of the loss with respect to y_pred.
-        
-        Parameters:
-        - y_true (np.ndarray): True target variable
-        - y_pred (np.ndarray): Predicted target variable
-        
-        Returns:
-        - np.ndarray: Gradient of the loss with respect to y_pred
-        """
-        
-        # Extract the batch size
-        batch_size = y_true.shape[0]
-        
-        if self.from_logits:
-            # Compute probabilities from logits
-            prob = Sigmoid()(y_pred)
-            # Gradient with respect to logits: (sigmoid(z) - y)
-            grad = (prob - y_true) / batch_size
-            
-        else:
-            # Return the gradient
-            grad = - (y_true / y_pred - (1 - y_true) / (1 - y_pred)) / batch_size
-            
-        return grad

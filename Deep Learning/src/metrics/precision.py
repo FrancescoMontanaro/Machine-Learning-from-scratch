@@ -1,21 +1,23 @@
 import numpy as np
 
+from ..core import Tensor
 
-def precision(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+
+def precision(y_true: Tensor, y_pred: Tensor) -> Tensor:
     """
     Compute the precision of the model.
 
     Parameters:
-    - y_true (np.ndarray): True target variable
-    - y_pred (np.ndarray): Predicted target variable
+    - y_true (Tensor): True target variable
+    - y_pred (Tensor): Predicted target variable
 
     Returns:
-    - float: Precision of the model
+    - Tensor: Precision of the model
     """
     
     # Compute the precision
-    tp = np.sum((y_true == 1) & (y_pred == 1))
-    fp = np.sum((y_true == 0) & (y_pred == 1))
+    tp = np.sum((y_true.data == 1) & (y_pred.data == 1))
+    fp = np.sum((y_true.data == 0) & (y_pred.data == 1))
     
-    # Return the precision
-    return tp / (tp + fp)
+    # Compute and return the precision as a tensor
+    return Tensor((tp / (tp + fp)), requires_grad=False)

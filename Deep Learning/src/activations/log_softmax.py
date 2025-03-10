@@ -1,14 +1,16 @@
+import numpy as np
+
 from ..core import Tensor
 from .base import Activation
     
 
-class Softmax(Activation):
+class LogSoftmax(Activation):
         
     ### Magic methods ###
     
     def __call__(self, x: Tensor) -> Tensor:
         """
-        Compute the output of the softmax activation function.
+        Compute the output of the log softmax activation function.
         
         Parameters:
         - x (Tensor): Input to the activation function
@@ -17,4 +19,4 @@ class Softmax(Activation):
         - Tensor: Output of the activation function
         """
         
-        return x.softmax()
+        return x.log_softmax()

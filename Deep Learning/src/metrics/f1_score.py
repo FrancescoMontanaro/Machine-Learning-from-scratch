@@ -1,16 +1,15 @@
-import numpy as np
-
+from ..core import Tensor
 from .recall import recall
 from .precision import precision
 
 
-def f1_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+def f1_score(y_true: Tensor, y_pred: Tensor) -> Tensor:
     """
     Compute the F1 score of the model.
 
     Parameters:
-    - y_true (np.ndarray): True target variable
-    - y_pred (np.ndarray): Predicted target variable
+    - y_true (Tensor): True target variable
+    - y_pred (Tensor): Predicted target variable
 
     Returns:
     - float: F1 score of the model
@@ -21,4 +20,7 @@ def f1_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     rec = recall(y_true, y_pred)
     
     # Compute the F1 score
-    return 2 * (prec * rec) / (prec + rec)
+    f1 = 2 * (prec * rec) / (prec + rec)
+
+    # Compute and return the F1 score as a tensor
+    return f1

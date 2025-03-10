@@ -1,23 +1,29 @@
 import numpy as np
 
+from ..core import Tensor
 
-def accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+
+def accuracy(y_true: Tensor, y_pred: Tensor) -> Tensor:
     """
     Compute the accuracy of the model.
 
     Parameters:
-    - y_true (np.ndarray): True target variable
-    - y_pred (np.ndarray): Predicted target variable
+    - y_true (Tensor): True target variable
+    - y_pred (Tensor): Predicted target variable
 
     Returns:
-    - float: Accuracy value
+    - Tensor: Accuracy tensor
     """
     
-    # If the array is multi-dimensional, take the argmax
-    if y_true.ndim > 1:
-        y_true = np.argmax(y_true, axis=-1)
-    if y_pred.ndim > 1:
-        y_pred = np.argmax(y_pred, axis=-1)
+    # Ensure the data is in numpy format
+    y_true_data = y_true.data.copy()
+    y_pred_data = y_pred.data.copy()
     
-    # Compute the accuracy
-    return np.mean(y_true == y_pred, axis=-1)
+    # If the array is multi-dimensional, take the argmax
+    if y_true_data.ndim > 1:
+        y_true_data = np.argmax(y_true_data, axis=-1)
+    if y_pred_data.ndim > 1:
+        y_pred_data = np.argmax(y_pred_data, axis=-1)
+    
+    # Compute and return the accuracy as a tensor
+    return Tensor(np.mean(y_true_data == y_pred_data, axis=-1), requires_grad=False)
