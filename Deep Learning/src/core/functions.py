@@ -660,3 +660,44 @@ def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
     
     # Return the output tensor
     return out
+
+
+def reshape(x: 'Tensor', new_shape: Tuple[int, ...]) -> 'Tensor':
+    """
+    Reshape the tensor to the specified new shape.
+    
+    Parameters:
+    - x (Tensor): Input tensor.
+    - new_shape (Tuple[int, ...]): The desired shape.
+    
+    Returns:
+    - Tensor: A new Tensor with the specified shape.
+    """
+    
+    # Get the tensor class
+    Tensor = cast(Type['Tensor'], get_tensor_class())
+    
+    # Check if the input is a tensor
+    assert isinstance(x, Tensor), "Input must be a tensor"
+    
+    # Compute the reshaped tensor
+    out = Tensor(x.data.reshape(new_shape), requires_grad=x.requires_grad)
+    
+    # Define the backward function
+    def _backward() -> None:
+        # If the gradient needs to be computed, backpropagate the gradient
+        if x.requires_grad and out.grad is not None:
+            # Reshape the gradient from the output back to the shape of x.data
+            grad_back = out.grad.reshape(x.data.shape)
+            
+            # Accumulate the gradient in x.grad
+            x.grad = x.grad + grad_back if x.grad is not None else grad_back
+            
+    # Store the backward function with respect to the reshape operation
+    out._backward = _backward
+    
+    # Store the previous tensors in the computation graph
+    out._prev = {x}
+    
+    # Return the output tensor
+    return out

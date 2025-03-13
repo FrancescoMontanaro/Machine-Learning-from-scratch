@@ -662,6 +662,21 @@ class Tensor:
         return unsqueeze(self, axis)
     
     
+    def reshape(self, shape: tuple) -> 'Tensor':
+        """
+        Method to reshape the tensor
+        
+        Parameters:
+        - shape (tuple): New shape of the tensor
+        
+        Returns:
+        - Tensor: Reshaped tensor
+        """
+        
+        # Compute and return the reshaped tensor
+        return reshape(self, shape)
+    
+    
     @staticmethod
     def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
         """

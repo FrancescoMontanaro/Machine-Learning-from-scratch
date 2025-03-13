@@ -1,18 +1,13 @@
-import numpy as np
 from typing import Optional
 
-from .base import Layer
+from ..core import Tensor, Module
 
 
-class Input(Layer):
+class Input(Module):
     
     ### Magic methods ###
     
-    def __init__(
-        self, 
-        shape: tuple, 
-        name: Optional[str] = None
-    ) -> None:
+    def __init__(self, shape: tuple, name: Optional[str] = None) -> None:
         """
         Class constructor for Input layer.
         
@@ -27,61 +22,30 @@ class Input(Layer):
         # Initializing the input shape
         self.input_shape = shape
     
-        
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    
+    ### Public methods ###
+    
+    def forward(self, x: Tensor) -> Tensor:
         """
         Function to compute the forward pass of the Input layer.
-        It initializes the filters if not initialized and computes the forward pass.
         
         Parameters:
-        - x (np.ndarray): input data.
+        - x (Tensor): input data
         
         Returns:
-        - np.ndarray: output data.
+        - Tensor: output data
         """
         
         # Save the input shape
-        self.input_shape = x.shape
+        self.input_shape = x.shape()
         
         # Checking if the layer is initialized
         if not self.initialized:
             # Initialize the filters
             self.init_params()
-            
-        # Compute the forward pass
-        return self.forward(x)
-    
-    
-    ### Public methods ###
-    
-    def forward(self, x: np.ndarray) -> np.ndarray:
-        """
-        Function to compute the forward pass of the Input layer.
-        
-        Parameters:
-        - x (np.ndarray): input data
-        
-        Returns:
-        - np.ndarray: output data
-        """
         
         # Return the input data as it is
         return x
-    
-    
-    def backward(self, loss_gradient: np.ndarray) -> np.ndarray:
-        """
-        Backward pass of the Input layer
-        
-        Parameters:
-        - loss_gradient (np.ndarray): Gradient of the loss with respect to the output of the layer: dL/dO_i
-        
-        Returns:
-        - np.ndarray: Gradient of the loss with respect to the input of the layer: dL/dX_i ≡ dL/dO_{i-1}
-        """
-        
-        # Return the loss gradient as it is
-        return loss_gradient
     
     
     def output_shape(self) -> tuple:
@@ -92,4 +56,8 @@ class Input(Layer):
         - tuple: output shape of the layer
         """
         
+        # Call the parent class method to check if the layer is initialized
+        super().output_shape()
+        
+        # Return the input shape
         return self.input_shape
