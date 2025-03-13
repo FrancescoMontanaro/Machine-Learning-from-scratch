@@ -677,6 +677,22 @@ class Tensor:
         return reshape(self, shape)
     
     
+    def repeat(self, repeats: int, axis: Optional[int] = None) -> 'Tensor':
+        """
+        Method to repeat the tensor along the specified dimensions
+        
+        Parameters:
+        - repeats (Union[int, Tuple[int, ...]]): Number of times to repeat the tensor
+        - axis (Union[int, Tuple[int, ...]]): Axis along which to repeat the tensor
+        
+        Returns:
+        - Tensor: Repeated tensor
+        """
+        
+        # Compute and return the repeated tensor
+        return repeat(self, repeats, axis)
+    
+    
     @staticmethod
     def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
         """

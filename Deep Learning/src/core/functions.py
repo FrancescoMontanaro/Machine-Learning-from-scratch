@@ -701,3 +701,57 @@ def reshape(x: 'Tensor', new_shape: Tuple[int, ...]) -> 'Tensor':
     
     # Return the output tensor
     return out
+
+
+def repeat(x: 'Tensor', repeats: int, axis: Optional[int] = None) -> 'Tensor':
+    """
+    Repeat elements of a tensor along a specified axis.
+    
+    Parameters:
+    - x (Tensor): Input tensor.
+    - repeats (int): Number of repetitions for each element.
+    - axis (Optional[int]): The axis along which to repeat. If None, the array is flattened before repeating, and the output will be 1D.
+    
+    Returns:
+    - Tensor: A new tensor with repeated elements.
+    """
+    
+    # Get the Tensor class
+    Tensor = cast(Type['Tensor'], get_tensor_class())
+    
+    # Compute the output tensor by repeating the input tensor
+    out = Tensor(np.repeat(x.data, repeats, axis=axis), requires_grad=x.requires_grad)
+    
+    # Define the backward function
+    def _backward() -> None:
+        # If the gradient needs to be computed, backpropagate the gradient
+        if x.requires_grad and out.grad is not None:
+            # If axis is None, np.repeat flattens x, so the gradient must be reshaped back to the original shape
+            if axis is None:
+                # out.grad has shape (x.data.size, * repeats,). Reshape to (x.data.size, repeats) then sum along the repeated axis.
+                grad_unrepeated = out.grad.reshape(x.data.size, repeats).sum(axis=1)
+                
+                # Finally, reshape back to the original shape of x.data
+                grad_unrepeated = grad_unrepeated.reshape(x.data.shape)
+            else:
+                # Insert the repeats dimension into the shape along the specified axis:
+                new_shape = (
+                    x.data.shape[:axis] +
+                    (x.data.shape[axis], repeats) +
+                    x.data.shape[axis+1:]
+                )
+                
+                # Sum along the repeated axis to get the gradient for each element
+                grad_unrepeated = out.grad.reshape(new_shape).sum(axis=axis+1)
+            
+            # Accumulate the unrepeated gradient in x.grad
+            x.grad = x.grad + grad_unrepeated if x.grad is not None else grad_unrepeated
+
+    # Store the backward function with respect to the repeat operation
+    out._backward = _backward
+    
+    # Store the previous tensors in the computation graph
+    out._prev = {x}
+    
+    # Return the output tensor
+    return out
