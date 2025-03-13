@@ -102,28 +102,6 @@ def plot_confusion_matrix(cm: np.ndarray, title: str = "Confusion Matrix") -> No
     plt.ylabel('Actuals', fontsize=12)
     plt.title(title, fontsize=12)
     plt.show()
-   
-    
-def one_hot_encoding(y: np.ndarray, n_classes: int) -> np.ndarray:
-    """
-    Method to perform one-hot encoding on the target variable
-    
-    Parameters:
-    - y (np.ndarray): Target variable
-    - n_classes (int): Number of classes
-    
-    Returns:
-    - np.ndarray: One-hot encoded target variable
-    """
-    
-    # Initialize the one-hot encoded target variable
-    one_hot = np.zeros((y.shape[0], n_classes))
-    
-    # Set the appropriate index to 1
-    one_hot[np.arange(y.shape[0]), y] = 1
-    
-    # Return the one-hot encoded target variable
-    return one_hot.astype(int)
 
 
 def format_summary_output(value: str, width: int) -> str:

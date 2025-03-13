@@ -99,14 +99,17 @@ class Dense(Module):
         - num_features (int): Number of features in the input data
         """
         
-        # Initialize the weights and bias with random values
+        # Initialize the weights with random values
         self.weights = Tensor(
             data = np.random.uniform(-np.sqrt(1 / num_features), np.sqrt(1 / num_features), (num_features, self.num_units)),
+            requires_grad = True,
             is_parameter = True
         )
         
+        # Initialize the bias with zeros
         self.bias = Tensor(
             data = np.zeros(self.num_units),
+            requires_grad = True,
             is_parameter = True
         )
         

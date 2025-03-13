@@ -114,12 +114,55 @@ def max(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Ten
     return out
 
 
-def mean(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Tensor':
+def sqrt(x: 'Tensor') -> 'Tensor':
+    """
+    Compute the element-wise square root of the tensor.
+    
+    Parameters:
+    - x (Tensor): Input tensor.
+    
+    Returns:
+    - Tensor: Square root of the input tensor.
+    
+    Raises:
+    - AssertionError: If the input is not a tensor.
+    """
+    
+    # Get the tensor class
+    Tensor = cast(Type['Tensor'], get_tensor_class())
+    
+    # Check if the input is a tensor
+    assert isinstance(x, Tensor), "Input must be a tensor"
+
+    # Compute the square root of the tensor
+    out = Tensor(np.sqrt(x.data), requires_grad=x.requires_grad)
+    
+    # Define the backward function
+    def _backward() -> None:
+        # If the gradient needs to be computed, backpropagate the gradient
+        if x.requires_grad and out.grad is not None:
+            # Avoid division by zero; assume x.data is non-negative.
+            grad_self = out.grad / (2 * np.sqrt(x.data))
+            
+            # Update the gradient of the input tensor
+            x.grad = x.grad + grad_self if x.grad is not None else grad_self
+
+    # Store the backward function with respect to the square root operation
+    out._backward = _backward
+    
+    # Store the previous tensors in the computation graph
+    out._prev = {x}
+    
+    # Return the output tensor
+    return out
+
+
+def mean(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':
     """
     Compute the mean of the tensor along the specified axis.
     
     Parameters:
-    - axis (Optional[int]): Axis along which to compute the mean
+    - axis (Optional[Union[int, Tuple[int, ...]]]): Axis along which to compute the mean
     - keepdims (bool): Whether to keep the dimensions of the input tensor
     
     Returns:
@@ -142,21 +185,39 @@ def mean(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Te
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Determine the number of elements that were averaged
-            count = x.data.size if axis is None else x.data.shape[axis]
-            
-            # Multiply the upstream gradient by the scale factor
+            # Determine the number of elements over which the mean is computed.
+            if axis is None:
+                # If axis is None, the mean is computed over all elements.
+                count = x.data.size
+            elif isinstance(axis, int):
+                # If axis is an integer, the mean is computed over the elements in that axis.
+                count = x.data.shape[axis]
+            else:
+                # If axis is a tuple, the mean is computed over the elements in the specified axes.
+                count = 1
+                for a in axis:
+                    count *= x.data.shape[a]
+                    
+            # Scale the gradient by the reciprocal of the number of elements over which the mean is computed.
             grad_self = out.grad * (1.0 / count)
             
-            # If axis is specified and keepdims is False, expand dims to allow broadcasting
+            # If axis is not None and keepdims is False, expand dimensions for proper broadcasting.
             if axis is not None and not keepdims:
-                # Expand the gradient along the specified axis
-                grad_self = np.expand_dims(grad_self, axis=axis)
+                # If axis is an integer, expand the gradient along that axis.
+                if isinstance(axis, int):
+                    # Expand the gradient along the specified axis.
+                    grad_self = np.expand_dims(grad_self, axis=axis)
+                # If axis is a tuple, expand the gradient along each axis in the tuple.
+                else:
+                    # Sort the axes in ascending order to avoid conflicts.
+                    for a in sorted(axis):
+                        # Expand the gradient along the specified axis.
+                        grad_self = np.expand_dims(grad_self, axis=a)
             
-            # Broadcast the gradient to the original shape of self.data
+            # Broadcast the gradient to the original shape of self.data.
             grad_self = np.broadcast_to(grad_self, x.data.shape)
             
-            # Update the gradient of the input tensor
+            # Update the gradient of the input tensor.
             x.grad = x.grad + grad_self if x.grad is not None else grad_self
 
     # Store the backward function with respect to the mean operation
@@ -167,6 +228,41 @@ def mean(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Te
     
     # Return the output tensor
     return out
+
+
+def var(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':
+    """
+    Compute the variance of the tensor along the specified axis (or axes).
+
+    Parameters:
+    - x (Tensor): Input tensor.
+    - axis (Optional[Union[int, Tuple[int, ...]]]): Axis or axes along which to compute the variance.
+     - keepdims (bool): Whether to keep the dimensions of the result.
+
+    Returns:
+    - Tensor: Variance of the tensor.
+    
+    Raises:
+    - AssertionError: If the input is not a tensor.
+    """
+    
+    # Get the tensor class
+    Tensor = cast(Type['Tensor'], get_tensor_class())
+    
+    # Check if the input is a tensor
+    assert isinstance(x, Tensor), "Input must be a tensor"
+    
+    # Compute the mean with keepdims=True to allow proper broadcasting.
+    m = mean(x, axis=axis, keepdims=True)
+    
+    # Compute the squared difference between the tensor and the mean.
+    diff = x - m
+    
+    # Compute the squared difference and take the mean along the specified axis.
+    sq = diff * diff
+    
+    # Compute the variance by taking the mean of the squared difference.
+    return mean(sq, axis=axis, keepdims=keepdims)
 
 
 def exp(x: 'Tensor') -> 'Tensor':

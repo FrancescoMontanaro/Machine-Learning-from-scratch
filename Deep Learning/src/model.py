@@ -70,15 +70,17 @@ class Model:
         - Tensor: Output of the neural network
         """
         
-        # Set the model in evaluation mode
-        self.eval()
-        
-        # Execute a first forward pass to initialize the parameters
-        return self.forward(
-            x = x,
-            batch_size = batch_size,
-            verbose = verbose
-        )
+        # Disable gradient computation
+        with no_grad():
+            # Set the model in evaluation mode
+            self.eval()
+            
+            # Execute a first forward pass to initialize the parameters
+            return self.forward(
+                x = x,
+                batch_size = batch_size,
+                verbose = verbose
+            )
         
         
     ### Public methods ###      
@@ -153,7 +155,7 @@ class Model:
             self.train()
             
             # Shuffle the dataset at the beginning of each epoch
-            X_train_shuffled, Y_train_shuffled = self.shuffle_data(X_train, y_train)
+            X_train_shuffled, Y_train_shuffled = shuffle_data((X_train, y_train))
             
             # Iterate over the batches
             elapsed_time = 0.0
@@ -494,30 +496,3 @@ class Model:
         # This will evetually be called recursively until the last the module is a layer
         # which returns the output shape
         return self.modules[-1].output_shape()
-    
-    
-    @staticmethod
-    def shuffle_data(X: Tensor, y: Tensor) -> tuple[Tensor, Tensor]:
-        """
-        Method to shuffle the dataset
-        
-        Parameters:
-        - X (Tensor): Features of the dataset
-        - y (Tensor): Target of the dataset
-        
-        Returns:
-        - tuple[Tensor, Tensor]: Shuffled features and target
-        """
-        
-        # Get the number of samples
-        n_samples = X.shape()[0]
-        
-        # Generate random indices
-        indices = np.random.permutation(n_samples)
-        
-        # Shuffle the dataset
-        X_shuffled = X[indices]
-        y_shuffled = y[indices]
-        
-        # Return the shuffled dataset
-        return X_shuffled, y_shuffled

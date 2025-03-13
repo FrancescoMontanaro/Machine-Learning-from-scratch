@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
 
 from .operators import *
 from .functions import *
@@ -47,7 +47,7 @@ class Tensor:
         """
         
         # Return the string representation of the tensor
-        return f"Tensor({self.data}, requires_grad={self.requires_grad}, shape={self.data.shape}, dtype={self.data.dtype})"
+        return f"Tensor({self.data}, shape={self.data.shape}, dtype={self.data.dtype})"
 
 
     #############################
@@ -210,12 +210,12 @@ class Tensor:
         
         # Convert the constant to a Tensor (with requires_grad=False)
         other_tensor = Tensor(
-                data = np.array(other, dtype=self.data.dtype) if isinstance(other, (int, float)) else other, 
-                requires_grad = False
-            )
+            data = np.array(other, dtype=self.data.dtype) if isinstance(other, (int, float)) else other, 
+            requires_grad = False
+        )
             
         # Compute the sum of the two tensors
-        return add(other_tensor, self)
+        return self.__add__(other_tensor)
     
     
     def __rsub__(self, other: Union[int, float, np.ndarray]) -> 'Tensor':
@@ -237,12 +237,12 @@ class Tensor:
         
         # Convert the constant to a Tensor (with requires_grad=False)
         other_tensor = Tensor(
-                data = np.array(other, dtype=self.data.dtype) if isinstance(other, (int, float)) else other, 
-                requires_grad = False
-            )
+            data = np.array(other, dtype=self.data.dtype) if isinstance(other, (int, float)) else other, 
+            requires_grad = False
+        )
             
         # Compute the difference of the two tensors
-        return sub(other_tensor, self)
+        return -self.__sub__(other_tensor)
     
     
     def __rmul__(self, other: Union[int, float, np.ndarray]) -> 'Tensor':
@@ -276,12 +276,12 @@ class Tensor:
         
         # Convert the constant to a Tensor (with requires_grad=False)
         other_tensor = Tensor(
-                data = np.array(other, dtype=self.data.dtype) if isinstance(other, (int, float)) else other, 
-                requires_grad = False
-            )
+            data = np.array(other, dtype=self.data.dtype) if isinstance(other, (int, float)) else other, 
+            requires_grad = False
+        )
             
         # Compute the division of the two tensors
-        return div(other_tensor, self)
+        return other_tensor.__truediv__(self)
     
     
     def __pow__(self, power: Union[int, float]) -> 'Tensor':
@@ -314,7 +314,7 @@ class Tensor:
         """
         
         # Compute and return the negation of the tensor
-        return neg(self)
+        return (-1) * self
     
     
     def __getitem__(self, key: Union[int, slice, np.ndarray]) -> 'Tensor':
@@ -516,7 +516,19 @@ class Tensor:
         return max(self, axis=axis, keepdims=keepdims)
    
    
-    def mean(self, axis: Optional[int] = None, keepdims: bool = False) -> 'Tensor':
+    def sqrt(self) -> 'Tensor':
+        """
+        Method to compute the square root of the tensor
+        
+        Returns:
+        - Tensor: Tensor containing the square root of the current tensor
+        """
+        
+        # Compute and return the square root of the tensor
+        return sqrt(self)
+   
+   
+    def mean(self, axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':
         """
         Method to compute the mean of the tensor along the specified axis
         
@@ -530,6 +542,22 @@ class Tensor:
         
         # Compute and return the mean of the tensor along the specified axis
         return mean(self, axis=axis, keepdims=keepdims)
+    
+    
+    def var(self, axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':
+        """
+        Method to compute the variance of the tensor along the specified axis
+        
+        Parameters:
+        - axis (int): Axis along which to compute the variance
+        - keepdims (bool): Whether to keep the dimensions of the input tensor
+        
+        Returns:
+        - Tensor: variance of the tensor along the specified axis
+        """
+        
+        # Compute and return the variance of the tensor along the specified axis
+        return var(self, axis=axis, keepdims=keepdims)
    
     
     def exp(self) -> 'Tensor':
