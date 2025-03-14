@@ -317,12 +317,12 @@ class Tensor:
         return (-1) * self
     
     
-    def __getitem__(self, key: Union[int, slice, np.ndarray]) -> 'Tensor':
+    def __getitem__(self, key: Union[int, slice, np.ndarray, Tuple[Union[int, slice, np.ndarray], ...]]) -> 'Tensor':
         """
         Implements slicing for the tensor using the [] operator.
         
         Parameters:
-        - key (Union[int, slice, np.ndarray]): The index or slice(s) to apply.
+        - key (Union[int, slice, np.ndarray, Tuple[Union[int, slice, np.ndarray], ...]]): Key to slice the tensor
 
         Returns:
         - Tensor: A new tensor with data = self.data[key].
@@ -500,12 +500,12 @@ class Tensor:
         return sum(self, axis=axis, keepdims=keepdims)
     
     
-    def max(self, axis: Optional[int] = None, keepdims: bool = False) -> 'Tensor':
+    def max(self, axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':
         """
         Method to compute the maximum value of the tensor along the specified axis
         
         Parameters:
-        - axis (int): Axis along which to compute the maximum value
+        - axis (Optional[Union[int, Tuple[int, ...]]]): Axis along which to compute the maximum value
         - keepdims (bool): Whether to keep the dimensions of the input tensor
         
         Returns:
@@ -691,6 +691,53 @@ class Tensor:
         
         # Compute and return the repeated tensor
         return repeat(self, repeats, axis)
+    
+    
+    def pad(self, pad_width: tuple) -> 'Tensor':
+        """
+        Method to pad the tensor along the specified dimensions
+        
+        Parameters:
+        - pad_width (tuple): Width of the padding
+        
+        Returns:
+        - Tensor: Padded tensor
+        """
+        
+        # Compute and return the padded tensor
+        return pad(self, pad_width)
+    
+    
+    def sliding_window(self, window_shape: Union[int, Tuple[int, ...]], axis: Optional[Union[int, Tuple[int, ...]]] = None) -> 'Tensor':
+        """
+        Method to extract sliding windows from the tensor
+        
+        Parameters:
+        - window_shape (Union[int, Tuple[int, ...]]): Shape of the sliding window
+        - axis (Union[int, Tuple[int, ...]]): Axis along which to extract the sliding windows
+        
+        Returns:
+        - Tensor: Sliding windows tensor
+        """
+        
+        # Compute and return the sliding windows tensor
+        return sliding_window(self, window_shape, axis)
+    
+    
+    def tensordot(self, other: 'Tensor', axes: Union[int, Tuple[List[int], List[int]]]) -> 'Tensor':
+        """
+        Method to compute the tensor dot product of two tensors
+        
+        Parameters:
+        - other (Tensor): Tensor to compute the dot product
+        - axes (Union[int, Tuple[List[int], List[int]]): Axes along which to compute the dot product
+        
+        Returns:
+        - Tensor: Tensor containing the dot product of the two tensors
+        """
+        
+        # Compute and return the tensor dot product of the two tensors
+        return tensordot(self, other, axes)
     
     
     @staticmethod

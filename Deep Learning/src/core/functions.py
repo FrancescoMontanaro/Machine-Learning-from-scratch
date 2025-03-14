@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Optional, Tuple, List, Union, Type, TYPE_CHECKING, cast
+from typing import Optional, Tuple, List, Union, Type, Iterator, TYPE_CHECKING, cast
 
 from .registry import get_tensor_class
 if TYPE_CHECKING: from .tensor import Tensor
@@ -60,13 +60,13 @@ def sum(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Ten
     return out
 
 
-def max(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Tensor':
+def max(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':
     """
     Compute the maximum value of the tensor along the specified axis.
     
     Parameters:
     - x (Tensor): Input tensor
-    - axis (int): Axis along which to compute the maximum value
+    - axis (Optional[Union[int, Tuple[int, ...]]]): Axis along which to compute the maximum value
     - keepdims (bool): Whether to keep the dimensions of the input tensor
     
     Returns:
@@ -84,25 +84,51 @@ def max(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Ten
     
     # Compute the maximum value of the tensor along the specified axis
     out = Tensor(np.max(x.data, axis=axis, keepdims=keepdims), requires_grad=x.requires_grad)
-
+            
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Broadcast the gradient to the shape of the input tensor
-            broadcasted_max = np.broadcast_to(out.data, x.data.shape)
-            
             # Create a mask to identify the maximum elements
+            expanded_shape = None
+            if axis is not None and not keepdims:
+                # Determine the axes as a list.
+                axes_list = [axis] if isinstance(axis, int) else list(axis)
+                
+                # Create the expanded shape from x.data.shape: set each reduction axis to 1.
+                expanded_shape = list(x.data.shape)
+                for ax in axes_list:
+                    expanded_shape[ax] = 1
+                
+                # Reshape out.data and then broadcast to x.data.shape.
+                broadcasted_max = np.broadcast_to(np.reshape(out.data, tuple(expanded_shape)), x.data.shape)
+            else:
+                # Otherwise, out.data can be directly broadcast.
+                broadcasted_max = np.broadcast_to(out.data, x.data.shape)
+                
+            # Create a mask where x.data equals the broadcasted maximum.
             mask = (x.data == broadcasted_max).astype(x.data.dtype)
             
-            # Count the number of maximum elements
+            # Count how many times the maximum appears along the reduced axes.
             count = np.sum(mask, axis=axis, keepdims=True) if axis is not None else np.sum(mask)
             
             # Distribute the gradient to the maximum elements
-            grad_self = mask * (out.grad / count)
+            if keepdims or axis is None:
+                # If keepdims is True or axis is None, the gradient directly can be broadcasted directly
+                grad_x = mask * (np.broadcast_to(out.grad, x.data.shape) / count)
+            else:
+                # If keepdims is False, it must be expanded along the reduction axes to match the original shape
+                if expanded_shape is not None:
+                    out_grad_expanded = np.reshape(out.grad, tuple(expanded_shape))
+                else:
+                    # expanded_shape should not be None if keepdims is False
+                    raise ValueError("expanded_shape cannot be None")
+                
+                # Compute the gradient for each element
+                grad_x = mask * (np.broadcast_to(out_grad_expanded, x.data.shape) / count)
             
             # Update the gradient of the input tensor
-            x.grad = x.grad + grad_self if x.grad is not None else grad_self
+            x.grad = x.grad + grad_x if x.grad is not None else grad_x
 
     # Store the backward function with respect to the maximum operation
     out._backward = _backward
@@ -672,6 +698,9 @@ def reshape(x: 'Tensor', new_shape: Tuple[int, ...]) -> 'Tensor':
     
     Returns:
     - Tensor: A new Tensor with the specified shape.
+    
+    Raises:
+    - AssertionError: If the input is not a tensor.
     """
     
     # Get the tensor class
@@ -714,10 +743,16 @@ def repeat(x: 'Tensor', repeats: int, axis: Optional[int] = None) -> 'Tensor':
     
     Returns:
     - Tensor: A new tensor with repeated elements.
+    
+    Raises:
+    - AssertionError: If the input is not a tensor.
     """
     
     # Get the Tensor class
     Tensor = cast(Type['Tensor'], get_tensor_class())
+    
+    # Check if the input is a tensor
+    assert isinstance(x, Tensor), "Input must be a tensor"
     
     # Compute the output tensor by repeating the input tensor
     out = Tensor(np.repeat(x.data, repeats, axis=axis), requires_grad=x.requires_grad)
@@ -752,6 +787,345 @@ def repeat(x: 'Tensor', repeats: int, axis: Optional[int] = None) -> 'Tensor':
     
     # Store the previous tensors in the computation graph
     out._prev = {x}
+    
+    # Return the output tensor
+    return out
+
+
+def pad(x: 'Tensor', pad_width: Tuple[Tuple[int, int], ...]) -> 'Tensor':
+    """
+    Pad the tensor with zeros or a constant value.
+
+    Parameters:
+    - x (Tensor): Input tensor.
+    - pad_width (Tuple[Tuple[int, int], ...]): Tuple of pad widths for each dimension. For example, for a 2D tensor, ((pad_top, pad_bottom), (pad_left, pad_right)).
+    - mode (str): Padding mode (default "constant").
+
+    Returns:
+    - Tensor: A new tensor with padded data.
+    
+    Raises:
+    - AssertionError: If the input is not a tensor.
+    """
+    
+    # Get the Tensor class
+    Tensor = cast(Type['Tensor'], get_tensor_class())
+    
+    # Check if the input is a tensor
+    assert isinstance(x, Tensor), "Input must be a tensor"
+    
+    # Compute the padded tensor
+    out = Tensor(np.pad(x.data, pad_width, mode="constant"), requires_grad=x.requires_grad)
+    
+    # Define the backward function
+    def _backward() -> None:
+        # If the gradient needs to be computed, backpropagate the gradient
+        if x.requires_grad and out.grad is not None:
+            # For each axis, create a slice from pad_width[axis][0] to pad_width[axis][0] + original_dim.
+            slices = tuple(slice(pw[0], pw[0] + s) for s, pw in zip(x.data.shape, pad_width))
+            
+            # Extract the portion of out.grad corresponding to the original tensor's shape.
+            grad_unpadded = out.grad[slices]
+            
+            # Update the gradient of the input tensor
+            x.grad = x.grad + grad_unpadded if x.grad is not None else grad_unpadded
+    
+    # Store the backward function with respect to the pad operation
+    out._backward = _backward
+    
+    # Store the previous tensors in the computation graph
+    out._prev = {x}
+    
+    # Return the output tensor
+    return out
+
+
+def sliding_window(x: 'Tensor', window_shape: Union[int, Tuple[int, ...]], axis: Optional[Union[int, Tuple[int, ...]]] = None) -> 'Tensor':
+    """
+    Extracts a sliding window view from a tensor
+
+    Parameters:
+    - x (Tensor): Input tensor.
+    - window_shape (int or Tuple[int, ...]): The size of the window along each axis. If an int is provided, the same window size is used.
+    - axis (int or Tuple[int, ...], optional): The axis (or axes) along which to extract sliding windows. If None, the input is flattened before extracting windows.
+
+    Returns:
+    - Tensor: A new Tensor containing the sliding window view of the input.
+    
+    Raises:
+    - AssertionError: If the input is not a tensor.
+    - AssertionError: If the length of window_shape does not match the length of axis.
+    """
+    
+    # Get the Tensor class
+    Tensor = cast(Type['Tensor'], get_tensor_class())
+    
+    # Check if the input is a tensor
+    assert isinstance(x, Tensor), "Input must be a tensor"
+    
+    # Normalize window_shape and axis to tuples.
+    if isinstance(window_shape, int):
+        # If window_shape is an int, convert it to a tuple.
+        window_shape = (window_shape,)
+        
+    # If axis is None, flatten the input before window extraction.
+    if axis is None:
+        # Flatten the input before window extraction.
+        flat = x.data.flatten()
+        
+        # Save shapes for backward.
+        orig_shape = x.data.shape
+        flat_size = flat.shape[0]
+        
+        # Compute the sliding window view.
+        out = Tensor(np.lib.stride_tricks.sliding_window_view(flat, window_shape), requires_grad=x.requires_grad)
+        
+        # Define the backward function.
+        def _backward() -> None:
+            # If the gradient needs to be computed, backpropagate the gradient.
+            if x.requires_grad and out.grad is not None:
+                # Create a gradient array with the same shape as the flattened input.
+                grad_flat = np.zeros_like(flat)
+                
+                # Iterate over each sliding window index.
+                for i in range(flat_size - window_shape[0] + 1):
+                    # Accumulate the gradient for each window.
+                    grad_flat[i:i+window_shape[0]] += out.grad[i]
+                    
+                # Reshape the gradient to the original shape.
+                grad_unflat = grad_flat.reshape(orig_shape)
+                
+                # Update the gradient of the input tensor.
+                x.grad = x.grad + grad_unflat if x.grad is not None else grad_unflat
+        
+        # Store the backward function with respect to the sliding window operation.
+        out._backward = _backward
+        
+        # Store the previous tensors in the computation graph.
+        out._prev = {x}
+        
+        # Return the output tensor.
+        return out
+    
+    # If axis is not None, extract sliding windows along the specified axis.
+    else:
+        # If axis is provided, ensure it is a tuple.
+        if isinstance(axis, int):
+            axis = (axis,)
+            
+        # Ensure that window_shape has the same length as axis.
+        if len(window_shape) == 1 and len(axis) > 1:
+            # If window_shape is a single int, repeat it for each axis.
+            window_shape = window_shape * len(axis)
+            
+        # Ensure that window_shape has the same length as axis.
+        assert len(window_shape) == len(axis), "Length of window_shape must match length of axis."
+
+        # Compute the sliding window view.
+        out = Tensor(np.lib.stride_tricks.sliding_window_view(x.data, window_shape, axis=axis), requires_grad=x.requires_grad) # type: ignore
+        
+        # Compute the shape of the sliding window view.
+        sliding_shape: List[int] = []
+        for a, w in zip(axis, window_shape):
+            sliding_shape.append(x.data.shape[a] - w + 1)
+        
+        # Define the backward function.
+        def _backward() -> None:
+            # If the gradient needs to be computed, backpropagate the gradient.
+            if x.requires_grad and out.grad is not None:
+                # Create a gradient array with the same shape as the input.
+                grad_x = np.zeros_like(x.data)
+                
+                # Store the shape of the gradient.
+                out_shape = out.grad.shape
+                
+                # Create an iterator for the correct indices based on out.grad shape
+                valid_shape = out_shape[:len(sliding_shape)]
+                valid_iter = np.ndindex(*valid_shape)
+                
+                # Iterate over each valid output index.
+                for out_idx in valid_iter:
+                    # Build a slicing tuple for x.data.
+                    slicer = [slice(None)] * x.data.ndim
+                    
+                    # Iterate over each axis and window size.
+                    for i, a in enumerate(axis):
+                        # The input index is the output index plus the window size.
+                        input_idx = out_idx[i]
+                        slicer[a] = slice(input_idx, input_idx + window_shape[i])
+                    
+                    # Convert slicer to a tuple.
+                    out_slicer = list(out_idx)
+                    
+                    # Ensure that out_slicer has the same length as out.grad.ndim.
+                    while len(out_slicer) < out.grad.ndim:
+                        out_slicer.append(slice(None)) # type: ignore
+                    
+                    # Extract the gradient for the current window.
+                    grad_piece = out.grad[tuple(out_slicer)]
+                    
+                    # Ensure that grad_piece has the same length as x.data.ndim.
+                    target_shape = grad_x[tuple(slicer)].shape
+                    if grad_piece.shape != target_shape:
+                        # Broadcast the gradient to the target shape.
+                        if grad_piece.size == 1:
+                            # Broadcast the gradient to the target shape, if it is a scalar.
+                            grad_piece = np.broadcast_to(grad_piece, target_shape)
+                        else:
+                            # Otherwise, sum the gradient along the last axes.
+                            axes_to_sum = tuple(range(grad_piece.ndim - len(target_shape), grad_piece.ndim))
+                            if axes_to_sum:
+                                grad_piece = np.sum(grad_piece, axis=axes_to_sum)
+                                
+                            # Broadcast the gradient to the target shape, if necessary.
+                            if grad_piece.shape != target_shape:
+                                grad_piece = np.broadcast_to(grad_piece, target_shape)
+                    
+                    # Accumulate the gradient for the current window.
+                    grad_x[tuple(slicer)] += grad_piece
+                    
+                # Update the gradient of the input tensor.
+                x.grad = x.grad + grad_x if x.grad is not None else grad_x
+                
+        # Store the backward function with respect to the sliding window operation.
+        out._backward = _backward
+        
+        # Store the previous tensors in the computation graph.
+        out._prev = {x}
+        
+        # Return the output tensor.
+        return out
+
+    
+def tensordot(a: 'Tensor', b: 'Tensor', axes: Union[int, Tuple[List[int], List[int]]]) -> 'Tensor':
+    """
+    Compute the generalized tensor dot product
+    
+    Parameters:
+    - a (Tensor): First tensor.
+    - b (Tensor): Second tensor.
+    - axes: Either an integer (contracting the last axes of a with the first axes of b) or a tuple of two lists specifying the axes to contract.
+    
+    Returns:
+    - Tensor: The result of the tensordot operation.
+    
+    Raises:
+    - AssertionError: If the inputs are not tensors.
+    """
+    
+    # Get the tensor class
+    Tensor = cast(Type['Tensor'], get_tensor_class())
+    
+    # Ensure the inputs are tensors
+    assert isinstance(a, Tensor) and isinstance(b, Tensor), "Both inputs must be tensors"
+    
+    # Compute the tensordot operation
+    out = Tensor(np.tensordot(a.data, b.data, axes=axes), requires_grad=(a.requires_grad or b.requires_grad))
+    
+    # Define the backward function
+    def _backward() -> None:
+        # If there's no gradient to propagate, return early
+        if out.grad is None:
+            return
+            
+        # axes is an integer
+        if isinstance(axes, int):
+            n = axes  # Number of axes to contract
+            
+            # Compute the gradient for a
+            if a.requires_grad:
+                # For grad_a, contract out.grad with b transposed appropriately
+                b_axes_for_grad = list(range(n, b.data.ndim)) + list(range(n))
+                b_transposed = np.transpose(b.data, b_axes_for_grad)
+                
+                # Contract out.grad with transposed b
+                grad_a = np.tensordot(out.grad, b_transposed, axes=b.data.ndim - n)
+                
+                # Reshape to match a's dimensions if necessary
+                if grad_a.shape != a.data.shape:
+                    grad_a = grad_a.reshape(a.data.shape)
+                
+                # Accumulate gradient
+                a.grad = a.grad + grad_a if a.grad is not None else grad_a
+                
+            # Compute the gradient for b
+            if b.requires_grad:
+                # For grad_b, contract a transposed appropriately with out.grad
+                a_axes_for_grad = list(range(a.data.ndim - n)) + list(range(a.data.ndim - n, a.data.ndim))
+                a_transposed = np.transpose(a.data, a_axes_for_grad)
+                
+                # Contract transposed a with out.grad
+                grad_b = np.tensordot(a_transposed, out.grad, axes=a.data.ndim - n)
+                
+                # Reshape to match b's dimensions if necessary
+                if grad_b.shape != b.data.shape:
+                    grad_b = grad_b.reshape(b.data.shape)
+                
+                # Accumulate gradient
+                b.grad = b.grad + grad_b if b.grad is not None else grad_b
+                
+        # axes is a tuple of two lists
+        else:
+            # Extract the axes for a and b
+            a_axes, b_axes = axes
+            
+            # Compute the gradient for a
+            if a.requires_grad:
+                # Prepare axes for transposing b
+                transpose_b = list(b_axes) + [i for i in range(b.data.ndim) if i not in b_axes]
+                b_transposed = np.transpose(b.data, transpose_b)
+                
+                # Reshape b_transposed to combine contracted dimensions
+                b_contracted_shape = (-1,) + b_transposed.shape[len(b_axes):]
+                b_reshaped = b_transposed.reshape(b_contracted_shape)
+                
+                # Prepare the output gradient for contraction
+                free_out = list(range(out.grad.ndim - (b.data.ndim - len(b_axes)), out.grad.ndim))
+                
+                # Contract out.grad with reshaped b
+                grad_a = np.tensordot(out.grad, b_reshaped, axes=(free_out, list(range(1, b_reshaped.ndim))))
+                
+                # Calcola la forma target per il gradiente di a
+                target_shape = a.data.shape
+                
+                # Reshape diretto al posto di transpose
+                if grad_a.shape != target_shape:
+                    grad_a = grad_a.reshape(target_shape)
+                
+                # Accumulate gradient
+                a.grad = a.grad + grad_a if a.grad is not None else grad_a
+                
+            # Compute the gradient for b
+            if b.requires_grad:
+                # Prepare axes for transposing a
+                transpose_a = list(a_axes) + [i for i in range(a.data.ndim) if i not in a_axes]
+                a_transposed = np.transpose(a.data, transpose_a)
+                
+                # Reshape a_transposed to combine contracted dimensions
+                a_contracted_shape = (-1,) + a_transposed.shape[len(a_axes):]
+                a_reshaped = a_transposed.reshape(a_contracted_shape)
+                
+                # Prepare the output gradient for contraction
+                free_out = list(range(out.grad.ndim - (b.data.ndim - len(b_axes))))
+                
+                # Contract a with out.grad
+                grad_b = np.tensordot(a_reshaped, out.grad, axes=(list(range(1, a_reshaped.ndim)), free_out))
+                
+                # Calcola la forma target per il gradiente di b
+                target_shape = b.data.shape
+                
+                # Reshape diretto al posto di transpose
+                if grad_b.shape != target_shape:
+                    grad_b = grad_b.reshape(target_shape)
+                
+                # Accumulate gradient
+                b.grad = b.grad + grad_b if b.grad is not None else grad_b
+    
+    # Store the backward function with respect to the tensordot operation
+    out._backward = _backward
+    
+    # Store the previous tensors in the computation graph
+    out._prev = {a, b}
     
     # Return the output tensor
     return out

@@ -104,6 +104,7 @@ class Module:
         # Return the parameters
         return params
 
+
     def parameters(self) -> list[Tensor]:
         """
         Method to collect the parameters of the module

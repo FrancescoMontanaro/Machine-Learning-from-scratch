@@ -55,7 +55,7 @@ def shuffle_data(data: Union[Tensor, Tuple[Tensor, Tensor]]) -> Union[Tensor, Tu
         raise ValueError("data must be a tensor or a tuple of two tensors")
 
 
-def split_data(data: Union[Tensor, Tuple[Tensor, Tensor]], split_pct: float = 0.1, shuffle: bool = False) -> Union[Tuple[Tensor, Tensor, Tensor, Tensor], Tuple[Tensor, Tensor]]:
+def split_data(data: Union[Tensor, Tuple[Tensor, Tensor]], split_pct: float = 0.1, shuffle: bool = False) -> Tuple[Tensor, ...]:
     """
     Splits datasets into two subsets: for example, training and testing sets.
     The input dataset can be a single tensor or a tuple of tensors (X, y).

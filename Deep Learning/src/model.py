@@ -1,4 +1,5 @@
 import re
+import math
 import time
 import numpy as np
 from itertools import count
@@ -131,8 +132,8 @@ class Model:
             **{f"val_{metric.__name__}": np.array([]) for metric in metrics}
         }
         self.epoch, self.stop_training = 0, False
-        n_training_steps = max(1, X_train.shape()[0] // batch_size)
-        n_valid_steps = max(1, X_valid.shape()[0] // batch_size)
+        n_training_steps = max(1, math.ceil(X_train.shape()[0] / batch_size))
+        n_valid_steps = max(1, math.ceil(X_valid.shape()[0] / batch_size))
         
         # Execute a first forward pass in evaluation mode to initialize the parameters and their shapes
         self(X_train[:1])
@@ -313,7 +314,7 @@ class Model:
         
         # Compute the number of steps to iterate over the batches
         # If the batch size is not provided, set it to 1
-        num_steps = max(1, x.shape()[0] // batch_size) if batch_size else 1
+        num_steps = max(1, math.ceil(x.shape()[0] / batch_size)) if batch_size else 1
         
         # Initialize the list of outputs
         outputs = []

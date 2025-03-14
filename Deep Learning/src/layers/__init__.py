@@ -1,5 +1,3 @@
-from .base import Layer
-
 from .batch_normalization import BatchNormalization
 from .convolutional import Conv2D
 from .dense import Dense

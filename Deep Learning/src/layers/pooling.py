@@ -1,10 +1,10 @@
 import numpy as np
 from typing import Optional, Literal
 
-from .base import Layer
+from ..core import Tensor, Module
 
 
-class MaxPool2D(Layer):
+class MaxPool2D(Module):
     
     ### Magic methods ###
     
@@ -27,23 +27,26 @@ class MaxPool2D(Layer):
         self.padding = padding
         
         
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+        
+    ### Public methods ###
+    
+    def forward(self, x: Tensor) -> Tensor:
         """
         Method to perform the forward pass through the MaxPool2D layer
         
         Parameters:
-        - x (np.ndarray): Input data. Shape: (Batch size, height, width, channels)
+        - x (Tensor): Input data. Shape: (Batch size, height, width, channels)
         
         Returns:
-        - np.ndarray: Output of the layer after the forward pass
+        - Tensor: Output of the layer after the forward pass
         """
         
         # Check if the input shape has a valid shape
-        if len(x.shape) != 4:
-            raise ValueError(f"Input must be a 4D array. The shape must be (Batch size, Height, Width, Channels). Got shape: {x.shape}")
+        if len(x.shape()) != 4:
+            raise ValueError(f"Input must be a 4D array. The shape must be (Batch size, Height, Width, Channels). Got shape: {x.shape()}")
         
         # Extract the dimensions of the input data
-        batch_size, input_height, input_width, num_channels = x.shape
+        batch_size, input_height, input_width, num_channels = x.shape()
         
         # Save the input shape
         self.input_shape = (batch_size, input_height, input_width, num_channels)
@@ -52,126 +55,40 @@ class MaxPool2D(Layer):
         if not self.initialized:
             self.init_params()
         
-        # Perform the forward pass
-        return self.forward(x)
-        
-        
-    ### Public methods ###
-    
-    def forward(self, x: np.ndarray) -> np.ndarray:
-        """
-        Method to perform the forward pass through the MaxPool2D layer
-        
-        Parameters:
-        - x (np.ndarray): Input data. Shape: (Batch size, height, width, channels)
-        
-        Returns:
-        - np.ndarray: Output of the layer after the forward pass
-        """
-        
         # Extract the required dimensions for better readability
-        batch_size, output_height, output_width, n_channels = self.output_shape()
         pool_height, pool_width = self.size
         stride_height, stride_width = self.stride
-        
-        # Apply the padding
+            
+        # Apply padding to the input data
         if self.padding == "same":
             # Pad the input data
-            x = np.pad(
-                x, 
-                (
-                    (0, 0), 
-                    (self.top_padding, self.bottom_padding), 
-                    (self.left_padding, self.right_padding), 
-                    (0, 0)
-                ), 
-                mode="constant"
-            )
-            
-        # Save the input data for the backward pass
-        self.x = x
+            x_padded = x.pad((
+                (0, 0),
+                (self.top_padding, self.bottom_padding),
+                (self.left_padding, self.right_padding),
+                (0, 0)
+            ))
+        else:
+            # Set the padded input data as the input data
+            x_padded = x
         
-        # Extract the patches from the input data
-        patches = np.lib.stride_tricks.sliding_window_view(
-            x, 
-            window_shape = (pool_height, pool_width), 
-            axis = (1, 2)  # type: ignore
+        # Extract the sliding windows from the input data
+        patches = x_padded.sliding_window(
+            window_shape = (pool_height, pool_width),
+            axis = (1, 2)
         )
         
         # Apply the stride to the patches
         patches = patches[:, ::stride_height, ::stride_width, :, :, :]
         
         # Reshape the patches to have dimensions: (batch_size, output_height, output_width, pool_height, pool_width, n_channels)
-        patches = patches.transpose(0, 1, 2, 4, 5, 3)
+        patches = patches.transpose((0, 1, 2, 4, 5, 3))
 
         # For each patch, compute the max value
-        output = np.max(patches, axis=(3, 4)) # shape: (batch_size, output_height, output_width, n_channels)
-
-        # Reshape the patches to have dimensions: (batch_size, output_height, output_width, pool_height * pool_width, n_channels)
-        flat_patches = patches.reshape(batch_size, output_height, output_width, pool_height * pool_width, n_channels)
-        
-        # Save the indices of the max values for the backward pass
-        self.cache = np.argmax(flat_patches, axis=3) 
+        out = patches.max((3, 4)) # shape: (batch_size, output_height, output_width, n_channels)
                 
-        return output
-    
-    
-    def backward(self, loss_gradient: np.ndarray) -> np.ndarray:
-        """
-        Backward pass for the MaxPool2D layer (Layer i)
-        
-        Parameters:
-        - loss_gradient (np.ndarray): Gradient of the loss with respect to the output of this layer: dL/dO_i
-        
-        Returns:
-        - np.ndarray: Gradient of the loss with respect to the input of this layer: dL/dX_i ≡ dL/dO_{i-1}
-        """
-        
-        # Extract the required dimensions for better readability
-        batch_size, output_height, output_width, n_channels = loss_gradient.shape
-        _, pool_width = self.size
-        stride_height, stride_width = self.stride
-        
-        # Initialize the gradient of the loss with respect to the input
-        d_input = np.zeros_like(self.x)
-        
-        # Flatten cache to have shape (batch_size*out_height*out_width, n_channels)
-        argmax_flat = self.cache.reshape(-1, n_channels)
-        
-        # Decompose that offset into (row_offset, col_offset) and flatten them
-        row_offset = (argmax_flat // pool_width).ravel()
-        col_offset = (argmax_flat %  pool_width).ravel()
-
-        # Create coordinate grids for the batch, output height, and output width and flatten them
-        b_idx, oh_idx, ow_idx = np.indices((batch_size, output_height, output_width), sparse=False)
-        b_idx, oh_idx, ow_idx = b_idx.ravel(), oh_idx.ravel(), ow_idx.ravel()
-
-        # Replicate the batch index for each channel
-        b_expanded  = np.repeat(b_idx,  n_channels)
-        oh_expanded = np.repeat(oh_idx, n_channels)
-        ow_expanded = np.repeat(ow_idx, n_channels)
-
-        # The final row, col in the padded d_input
-        row_idx = oh_expanded * stride_height + row_offset
-        col_idx = ow_expanded * stride_width  + col_offset
-
-        # Replicate the channel index for each batch, output height, and output width
-        c_expanded = np.tile(np.arange(n_channels), b_idx.shape[0])
-
-        # Flatten the gradient and add the values to the correct indices
-        grad_flat = loss_gradient.reshape(-1, n_channels).ravel()
-        np.add.at(d_input, (b_expanded, row_idx, col_idx, c_expanded), grad_flat)
-
-        # Remove padding if applied during the forward pass
-        if self.padding == "same":
-            d_input = d_input[
-                :, 
-                self.top_padding : d_input.shape[1] - self.bottom_padding,
-                self.left_padding: d_input.shape[2] - self.right_padding,
-                :
-            ]
-        
-        return d_input
+        # Return the output
+        return out
         
         
     def output_shape(self) -> tuple:
@@ -184,6 +101,9 @@ class MaxPool2D(Layer):
         Raises:
         - AssertionError: if the input shape is not set
         """
+        
+        # Call the parent class method to check if the layer is initialized
+        super().output_shape()
         
         # Assert that the input shape is set
         assert self.input_shape is not None, "Input shape is not set. Please call the layer with some input data to set the input shape."

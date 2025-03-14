@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Union, Type, TYPE_CHECKING, cast
+from typing import Union, Type, Tuple, TYPE_CHECKING, cast
 
 
 from .registry import get_tensor_class
@@ -333,13 +333,13 @@ def pow(x: 'Tensor', power: Union[int, float]) -> 'Tensor':
     return out
 
 
-def get_item(x: 'Tensor', key: Union[int, slice, np.ndarray]) -> 'Tensor':
+def get_item(x: 'Tensor', key: Union[int, slice, np.ndarray, Tuple[Union[int, slice, np.ndarray], ...]]) -> 'Tensor':
     """
     Function to slice a tensor.
     
     Parameters:
     - x (Tensor): Input tensor
-    - key (Union[int, slice, np.ndarray]): Index or slice object
+    - key (Union[int, slice, np.ndarray, Tuple[Union[int, slice, np.ndarray], ...]]): Index or slice to extract
     
     Returns:
     - Tensor: Sliced tensor
