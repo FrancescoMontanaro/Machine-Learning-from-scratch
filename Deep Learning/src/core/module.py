@@ -25,6 +25,7 @@ class Module:
         # Initialize the dictionaries for the parameters and sub-modules
         self._parameters: dict[str, Tensor] = {} # Dictionary for the parameters of the module
         self._modules: dict[str, 'Module'] = {} # Dictionary for the sub-modules of the module
+        self._buffers: dict[str, Tensor] = {} # Dictionary for the buffers of the module
 
 
     def __setattr__(self, name: str, value: Any) -> None:
@@ -70,6 +71,27 @@ class Module:
     ######################
     ### Public methods ###
     ######################
+    
+    
+    def register_buffer(self, name: str, tensor: Tensor) -> None:
+        """
+        Method to register a buffer in the module
+        
+        Parameters:
+        - name (str): Name of the buffer
+        - tensor (Tensor): Tensor to register as buffer
+        """
+        
+        # Set the requires_grad attribute of the tensor to False
+        tensor.requires_grad = False
+        tensor.is_parameter = False
+        
+        # Add the tensor to the dictionary of buffers
+        self._buffers[name] = tensor
+        
+        # Set the attribute of the module
+        setattr(self, name, tensor)
+        
     
     def named_parameters(self, prefix: str = "") -> dict[str, Tensor]:
         """

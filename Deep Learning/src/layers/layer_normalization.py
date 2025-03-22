@@ -63,13 +63,8 @@ class LayerNormalization(Module):
         layer_mean = x.mean(axis=axes, keepdims=True)
         layer_var = x.var(axis=axes, keepdims=True)
         
-        # Normalize the input
-        self.X_centered = x - layer_mean
-        self.stddev_inv = 1 / (layer_var + self.epsilon).sqrt()
-        self.X_norm = self.X_centered * self.stddev_inv
-        
         # Scale and shift
-        return self.gamma * self.X_norm + self.beta
+        return self.gamma * ((x - layer_mean) * (1 / (layer_var + self.epsilon).sqrt())) + self.beta
     
     
     def output_shape(self) -> tuple:

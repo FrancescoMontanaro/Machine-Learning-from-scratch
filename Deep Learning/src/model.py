@@ -1,4 +1,5 @@
 import re
+import gc
 import math
 import time
 import numpy as np
@@ -160,7 +161,7 @@ class Model:
             
             # Iterate over the batches
             elapsed_time = 0.0
-            training_epoch_loss = Tensor(data=0.0)
+            training_epoch_loss = 0.0
             n_micro_steps, accumulated_loss = 0, None
             train_metrics = {metric.__name__: 0.0 for metric in metrics}
             for training_step in range(n_training_steps):
@@ -177,7 +178,7 @@ class Model:
                 # Forward pass: Compute the output of the model
                 training_batch_output = self.forward(X_training_batch)
                 
-                # Loss: Compute the loss of the model
+                # Compute the loss of the model
                 training_loss = loss_fn(y_training_batch, training_batch_output)
                 
                 # Accumulate the gradients and update the counter
@@ -195,28 +196,28 @@ class Model:
                     # Update the parameters of the model
                     optimizer.update()
                     
+                    # Clear the computational graph
+                    average_loss.clear_graph()
+                    
                     # Reset the accumulation counter and the accumulated gradient
                     n_micro_steps = 0
                     accumulated_loss = None
                 
                 # Update the epoch loss
-                training_epoch_loss += training_loss
+                training_epoch_loss += training_loss.data
                 
                 # Compute the metrics
                 for metric in metrics:
                     train_metrics[metric.__name__] += metric(y_training_batch, training_batch_output).data
                     
-                # Store the end time
-                end_time = time.time()
-                
-                # Update the elapsed time
-                elapsed_time += (end_time - start_time)
-                
-                # Compute the milliseconds per step
-                ms_per_step = elapsed_time / (training_step + 1) * 1000
+                # Comute the the statistics
+                end_time = time.time() # Store the end time
+                elapsed_time += (end_time - start_time) # Update the elapsed time
+                ms_per_step = elapsed_time / (training_step + 1) * 1000 # Compute the milliseconds per step
+                tensors_in_memory = len([t for t in gc.get_objects() if isinstance(t, Tensor)]) # Compute the number of tensors in memory
                 
                 # Display epoch progress
-                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {round(ms_per_step, 2)} ms/step --> loss: {training_loss.data:.4f}", end="")
+                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {tensors_in_memory} tensors in memory | {round(ms_per_step, 2)} ms/step --> loss: {training_loss.data:.4f}", end="")
             
             ##############################
             ### Start validation phase ###
@@ -228,7 +229,7 @@ class Model:
             # Disable automatic gradient computation
             with no_grad(): 
                 # Iterate over the validation steps
-                valid_epoch_loss = Tensor(data=0.0)
+                valid_epoch_loss = 0.0
                 valid_metrics = {metric.__name__: 0.0 for metric in metrics}
                 for valid_step in range(n_valid_steps):
                     # Get the current batch of validation data
@@ -240,7 +241,7 @@ class Model:
                     
                     # Compute the loss of the model for the current validation batch
                     # and update the validation epoch loss
-                    valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output)
+                    valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output).data
                     
                     # Compute the metrics
                     for metric in metrics:
@@ -251,14 +252,14 @@ class Model:
             ##########################
                   
             # Store the training and validation losses
-            self.history["loss"] = np.append(self.history["loss"], training_epoch_loss.data / n_training_steps)
-            self.history["val_loss"] = np.append(self.history["val_loss"], valid_epoch_loss.data / n_valid_steps)
+            self.history["loss"] = np.append(self.history["loss"], training_epoch_loss / n_training_steps)
+            self.history["val_loss"] = np.append(self.history["val_loss"], valid_epoch_loss / n_valid_steps)
             
             # Compute the average metrics
             for metric in metrics:
                 # Compute the average of the metrics for the training and validation sets and store them
                 self.history[metric.__name__] = np.append(self.history[metric.__name__], train_metrics[metric.__name__] / n_training_steps)
-                self.history[f"val_{metric.__name__}"] = np.append(self.history[f"val_{metric.__name__}"], valid_metrics[metric.__name__] / n_valid_steps) 
+                self.history[f"val_{metric.__name__}"] = np.append(self.history[f"val_{metric.__name__}"], valid_metrics[metric.__name__] / n_valid_steps)
             
             #############################
             ### Display the progress  ###
@@ -274,7 +275,7 @@ class Model:
                 + f" | Validation loss: {self.history['val_loss'][-1]:.4f} "
                 + " ".join(
                     [f"- Validation {metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'][-1]:.4f}" for metric in metrics]
-                )
+                ).ljust(50)
             )
             
             #############################
@@ -288,6 +289,9 @@ class Model:
             for callback in callbacks:
                 # Call the callback
                 callback(self)
+                
+            # Call the garbage collector to free up memory
+            gc.collect()
          
         # Return the history of the training   
         return self.history
@@ -354,7 +358,7 @@ class Model:
                 print(f"\rProcessing batch {step + 1}/{num_steps} - {round(ms_per_step, 2)} ms/step", end="")
             
         # Concatenate the outputs
-        out = Tensor.concat(outputs, axis=0)
+        out = concat(outputs, axis=0)
         
         # Return the output tensor
         return out

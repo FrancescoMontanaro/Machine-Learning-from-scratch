@@ -46,7 +46,7 @@ class Dropout(Module):
             self.init_params()
         
         # Generate a random mask
-        self.mask = Tensor(
+        mask = Tensor(
             data = np.random.rand(*x.shape()) > self.rate, 
             requires_grad = False, 
             is_parameter = False
@@ -54,7 +54,7 @@ class Dropout(Module):
         
         if self.training:
             # Scale the output during training
-            return x * self.mask / (1 - self.rate)
+            return x * mask / (1 - self.rate)
         else:
             # Return the output during inference
             return x

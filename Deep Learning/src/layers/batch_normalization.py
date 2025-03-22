@@ -29,7 +29,7 @@ class BatchNormalization(Module):
         self.gamma: Tensor
         self.beta: Tensor
         
-        # Initialize the mean and variance parameters
+        # Initialize the running mean and variance
         self.running_mean: Tensor
         self.running_var: Tensor
 
@@ -75,30 +75,20 @@ class BatchNormalization(Module):
         # The layer is in training phase
         if self.training:
             # Calculate batch mean and variance
-            batch_mean = x.mean(axis=axes, keepdims=True)
-            batch_var = x.var(axis=axes, keepdims=True)
-
-            # Update running mean and variance
-            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * batch_mean
-            self.running_var = self.momentum * self.running_var + (1 - self.momentum) * batch_var
-
-            # Use batch statistics for normalization
-            mean = batch_mean
-            var = batch_var
+            mean = x.mean(axis=axes, keepdims=True)
+            var = x.var(axis=axes, keepdims=True)
+            
+            # Update the running mean and variance tensors
+            self.running_mean.data = self.running_mean.data * self.momentum + mean.data * (1 - self.momentum)
+            self.running_var.data = self.running_var.data * self.momentum + var.data * (1 - self.momentum)
+            
+            # Scale and shift the normalized input
+            return self.gamma * ((x - mean) * (1 / (var + self.epsilon).sqrt())) + self.beta
            
         # The layer is in inference phase 
         else:
             # Use running statistics for normalization
-            mean = self.running_mean
-            var = self.running_var
-            
-        # Normalize the input
-        self.X_centered = x - mean
-        self.stddev_inv = 1 / (var + self.epsilon).sqrt()
-        self.X_norm = self.X_centered * self.stddev_inv
-            
-        # Scale and shift the normalized input
-        return self.gamma * self.X_norm + self.beta
+            return self.gamma * ((x - self.running_mean) * (1 / (self.running_var + self.epsilon).sqrt())) + self.beta
     
     
     def output_shape(self) -> tuple:
@@ -145,8 +135,12 @@ class BatchNormalization(Module):
         )
         
         # Initialize the running mean and variance
-        self.running_mean = Tensor(np.zeros(num_features), requires_grad=False, is_parameter=False)
-        self.running_var = Tensor(np.ones(num_features), requires_grad=False, is_parameter=False)
+        running_mean = Tensor(np.zeros(num_features), requires_grad=False, is_parameter=False)
+        running_var = Tensor(np.ones(num_features), requires_grad=False, is_parameter=False)
+        
+        # Store the running mean and variance as buffers
+        self.register_buffer("running_mean", running_mean)
+        self.register_buffer("running_var", running_var)
         
         # Call the parent class method to set the layer as initialized
         super().init_params()

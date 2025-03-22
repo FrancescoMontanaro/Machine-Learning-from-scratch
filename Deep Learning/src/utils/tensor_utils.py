@@ -1,7 +1,8 @@
 import numpy as np
-from typing import Optional, Union, Tuple
+from typing import Union, Tuple, List
 
 from ..core import Tensor
+from ..core import functions as F
 
 
 def shuffle_data(data: Union[Tensor, Tuple[Tensor, Tensor]]) -> Union[Tensor, Tuple[Tensor, Tensor]]:
@@ -149,3 +150,19 @@ def one_hot_encoding(y: Tensor, n_classes: int) -> Tensor:
     
     # Return the one-hot encoded target variable
     return Tensor(one_hot, requires_grad=False, dtype=np.int8)
+
+
+def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
+    """
+    Method to concatenate the tensors along the specified axis
+    
+    Parameters:
+    - tensors (Tensor): List of tensors to concatenate
+    - axis (int): Axis along which to concatenate the tensors
+    
+    Returns:
+    - Tensor: Concatenated tensor
+    """
+    
+    # Compute and return the concatenated tensor
+    return F.concat(tensors, axis)

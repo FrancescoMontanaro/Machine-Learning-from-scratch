@@ -67,10 +67,10 @@ class Dense(Module):
         assert isinstance(self.bias, Tensor), "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
         # Compute the linear combination of the weights and features
-        self.linear_comb = x @ self.weights + self.bias
+        linear_comb = x @ self.weights + self.bias
         
         # Return the output of the neuron
-        return self.activation(self.linear_comb) if self.activation is not None else self.linear_comb
+        return self.activation(linear_comb) if self.activation is not None else linear_comb
     
     
     def output_shape(self) -> tuple:

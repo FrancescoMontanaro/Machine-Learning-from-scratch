@@ -54,38 +54,19 @@ class MaxPool2D(Module):
         # Initialize the layer params
         if not self.initialized:
             self.init_params()
-        
-        # Extract the required dimensions for better readability
-        pool_height, pool_width = self.size
-        stride_height, stride_width = self.stride
             
         # Apply padding to the input data
         if self.padding == "same":
             # Pad the input data
-            x_padded = x.pad((
+            x = x.pad((
                 (0, 0),
                 (self.top_padding, self.bottom_padding),
                 (self.left_padding, self.right_padding),
                 (0, 0)
             ))
-        else:
-            # Set the padded input data as the input data
-            x_padded = x
         
-        # Extract the sliding windows from the input data
-        patches = x_padded.sliding_window(
-            window_shape = (pool_height, pool_width),
-            axis = (1, 2)
-        )
-        
-        # Apply the stride to the patches
-        patches = patches[:, ::stride_height, ::stride_width, :, :, :]
-        
-        # Reshape the patches to have dimensions: (batch_size, output_height, output_width, pool_height, pool_width, n_channels)
-        patches = patches.transpose((0, 1, 2, 4, 5, 3))
-
-        # For each patch, compute the max value
-        out = patches.max((3, 4)) # shape: (batch_size, output_height, output_width, n_channels)
+        # Perform the max pooling 2D operation
+        out = x.max_pool_2d(self.size, self.stride)
                 
         # Return the output
         return out

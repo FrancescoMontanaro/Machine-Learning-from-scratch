@@ -1,5 +1,6 @@
 import numpy as np
-from typing import Optional, Tuple, List, Union, Type, Iterator, TYPE_CHECKING, cast
+from numpy.lib.stride_tricks import sliding_window_view
+from typing import Optional, Tuple, List, Union, Type, TYPE_CHECKING, cast
 
 from .registry import get_tensor_class
 if TYPE_CHECKING: from .tensor import Tensor
@@ -54,7 +55,7 @@ def sum(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Ten
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -134,7 +135,7 @@ def max(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -177,7 +178,7 @@ def sqrt(x: 'Tensor') -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -250,7 +251,7 @@ def mean(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdi
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -288,7 +289,34 @@ def var(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
     sq = diff * diff
     
     # Compute the variance by taking the mean of the squared difference.
-    return mean(sq, axis=axis, keepdims=keepdims)
+    var = mean(sq, axis=axis, keepdims=keepdims)
+    
+    # Determine the number of elements over which the variance is computed.
+    if axis is None:
+        # If axis is None, the variance is computed over all elements.
+        N = x.data.size
+        
+    # If axis is an integer, the variance is computed over the elements in that axis.
+    elif isinstance(axis, int):
+        # If axis is an integer, the variance is computed over the elements in that axis.
+        N = x.data.shape[axis]
+        
+    # If axis is a tuple, the variance is computed over the elements in the specified axes.
+    elif isinstance(axis, tuple):
+        # If axis is a tuple, the variance is computed over the elements in the specified axes.
+        N = 1
+        for ax in axis:
+            N *= x.data.shape[ax]
+    else:
+        raise ValueError("axis must be an integer, a tuple of integers, or None")
+    
+    # If N > 1, apply the bessel correction to the variance.
+    if N > 1:
+        # Convert the population variance to the sample variance.
+        var = var * (N / (N - 1))
+    
+    # Return the variance tensor
+    return var
 
 
 def exp(x: 'Tensor') -> 'Tensor':
@@ -325,7 +353,7 @@ def exp(x: 'Tensor') -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -362,7 +390,7 @@ def log(x: 'Tensor') -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -409,7 +437,7 @@ def transpose(x: 'Tensor', axes: Tuple[int]) -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -443,7 +471,7 @@ def masked_fill(x: 'Tensor', mask: Union[np.ndarray, 'Tensor'], value: float) ->
     mask = mask.data if not isinstance(mask, np.ndarray) else mask
     
     # Fill the tensor with the value where the mask is False
-    out_data = np.where(mask, x.data, value)
+    out_data = np.where(mask, value, x.data)
     
     # Create a new tensor with the filled data
     out = Tensor(out_data, requires_grad=x.requires_grad)
@@ -453,7 +481,7 @@ def masked_fill(x: 'Tensor', mask: Union[np.ndarray, 'Tensor'], value: float) ->
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad:
             # Compute the gradient of the loss with respect to the current tensor
-            grad_mask = np.where(mask, out.grad if out.grad is not None else 0, 0)
+            grad_mask = np.where(mask, 0, out.grad if out.grad is not None else 0)
             
             # Update the gradient of the current tensor
             x.grad = x.grad + grad_mask if x.grad is not None else grad_mask
@@ -462,7 +490,7 @@ def masked_fill(x: 'Tensor', mask: Union[np.ndarray, 'Tensor'], value: float) ->
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -512,7 +540,7 @@ def clip(x: 'Tensor', min_value: float, max_value: float) -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph.
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor.
     return out
@@ -575,7 +603,7 @@ def gather(x: 'Tensor', indices: 'Tensor', axis: int = 0) -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -619,7 +647,7 @@ def unsqueeze(x: 'Tensor', axis: int) -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -682,7 +710,11 @@ def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = set(tensors)
+    prev = set()
+    for t in tensors:
+        if t.requires_grad:
+            prev.add(t)
+    out._prev = prev
     
     # Return the output tensor
     return out
@@ -726,7 +758,7 @@ def reshape(x: 'Tensor', new_shape: Tuple[int, ...]) -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -786,7 +818,7 @@ def repeat(x: 'Tensor', repeats: int, axis: Optional[int] = None) -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -834,7 +866,7 @@ def pad(x: 'Tensor', pad_width: Tuple[Tuple[int, int], ...]) -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -902,7 +934,7 @@ def sliding_window(x: 'Tensor', window_shape: Union[int, Tuple[int, ...]], axis:
         out._backward = _backward
         
         # Store the previous tensors in the computation graph.
-        out._prev = {x}
+        out._prev = {x} if x.requires_grad else set()
         
         # Return the output tensor.
         return out
@@ -991,7 +1023,7 @@ def sliding_window(x: 'Tensor', window_shape: Union[int, Tuple[int, ...]], axis:
         out._backward = _backward
         
         # Store the previous tensors in the computation graph.
-        out._prev = {x}
+        out._prev = {x} if x.requires_grad else set()
         
         # Return the output tensor.
         return out
@@ -1125,7 +1157,237 @@ def tensordot(a: 'Tensor', b: 'Tensor', axes: Union[int, Tuple[List[int], List[i
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {a, b}
+    prev = set()
+    if a.requires_grad:
+        prev.add(a)
+    if b.requires_grad:
+        prev.add(b)
+    out._prev = prev
+    
+    # Return the output tensor
+    return out
+
+
+def conv_2d(x: 'Tensor', kernel: 'Tensor', stride: Tuple[int, int] = (1,1)) -> 'Tensor':
+    """
+    Compute the 2D convolution of the input tensor with the kernel.
+    
+    Parameters:
+    - x (Tensor): Input tensor.
+    - kernel (Tensor): Convolution kernel.
+    - stride (Tuple[int, int]): Stride of the convolution. Default is (1, 1).
+    
+    Returns:
+    - Tensor: The result of the 2D convolution.
+    
+    Raises:
+    - AssertionError: If the inputs are not tensors.
+    - AssertionError: If the input channels do not match the kernel channels.
+    - ValueError: If the kernel or stride is too large for the input size.
+    """
+    
+    # Get the tensor class
+    Tensor = cast(Type['Tensor'], get_tensor_class())
+    
+    # Ensure the inputs are tensors
+    assert isinstance(x, Tensor) and isinstance(kernel, Tensor), "Both inputs must be tensors"
+    
+    # Extract the dimensions of the input tensor, the kernel and the stride
+    batch_size, height, width, num_channels = x.shape()
+    out_channels, kernel_in_channels, kernel_height, kernel_width = kernel.shape()
+    stride_height, stride_width = stride # Extract the stride along the height and width
+    
+    # Check if the input channels match the kernel channels
+    assert kernel_in_channels == num_channels, "w in_channels != x channels"
+    
+    # Compute the output dimensions
+    output_height = (height - kernel_height) // stride_height + 1
+    output_width = (width - kernel_width) // stride_width + 1
+    
+    # Check if the kernel is too large or the stride is too large for the input size
+    if output_height < 1 or output_width < 1:
+        raise ValueError("Kernel or stride too large for input size")
+    
+    # Create the column matrix
+    col = np.array([
+        x.data[n, i*stride_height:i*stride_height+kernel_height, j*stride_width:j*stride_width+kernel_width, :].reshape(-1)
+        for n in range(batch_size)
+        for i in range(output_height)
+        for j in range(output_width)
+    ], dtype=x.data.dtype)
+    
+    # Reshape the kernel to (out_channels, kernel_height*kernel_width*num_channels)
+    kernel_reshaped = kernel.data.reshape(out_channels, -1)
+    
+    # Matrix multiplication between col and kernel_reshaped.T. The result is a matrix of shape (batch_size*output_height*output_width, out_channels)
+    out_col = col @ kernel_reshaped.T
+    
+    # Reshape the output matrix to (batch_size, output_height, output_width, out_channels)
+    out_data = out_col.reshape(batch_size, output_height, output_width, out_channels)
+    
+    # Create the output tensor
+    out = Tensor(out_data, requires_grad=x.requires_grad or kernel.requires_grad)
+    
+    # Define the backward function
+    def _backward():
+        # Check if the gradient needs to be computed
+        if out.grad is None:
+            return
+        
+        # Reshape the gradient to (batch_size*output_height*output_width, out_channels)
+        grad_out_col = out.grad.reshape(-1, out_channels)
+        
+        # Compute the gradient of the kernel if required
+        if kernel.requires_grad:
+            # Compute the gradient of the kernel using the column matrix
+            grad_kernel_2d = col.T @ grad_out_col
+            
+            # Transpose the gradient of the kernel. Reshape to (kernel_height, kernel_width, num_channels, out_channels)
+            grad_kernel_2d = grad_kernel_2d.T
+            
+            # Final shape: (out_channels, kernel_in_channels, kernel_height, kernel_width)
+            grad_w_full = grad_kernel_2d.reshape(kernel.data.shape)
+            
+            # Update the gradient of the kernel
+            kernel.grad = grad_w_full if kernel.grad is None else kernel.grad + grad_w_full
+            
+        # Compute the gradient of the input tensor if required
+        if x.requires_grad:
+            # Compute the gradient of the input tensor using the kernel and the gradient of the output tensor
+            d_col = grad_out_col @ kernel_reshaped
+            
+            # Initialize the gradient of the input tensor
+            dx_data = np.zeros_like(x.data)
+            
+            # Reshape d_col to (batch_size, output_height, output_width, kernel_height, kernel_width, num_channels)
+            d_col_reshaped = d_col.reshape(batch_size, output_height, output_width, -1)
+            
+            # Iterate over each element in the batch
+            for n in range(batch_size):
+                # Iterate over each element in the output tensor
+                for i_out in range(output_height):
+                    # Compute the starting index along the height
+                    i0 = i_out * stride_height
+                    # Iterate over each element in the output tensor
+                    for j_out in range(output_width):
+                        # Compute the starting index along the width
+                        j0 = j_out * stride_width
+                        
+                        # Extract the gradient for the current element
+                        patch_grad = d_col_reshaped[n, i_out, j_out].reshape(kernel_height, kernel_width, num_channels)
+                        
+                        # Accumulate the gradient in the input tensor
+                        dx_data[n, i0:i0+kernel_height, j0:j0+kernel_width, :] += patch_grad
+            
+            # Update the gradient of the input tensor
+            x.grad = dx_data if x.grad is None else x.grad + dx_data
+    
+    # Store the backward function with respect to the convolution operation
+    out._backward = _backward
+    
+    # Store the previous tensors in the computation graph
+    prev = set()
+    if x.requires_grad:
+        prev.add(x)
+    if kernel.requires_grad:
+        prev.add(kernel)
+    out._prev = prev
+    
+    # Return the output tensor
+    return out
+
+
+def max_pool_2d(x: 'Tensor', kernel_size: Tuple[int,int] = (2,2), stride: Tuple[int,int] = (2,2)) -> 'Tensor':
+    """
+    Apply a 2D Max Pooling over an input tensor of shape (N, H, W, C).
+    
+    Parameters:
+    - x (Tensor): The input tensor, shape (N, H, W, C).
+    - kernel_size (Tuple[int,int]): The spatial size of the window (kH, kW).
+    - stride (Tuple[int,int]): The stride (stride_height, stride_width).
+    
+    Returns:
+    - Tensor: The output after applying Max Pool 2D, shape (N, outH, outW, C).
+    
+    Raises:
+    - AssertionError: If x is not a Tensor.
+    - ValueError: If the window or stride is too large for the input size.
+    """
+    
+    # Get the tensor class
+    Tensor = cast(Type['Tensor'], get_tensor_class())
+    
+    # Check if the input is a tensor
+    assert isinstance(x, Tensor), "Input x must be a Tensor."
+    
+    # Extract the dimensions of the input tensor, the kernel size and the stride
+    batch_size, height, width, num_channels = x.shape()
+    kernel_height, kernel_width = kernel_size
+    stride_height, stride_width = stride
+    
+    # Compute the output dimensions
+    output_height = (height - kernel_height) // stride_height + 1
+    output_width = (width - kernel_width) // stride_width + 1
+    
+    # Check if the kernel or stride is too large for the input size
+    if output_height < 1 or output_width < 1:
+        raise ValueError("Kernel size or stride too large for input size.")
+    
+    # Apply the sliding window view to the input tensor to extract the pooling windows
+    windows = sliding_window_view(
+        x = x.data, 
+        window_shape = (kernel_height, kernel_width), 
+        axis = (1, 2)  # type: ignore
+    )
+
+    # Apply the stride to the sliding window view and transpose the dimensions
+    windows = windows[:, ::stride_height, ::stride_width, ...].transpose(0, 1, 2, 4, 5, 3)
+    
+    # Flatten the windows along the last two dimensions
+    flat_windows = windows.reshape(batch_size, output_height, output_width, num_channels, -1)
+
+    # Extract the index of the maximum value in each window
+    argmax_vals = np.argmax(flat_windows, axis=4)
+
+    # Compute the index of the maximum value in each window
+    max_ids = np.stack([argmax_vals // kernel_width, argmax_vals % kernel_width], axis=-1)
+    
+    # Compute the max pooling operation and store the output tensor
+    out = Tensor(np.max(windows, axis=(3, 4)), requires_grad=x.requires_grad)
+    
+    # Define the backward function
+    def _backward():
+        # Check if the gradient needs to be computed
+        if out.grad is None:
+            return
+        
+        # Compute the gradient of the input tensor if required
+        if x.requires_grad:
+            # Initialize the gradient of the input tensor
+            if x.grad is None:
+                x.grad = np.zeros_like(x.data)
+                            
+            # Initialize the global indices for the gradient
+            n_idx, i_out_idx, j_out_idx, c_idx_idx = np.indices(
+                (batch_size, output_height, output_width, num_channels)
+            )
+
+            # Compute the global indices for the maximum values
+            x_idx = i_out_idx * stride_height + max_ids[..., 0]
+            y_idx = j_out_idx * stride_width + max_ids[..., 1]
+
+            # Accumulate the gradient in the input tensor
+            np.add.at(
+                x.grad,
+                (n_idx, x_idx, y_idx, c_idx_idx),
+                out.grad
+            )
+    
+    # Store the backward function with respect to the max pooling operation
+    out._backward = _backward
+    
+    # Store the previous tensors in the computation graph
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out

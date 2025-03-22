@@ -1,9 +1,9 @@
 import numpy as np
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, Callable
 
 from .operators import *
 from .functions import *
-from .activtions import *
+from .activations import *
 from .context_manager import _NO_GRAD
 
 
@@ -13,7 +13,7 @@ class Tensor:
     ###### Magic methods ######
     ###########################
     
-    def __init__(self, data: Union[int, float, np.ndarray], requires_grad: bool = True, dtype: type = np.float32, is_parameter: bool = False) -> None:
+    def __init__(self, data: Union[int, float, np.ndarray], requires_grad: bool = False, dtype: type = np.float32, is_parameter: bool = False) -> None:
         """
         Constructor for the Tensor class
         
@@ -34,8 +34,8 @@ class Tensor:
         self.is_parameter = is_parameter # Flag to indicate if the tensor is a trainable parameter
         self.requires_grad = False if _NO_GRAD else requires_grad # Flag to indicate if the gradient needs to be computed for the tensor
         self.grad = None # Gradient of the tensor with respect to the loss
-        self._backward = lambda: None # Function to backpropagate the gradient
-        self._prev = set() # Set to store the previous tensors in the computation graph
+        self._backward: Callable = lambda: None # Function to backpropagate the gradient
+        self._prev: set['Tensor'] = set() # Set to store the previous tensors in the computation graph
 
 
     def __repr__(self) -> str:
@@ -396,7 +396,47 @@ class Tensor:
         for t in reversed(topological_order):
             # Backpropagate the gradient
             t._backward()
+      
+    
+    def detach(self) -> 'Tensor':
+        """
+        Method to detach the tensor from the computation graph
         
+        Returns:
+        - Tensor: Detached tensor
+        """
+        
+        # Create a new tensor with the same data but without gradient computation
+        return Tensor(data=self.data, requires_grad=False, is_parameter=self.is_parameter)
+    
+    
+    def clear_graph(self, visited: Optional[set] = None) -> None:
+        """
+        Method to clear the computation graph
+        
+        Parameters:
+        - t (Tensor): Tensor to clear the graph
+        - visited (set): Set to store the visited tensors
+        """
+        
+        # Initialize the visited set
+        if visited is None:
+            visited = set()
+            
+        # Check if the tensor is not visited
+        if self not in visited:
+            # Add the tensor to the visited set
+            visited.add(self)
+            
+        # Iterate over the children
+        for child in list(self._prev):
+            # Clear the graph for the child
+            child.clear_graph(visited)
+            
+        # Clear the graph for the current tensor and the backward function
+        self._backward = lambda: None
+        self._prev.clear()
+    
     
     ###########################
     ####### Activations #######
@@ -601,7 +641,7 @@ class Tensor:
 
     def masked_fill(self, mask: Union[np.ndarray, 'Tensor'], value: float) -> 'Tensor':
         """
-        Method to fill the tensor with a value where the mask is False
+        Method to fill the tensor with a value where the mask is True
         
         Parameters:
         - mask (Union[np.ndarray, Tensor]): Mask to fill the tensor
@@ -706,7 +746,7 @@ class Tensor:
         
         # Compute and return the padded tensor
         return pad(self, pad_width)
-    
+
     
     def sliding_window(self, window_shape: Union[int, Tuple[int, ...]], axis: Optional[Union[int, Tuple[int, ...]]] = None) -> 'Tensor':
         """
@@ -740,18 +780,33 @@ class Tensor:
         return tensordot(self, other, axes)
     
     
-    @staticmethod
-    def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
+    def conv_2d(self, kernel: 'Tensor', stride: Tuple[int,int] = (1,1)) -> 'Tensor':
         """
-        Method to concatenate the tensors along the specified axis
+        Method to compute the 2D convolution of the tensor
         
         Parameters:
-        - tensors (Tensor): List of tensors to concatenate
-        - axis (int): Axis along which to concatenate the tensors
+        - kernel (Tensor): Kernel for the convolution
+        - stride (Tuple[int,int]): Stride for the convolution. Default is (1,1)
         
         Returns:
-        - Tensor: Concatenated tensor
+        - Tensor: Tensor containing the 2D convolution of the tensor
         """
         
-        # Compute and return the concatenated tensor
-        return concat(tensors, axis)
+        # Compute and return the 2D convolution of the tensor
+        return conv_2d(self, kernel, stride)
+    
+    
+    def max_pool_2d(self, kernel_size: Tuple[int,int] = (2,2), stride: Tuple[int,int] = (2,2)) -> 'Tensor':
+        """
+        Method to compute the 2D max pooling of the tensor
+        
+        Parameters:
+        - kernel_size (Tuple[int,int]): Kernel size for the pooling. Default is (2,2)
+        - stride (Tuple[int,int]): Stride for the pooling. Default is (2,2)
+        
+        Returns:
+        - Tensor: Tensor containing the 2D max pooling of the tensor
+        """
+        
+        # Compute and return the 2D max pooling of the tensor
+        return max_pool_2d(self, kernel_size, stride)

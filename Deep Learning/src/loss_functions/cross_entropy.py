@@ -44,7 +44,7 @@ class CrossEntropy(LossFn):
             y_pred = y_pred.clip(EPSILON, 1 - EPSILON)
 
         # Compute the cross-entropy loss
-        loss = - (y_true * y_pred.log())
+        loss = - y_true * y_pred.log()
         
         # Apply the reduction method
         if self.reduction == "sum":

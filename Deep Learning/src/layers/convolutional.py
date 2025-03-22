@@ -90,36 +90,19 @@ class Conv2D(Module):
         
         # Extract the required dimensions for a better interpretation
         self.output_shape() # Compute the output shape of the Conv2D layer
-        kernel_height, kernel_width = self.kernel_size # Shape of the kernel
-        stride_height, stride_width = self.stride # Stride of the kernel
         
         # Apply padding to the input data
         if self.padding == "same":
             # Pad the input data
-            x_padded = x.pad((
+            x = x.pad((
                 (0, 0),
                 (self.padding_top, self.padding_bottom),
                 (self.padding_left, self.padding_right),
                 (0, 0)
             ))
-        else:
-            # Set the padded input data as the input data
-            x_padded = x
-                
-        # Extract the sliding windows from the input data
-        patches = x_padded.sliding_window(
-            window_shape = (kernel_height, kernel_width),
-            axis = (1, 2)
-        )
         
-        # Apply the stride
-        patches = patches[:, ::stride_height, ::stride_width, :, :, :]
-        
-        # Transpose the patches to have shape: (batch_size, output_height, output_width, kernel_height, kernel_width, num_channels)
-        patches = patches.transpose((0, 1, 2, 4, 5, 3))
-
-        # Compute the output of the Conv2D layer by applying the convolution operation
-        out = patches.tensordot(self.filters, axes=([3, 4, 5], [1, 2, 3]))
+        # Compute the convolution operation by applying the filters to the input data
+        out = x.conv_2d(self.filters, stride=self.stride)
         
         # Add the bias to the output
         out = out + self.bias
@@ -201,7 +184,7 @@ class Conv2D(Module):
         
         # Initialize the filters with random values
         self.filters = Tensor(
-            data = np.random.randn(self.num_filters, kernel_height, kernel_width, num_channels) / (kernel_height * kernel_width),
+            data = np.random.randn(self.num_filters, num_channels, kernel_height, kernel_width) / (kernel_height * kernel_width),
             requires_grad = True,
             is_parameter = True
         )

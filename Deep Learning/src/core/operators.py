@@ -54,7 +54,12 @@ def add(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {a, b}
+    prev = set()
+    if a.requires_grad:
+        prev.add(a)
+    if b.requires_grad:
+        prev.add(b)
+    out._prev = prev
     
     # Return the output tensor
     return out
@@ -111,7 +116,12 @@ def sub(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {a, b}
+    prev = set()
+    if a.requires_grad:
+        prev.add(a)
+    if b.requires_grad:
+        prev.add(b)
+    out._prev = prev
     
     # Return the output tensor
     return out
@@ -168,7 +178,12 @@ def mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {a, b}
+    prev = set()
+    if a.requires_grad:
+        prev.add(a)
+    if b.requires_grad:
+        prev.add(b)
+    out._prev = prev
     
     # Return the output tensor
     return out
@@ -224,7 +239,12 @@ def div(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {a, b}
+    prev = set()
+    if a.requires_grad:
+        prev.add(a)
+    if b.requires_grad:
+        prev.add(b)
+    out._prev = prev
     
     # Return the output tensor
     return out
@@ -281,7 +301,12 @@ def mat_mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     out._backward = _backward
         
     # Store the previous tensors in the computation graph
-    out._prev = {a, b}
+    prev = set()
+    if a.requires_grad:
+        prev.add(a)
+    if b.requires_grad:
+        prev.add(b)
+    out._prev = prev
     
     # Return the output tensor
     return out
@@ -327,7 +352,7 @@ def pow(x: 'Tensor', power: Union[int, float]) -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -374,7 +399,7 @@ def get_item(x: 'Tensor', key: Union[int, slice, np.ndarray, Tuple[Union[int, sl
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out

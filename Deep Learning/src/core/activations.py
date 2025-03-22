@@ -25,21 +25,38 @@ def sigmoid(x: 'Tensor') -> 'Tensor':
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
     
+    # Prepare an empty array for the output
+    out_data = np.empty_like(x.data)
+    
+    # Create a boolean mask for non-negative values
+    mask = x.data >= 0
+    
+    # For x >= 0: compute 1 / (1 + exp(-x))
+    out_data[mask] = 1 / (1 + np.exp(-x.data[mask]))
+    
+    # For x < 0: compute exp(x) / (1 + exp(x))
+    # Only compute exp for the negative part to avoid overflow
+    exp_x = np.exp(x.data[~mask])
+    out_data[~mask] = exp_x / (1 + exp_x)
+    
     # Compute the sigmoid of the tensor
-    out = Tensor(1 / (1 + np.exp(-x.data)), requires_grad=x.requires_grad)
+    out = Tensor(data=out_data, requires_grad=x.requires_grad)
     
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Compute the gradient of the loss with respect to the current tensor
-            x.grad = x.grad + out.data * (1 - out.data) * out.grad if x.grad is not None else out.data * (1 - out.data) * out.grad
+            # Compute the derivative of the sigmoid function
+            grad = out.data * (1 - out.data) * out.grad
+            
+            # Update the gradient of the input tensor
+            x.grad = x.grad + grad if x.grad is not None else grad
             
     # Store the backward function with respect to the sigmoid operation
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -79,7 +96,7 @@ def relu(x: 'Tensor') -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -119,7 +136,7 @@ def tanh(x: 'Tensor') -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -172,7 +189,7 @@ def softmax(x: 'Tensor', axis: int = -1) -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -225,7 +242,7 @@ def log_softmax(x: 'Tensor', axis: int = -1) -> 'Tensor':
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    out._prev = {x}
+    out._prev = {x} if x.requires_grad else set()
     
     # Return the output tensor
     return out

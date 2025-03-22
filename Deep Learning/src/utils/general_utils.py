@@ -151,17 +151,22 @@ def unbroadcast(arr: np.ndarray, shape: tuple) -> np.ndarray:
     Returns:
     - np.ndarray: Unbroadcasted array
     """
+            
+    # Compare the number of dimensions of the array and the target shape
+    extra_dims = arr.ndim - len(shape)
     
-    # If the array has more dimensions than the specified shape, sum along the first axis until the number of dimensions match
-    while len(arr.shape) > len(shape):
-        arr = arr.sum(axis=0)
-        
-    # Iterate over the dimensions and sum along the axis if the dimension is 1
-    for axis, dim in enumerate(shape):
-        # If the dimension is 1, sum along the axis
-        if dim == 1 and arr.shape[axis] != 1:
-            # Sum along the axis
-            arr = arr.sum(axis=axis, keepdims=True)
-        
-    # Return the unbroadcasted array  
+    # If the array has more dimensions than the target shape, sum along the extra dimensions
+    if extra_dims > 0:
+        # Sum along the extra dimensions
+        axes_to_sum = tuple(range(extra_dims))
+        arr = arr.sum(axis=axes_to_sum, keepdims=False)
+    
+    # For each axis, if the target shape is 1 but arr.shape has a larger dimension,
+    # sum along that axis (keeping dims to preserve the number of dimensions).
+    for i, (a_dim, target_dim) in enumerate(zip(arr.shape, shape)):
+        # If the target dimension is 1 but the array dimension is larger, sum along that axis
+        if target_dim == 1 and a_dim != 1:
+            arr = arr.sum(axis=i, keepdims=True)
+    
+    # Return the unbroadcasted array
     return arr
