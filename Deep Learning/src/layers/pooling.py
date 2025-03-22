@@ -26,8 +26,7 @@ class MaxPool2D(Module):
         self.stride = stride if stride is not None else size
         self.padding = padding
         
-        
-        
+
     ### Public methods ###
     
     def forward(self, x: Tensor) -> Tensor:
@@ -54,6 +53,9 @@ class MaxPool2D(Module):
         # Initialize the layer params
         if not self.initialized:
             self.init_params()
+            
+        # Compute the output shape of the layer
+        self.output_shape()
             
         # Apply padding to the input data
         if self.padding == "same":

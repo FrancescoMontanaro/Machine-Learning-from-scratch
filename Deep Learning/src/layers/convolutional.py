@@ -88,8 +88,8 @@ class Conv2D(Module):
         assert isinstance(self.filters, Tensor), "Filters are not initialized. Please call the layer with some input data to initialize the filters."
         assert isinstance(self.bias, Tensor), "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
-        # Extract the required dimensions for a better interpretation
-        self.output_shape() # Compute the output shape of the Conv2D layer
+        # Compute the output shape of the Conv2D layer
+        self.output_shape()
         
         # Apply padding to the input data
         if self.padding == "same":
