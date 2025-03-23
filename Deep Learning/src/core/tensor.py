@@ -584,20 +584,21 @@ class Tensor:
         return mean(self, axis=axis, keepdims=keepdims)
     
     
-    def var(self, axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':
+    def var(self, axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False, ddof: int = 1) -> 'Tensor':
         """
         Method to compute the variance of the tensor along the specified axis
         
         Parameters:
         - axis (int): Axis along which to compute the variance
         - keepdims (bool): Whether to keep the dimensions of the input tensor
+        - ddof (int): Delta degrees of freedom for the variance computation
         
         Returns:
         - Tensor: variance of the tensor along the specified axis
         """
         
         # Compute and return the variance of the tensor along the specified axis
-        return var(self, axis=axis, keepdims=keepdims)
+        return var(self, axis=axis, keepdims=keepdims, ddof=ddof)
    
     
     def exp(self) -> 'Tensor':

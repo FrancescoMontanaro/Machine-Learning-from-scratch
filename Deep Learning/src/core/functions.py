@@ -257,14 +257,15 @@ def mean(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdi
     return out
 
 
-def var(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':
+def var(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False, ddof: int = 1) -> 'Tensor':
     """
     Compute the variance of the tensor along the specified axis (or axes).
 
     Parameters:
     - x (Tensor): Input tensor.
     - axis (Optional[Union[int, Tuple[int, ...]]]): Axis or axes along which to compute the variance.
-     - keepdims (bool): Whether to keep the dimensions of the result.
+    - keepdims (bool): Whether to keep the dimensions of the result.
+    - ddof (int): Delta degrees of freedom. The divisor used in the calculation is N - ddof, where N represents the number of elements.
 
     Returns:
     - Tensor: Variance of the tensor.
@@ -286,34 +287,34 @@ def var(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
     diff = x - m
     
     # Compute the squared difference and take the mean along the specified axis.
-    sq = diff * diff
+    square_diff = diff * diff
     
     # Compute the variance by taking the mean of the squared difference.
-    var = mean(sq, axis=axis, keepdims=keepdims)
+    var = mean(square_diff, axis=axis, keepdims=keepdims)
     
     # Determine the number of elements over which the variance is computed.
     if axis is None:
         # If axis is None, the variance is computed over all elements.
-        N = x.data.size
+        num_elements = x.data.size
         
     # If axis is an integer, the variance is computed over the elements in that axis.
     elif isinstance(axis, int):
         # If axis is an integer, the variance is computed over the elements in that axis.
-        N = x.data.shape[axis]
+        num_elements = x.data.shape[axis]
         
     # If axis is a tuple, the variance is computed over the elements in the specified axes.
     elif isinstance(axis, tuple):
         # If axis is a tuple, the variance is computed over the elements in the specified axes.
-        N = 1
+        num_elements = 1
         for ax in axis:
-            N *= x.data.shape[ax]
+            num_elements *= x.data.shape[ax]
     else:
         raise ValueError("axis must be an integer, a tuple of integers, or None")
     
-    # If N > 1, apply the bessel correction to the variance.
-    if N > 1:
+    # If num_elements > ddof, apply the bessel correction to the variance.
+    if ddof != 0 and num_elements > ddof:
         # Convert the population variance to the sample variance.
-        var = var * (N / (N - 1))
+        var = var * (num_elements / (num_elements - 1))
     
     # Return the variance tensor
     return var

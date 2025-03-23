@@ -61,7 +61,7 @@ class LayerNormalization(Module):
         
         # Compute mean and variance along the feature dimension for each sample
         layer_mean = x.mean(axis=axes, keepdims=True)
-        layer_var = x.var(axis=axes, keepdims=True)
+        layer_var = x.var(axis=axes, keepdims=True, ddof=0)
         
         # Scale and shift
         return self.gamma * ((x - layer_mean) * (1 / (layer_var + self.epsilon).sqrt())) + self.beta

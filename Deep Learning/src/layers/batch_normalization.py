@@ -76,14 +76,14 @@ class BatchNormalization(Module):
         if self.training:
             # Calculate batch mean and variance
             mean = x.mean(axis=axes, keepdims=True)
-            var = x.var(axis=axes, keepdims=True)
+            var = x.var(axis=axes, keepdims=True, ddof=0)
             
-            # Update the running mean and variance tensors
-            self.running_mean.data = self.running_mean.data * self.momentum + mean.data * (1 - self.momentum)
-            self.running_var.data = self.running_var.data * self.momentum + var.data * (1 - self.momentum)
+            # Update running mean and variance
+            self.running_mean.data = self.running_mean.data * (1 - self.momentum) + mean.data * self.momentum
+            self.running_var.data = self.running_var.data * (1 - self.momentum) + var.data * self.momentum
             
-            # Scale and shift the normalized input
-            return self.gamma * ((x - mean) * (1 / (var + self.epsilon).sqrt())) + self.beta
+            # Normalize and return the output
+            return (x - mean) / (var + self.epsilon).sqrt() * self.gamma + self.beta
            
         # The layer is in inference phase 
         else:

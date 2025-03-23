@@ -13,7 +13,7 @@ from src.layers import MaxPool2D
 
 class TestMaxPool2D(unittest.TestCase):
 
-    def setUp(self):
+    def setUp(self) -> None:
         """
         Set up the test case.
         This method will be called before each test.
@@ -38,7 +38,7 @@ class TestMaxPool2D(unittest.TestCase):
         self.max_pool_custom.init_params()
 
 
-    def test_max_pool_2d_forward(self):
+    def test_max_pool_2d_forward(self) -> None:
         """
         Test to verify that the forward pass of the MaxPool2D layer is consistent with PyTorch.
         """
@@ -58,7 +58,7 @@ class TestMaxPool2D(unittest.TestCase):
         )
 
 
-    def test_max_pool_2d_backward(self):
+    def test_max_pool_2d_backward(self) -> None:
         """
         Test to verify that the backward pass of the MaxPool2D layer is consistent with PyTorch.
         """
