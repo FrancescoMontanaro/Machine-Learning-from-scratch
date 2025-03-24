@@ -11,7 +11,7 @@ from src.core import Tensor
 from src.layers import LayerNormalization
 
 
-class TestLayerNormalization(unittest.TestCase):
+class TestLayerNormalizationLayer(unittest.TestCase):
 
     def setUp(self) -> None:
         """

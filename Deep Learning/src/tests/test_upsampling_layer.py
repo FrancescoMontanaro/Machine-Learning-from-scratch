@@ -11,7 +11,7 @@ from src.core import Tensor
 from src.layers import UpSampling2D
 
 
-class TestUpSampling2D(unittest.TestCase):
+class TestUpSampling2DLayer(unittest.TestCase):
 
     def setUp(self) -> None:
         """

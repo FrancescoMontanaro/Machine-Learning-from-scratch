@@ -10,7 +10,7 @@ from src.core import Tensor
 from src.layers import Input
 
 
-class TestInput(unittest.TestCase):
+class TestInputLayer(unittest.TestCase):
 
     def setUp(self) -> None:
         """

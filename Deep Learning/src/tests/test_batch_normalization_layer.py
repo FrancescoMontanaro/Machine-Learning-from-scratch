@@ -11,7 +11,7 @@ from src.core import Tensor
 from src.layers import BatchNormalization
 
 
-class TestBatchNormalization(unittest.TestCase):
+class TestBatchNormalizationLayer(unittest.TestCase):
 
     def setUp(self) -> None:
         """

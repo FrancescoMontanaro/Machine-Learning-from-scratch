@@ -11,7 +11,7 @@ from src.core import Tensor
 from src.layers import Dense
 
 
-class TestDense(unittest.TestCase):
+class TestDenseLayer(unittest.TestCase):
 
     def setUp(self) -> None:
         """

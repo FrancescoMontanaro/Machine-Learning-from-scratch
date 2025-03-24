@@ -11,7 +11,7 @@ from src.core import Tensor
 from src.layers import MaxPool2D
 
 
-class TestMaxPool2D(unittest.TestCase):
+class TestMaxPool2DLayer(unittest.TestCase):
 
     def setUp(self) -> None:
         """

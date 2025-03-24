@@ -44,7 +44,7 @@ class CategoricalCrossEntropy(LossFn):
             y_pred_log = y_pred.clip(EPSILON, 1 - EPSILON).log()
 
         # Compute the loss
-        loss = - (y_true * y_pred_log).sum(axis=1)
+        loss = - (y_true * y_pred_log).sum(axis=-1)
         
         # Apply the reduction method
         if self.reduction == "sum":

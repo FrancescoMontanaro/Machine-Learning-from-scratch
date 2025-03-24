@@ -11,7 +11,7 @@ from src.core import Tensor
 from src.layers import Flatten as CustomFlatten
 
 
-class TestFlatten(unittest.TestCase):
+class TestFlattenLayer(unittest.TestCase):
 
     def setUp(self) -> None:
         """

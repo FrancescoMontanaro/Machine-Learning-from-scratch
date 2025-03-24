@@ -11,7 +11,7 @@ from src.core import Tensor
 from src.layers import Dropout as CustomDropout
 
 
-class TestDropout(unittest.TestCase):
+class TestDropoutLayer(unittest.TestCase):
 
     def setUp(self) -> None:
         """

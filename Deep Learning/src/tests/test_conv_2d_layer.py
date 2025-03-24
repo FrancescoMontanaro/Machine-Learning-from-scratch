@@ -11,7 +11,7 @@ from src.core import Tensor
 from src.layers import Conv2D
 
 
-class TestConv2D(unittest.TestCase):
+class TestConv2DLayer(unittest.TestCase):
 
     def setUp(self) -> None:
         """

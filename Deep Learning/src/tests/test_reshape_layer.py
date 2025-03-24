@@ -10,7 +10,7 @@ from src.core import Tensor
 from src.layers import Reshape
 
 
-class TestReshape(unittest.TestCase):
+class TestReshapeLayer(unittest.TestCase):
 
     def setUp(self) -> None:
         """
