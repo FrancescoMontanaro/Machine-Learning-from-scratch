@@ -1,5 +1,5 @@
 tqdm
 numpy
+keras
 matplotlib
 scikit-learn
-tensorflow_datasets
