@@ -1,8 +1,8 @@
 import numpy as np
 from typing import Type, TYPE_CHECKING, cast
 
-from .registry import get_tensor_class
-if TYPE_CHECKING: from .tensor import Tensor
+from ..utils.registry import get_tensor_class
+if TYPE_CHECKING: from ..tensor import Tensor
 
 
 def sigmoid(x: 'Tensor') -> 'Tensor':

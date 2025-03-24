@@ -3,7 +3,7 @@ from typing import Optional
 
 from ..core import Tensor
 from .base import Optimizer
-from ..core.context_manager import no_grad
+from ..core.utils.context_manager import no_grad
 
 
 class SGD(Optimizer):

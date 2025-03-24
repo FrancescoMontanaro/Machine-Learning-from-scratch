@@ -2,8 +2,8 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from typing import Optional, Tuple, List, Union, Type, TYPE_CHECKING, cast
 
-from .registry import get_tensor_class
-if TYPE_CHECKING: from .tensor import Tensor
+from ..utils.registry import get_tensor_class
+if TYPE_CHECKING: from ..tensor import Tensor
 
 
 def sum(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Tensor':

@@ -10,7 +10,7 @@ from .utils import *
 from .core import Tensor, Module
 from .optimizers import Optimizer
 from .loss_functions import LossFn
-from .core.context_manager import no_grad
+from .core.utils.context_manager import no_grad
 
 
 class Model:

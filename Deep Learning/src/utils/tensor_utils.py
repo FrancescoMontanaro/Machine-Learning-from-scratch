@@ -2,7 +2,7 @@ import numpy as np
 from typing import Union, Tuple, List
 
 from ..core import Tensor
-from ..core import functions as F
+from ..core.functional import functions as F
 
 
 def shuffle_data(data: Union[Tensor, Tuple[Tensor, Tensor]]) -> Union[Tensor, Tuple[Tensor, Tensor]]:

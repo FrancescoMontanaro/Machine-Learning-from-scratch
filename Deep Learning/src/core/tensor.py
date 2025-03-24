@@ -1,10 +1,10 @@
 import numpy as np
 from typing import Optional, Union, Tuple, Callable
 
-from .operators import *
-from .functions import *
-from .activations import *
-from .context_manager import _NO_GRAD
+from .functional.operators import *
+from .functional.functions import *
+from .functional.activations import *
+from .utils.context_manager import _NO_GRAD
 
 
 class Tensor:
