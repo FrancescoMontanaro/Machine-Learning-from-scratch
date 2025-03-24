@@ -6,11 +6,12 @@ import numpy as np
 from itertools import count
 from typing import Callable, Union, Optional
 
-from .utils import *
 from .core import Tensor, Module
 from .optimizers import Optimizer
 from .loss_functions import LossFn
+from .core.utils.data_processing import *
 from .core.utils.context_manager import no_grad
+from .core.utils.data_analysis import format_summary_output
 
 
 class Model:

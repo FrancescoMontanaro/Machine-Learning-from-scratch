@@ -1,8 +1,8 @@
 import numpy as np
 from typing import Union, Tuple, List
 
-from ..core import Tensor
-from ..core.functional import functions as F
+from ..tensor import Tensor
+from ..functional import functions as F
 
 
 def shuffle_data(data: Union[Tensor, Tuple[Tensor, Tensor]]) -> Union[Tensor, Tuple[Tensor, Tensor]]:

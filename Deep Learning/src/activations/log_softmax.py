@@ -1,5 +1,3 @@
-import numpy as np
-
 from ..core import Tensor
 from .base import Activation
     

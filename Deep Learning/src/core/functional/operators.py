@@ -1,10 +1,9 @@
 import numpy as np
 from typing import Union, Type, Tuple, TYPE_CHECKING, cast
 
-
-from ..utils.registry import get_tensor_class
 if TYPE_CHECKING: from ..tensor import Tensor
-from ...utils.general_utils import unbroadcast
+from ..utils.data_analysis import unbroadcast
+from ..utils.types_registry import get_tensor_class
 
 
 def add(a: 'Tensor', b: 'Tensor') -> 'Tensor':

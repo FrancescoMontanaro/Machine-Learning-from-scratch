@@ -44,8 +44,8 @@ def plot_data(datasets: list[dict], title: str, xlabel: str, ylabel: str) -> Non
     
     # Show the plot
     plt.show()
-    
-    
+
+
 def plot_history(train_loss: np.ndarray, valid_loss: np.ndarray, title: str, xlabel: str, ylabel: str) -> None:
     """
     Method to plot the training and validation loss
