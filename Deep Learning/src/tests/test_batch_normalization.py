@@ -80,8 +80,8 @@ class TestBatchNormalization(unittest.TestCase):
                 f"Torch: {y_torch.detach().numpy()}"
             )
         )
-        
-        
+
+
     def test_batch_norm_forward_eval(self) -> None:
         """
         Test to verify that the forward pass of the BatchNormalization in evaluation mode layer is consistent with PyTorch.
