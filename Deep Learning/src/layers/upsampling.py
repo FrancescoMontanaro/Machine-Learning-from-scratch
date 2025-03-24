@@ -12,7 +12,7 @@ class UpSampling2D(Module):
         Class constructor for UpSampling2D layer.
         
         Parameters:
-        - size (tuple): size of the upsampling operation
+        - size (tuple): scaling factors for the height and width dimensions
         - interpolation (str): interpolation method for upsampling. Default: "nearest"
         - name (str): name of the layer
         
