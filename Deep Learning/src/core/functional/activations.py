@@ -201,6 +201,7 @@ def log_softmax(x: 'Tensor', axis: int = -1) -> 'Tensor':
 
     Parameters:
     - x (Tensor): Input tensor
+    - axis (int): Axis along which to compute softmax. Default: -1 (last axis)
 
     Returns:
     - Tensor: Output tensor
@@ -229,20 +230,22 @@ def log_softmax(x: 'Tensor', axis: int = -1) -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Weighted sum of the gradients along the specified axis
+            # Compute softmax (exp(log_softmax))
+            softmax = np.exp(out.data)
+            
+            # Sum of gradients along the softmax axis
             g_sum = np.sum(out.grad, axis=axis, keepdims=True)
             
-            # Compute the gradient of the loss with respect to the current tensor
-            grad_input = out.grad - np.exp(out.data) * g_sum
+            # Compute gradient
+            grad_input = out.grad - softmax * g_sum
             
-            # Add the gradient to the current tensor
+            # Accumulate gradient
             x.grad = x.grad + grad_input if x.grad is not None else grad_input
 
-    # Store the backward function with respect to the log softmax operation
+    # Store the backward function
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
     out._prev = {x} if x.requires_grad else set()
     
-    # Return the output tensor
     return out

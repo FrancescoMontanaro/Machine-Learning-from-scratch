@@ -53,6 +53,6 @@ class BinaryCrossEntropy(LossFn):
         elif self.reduction == "mean":
             # Return the mean loss
             return loss.mean()
-        else:
-            # Return the per-sample loss
-            return loss
+
+        # Return the per-sample loss
+        return loss

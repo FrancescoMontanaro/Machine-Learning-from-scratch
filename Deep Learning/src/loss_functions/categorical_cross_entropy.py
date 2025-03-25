@@ -1,3 +1,4 @@
+import numpy as np
 from typing import Literal, Optional
 
 from .base import LossFn
@@ -37,10 +38,13 @@ class CategoricalCrossEntropy(LossFn):
         
         # Check if the input is logits
         if self.from_logits:
-            # Convert logits to probabilities
-            y_pred_log = y_pred.log_softmax(axis=1)
+            # Convert logits to log probabilities
+            y_pred_log = y_pred.log_softmax(axis=-1)
         else:
-            # Clip values for numerical stability
+            # Ensure the probabilities sum to 1 
+            y_pred = y_pred / y_pred.sum(axis=-1, keepdims=True)
+            
+            # Clip values for numerical stability and compute log probabilities
             y_pred_log = y_pred.clip(EPSILON, 1 - EPSILON).log()
 
         # Compute the loss
@@ -49,10 +53,38 @@ class CategoricalCrossEntropy(LossFn):
         # Apply the reduction method
         if self.reduction == "sum":
             # Return the sum loss
-            return loss.sum()
+            loss = loss.sum()
         elif self.reduction == "mean":
             # Return the mean loss
-            return loss.mean()
-        else:
-            # Return the per-sample loss
-            return loss
+            loss = loss.mean()
+        
+        # Override backward pass when from_logits=True
+        # This is to avoid numerical instability when computing the gradient
+        if self.from_logits and y_pred.requires_grad:
+            # Define the backward function
+            def _backward() -> None:
+                # Compute softmax
+                softmax = np.exp(y_pred_log.data)
+                
+                # Computhe the gradient
+                grad = softmax - y_true.data
+                
+                # Apply reduction if needed
+                if self.reduction == "sum":
+                    # Sum reduction
+                    grad = grad
+                elif self.reduction == "mean":
+                    # Mean reduction
+                    grad = grad / y_true.shape()[0]
+                
+                # Accumulate gradient
+                y_pred.grad = y_pred.grad + grad if y_pred.grad is not None else grad
+            
+            # Store the backward function
+            loss._backward = _backward
+            
+            # Store the previous tensors in the computation graph
+            loss._prev = {y_pred} if y_pred.requires_grad else set()
+        
+        # Return the loss
+        return loss

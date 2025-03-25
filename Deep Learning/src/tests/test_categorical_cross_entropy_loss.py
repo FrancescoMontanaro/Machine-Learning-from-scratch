@@ -19,10 +19,6 @@ class TestCCELoss(unittest.TestCase):
         Set up the test case.
         This method will be called before each test.
         """
-        
-        # Set seeds for reproducibility
-        np.random.seed(42)
-        tf.random.set_seed(42)
 
         # Create random prediction and target arrays
         self.y_pred_np = np.random.randn(4, 5).astype(np.float32)
@@ -37,8 +33,8 @@ class TestCCELoss(unittest.TestCase):
         self.y_target_tf = tf.constant(self.y_target_np)
 
         # Instantiate the loss functions
-        self.loss_custom = CategoricalCrossEntropy(from_logits=True)
-        self.loss_tf = keras.losses.CategoricalCrossentropy(from_logits=True)
+        self.loss_custom = CategoricalCrossEntropy(from_logits=False)
+        self.loss_tf = keras.losses.CategoricalCrossentropy(from_logits=False)
         
         
     def test_cce_loss_forward(self) -> None:
@@ -58,6 +54,40 @@ class TestCCELoss(unittest.TestCase):
                 f"❌ Forward loss outputs differ!\n"
                 f"Custom Loss: {loss_custom_val.data}\n"
                 f"TF Loss: {loss_tf_val.numpy()}" # type: ignore
+            )
+        )
+     
+       
+    def test_cce_loss_backward(self) -> None:
+        """
+        Test to verify that the backward pass (gradient computation) 
+        of the custom CategoricalCrossEntropy is consistent with TensorFlow's CategoricalCrossentropy.
+        """
+        
+        # Compute the gradients for the custom loss
+        loss_custom_val = self.loss_custom(self.y_target_tensor, self.y_pred_tensor)
+        loss_custom_val.backward()
+        
+        # Compute the gradients for the TensorFlow loss using GradientTape.
+        with tf.GradientTape() as tape:
+            loss_tf_val = self.loss_tf(self.y_target_tf, self.y_pred_tf)
+        grad_tf = tape.gradient(loss_tf_val, self.y_pred_tf)
+        
+        # Check that gradients are not None
+        self.assertIsNotNone(self.y_pred_tensor.grad, "Custom Tensor grad is None")
+        self.assertIsNotNone(grad_tf, "TensorFlow grad is None")
+        
+        # Check if the gradients are not None
+        if self.y_pred_tensor.grad is None or grad_tf is None:
+            raise AssertionError("Gradients are None!")
+        
+        # Compare the gradients for the predictions
+        self.assertTrue(
+            np.allclose(self.y_pred_tensor.grad, grad_tf.numpy(), atol=1e-5), # type: ignore
+            msg=(
+                f"❌ Backward gradients differ!\n"
+                f"Custom grad:\n{self.y_pred_tensor.grad}\n\n"
+                f"TF grad:\n{grad_tf.numpy()}" # type: ignore
             )
         )
      
