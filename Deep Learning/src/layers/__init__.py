@@ -2,6 +2,7 @@ from .batch_normalization import BatchNormalization
 from .convolutional import Conv2D
 from .dense import Dense
 from .dropout import Dropout
+from .embedding import Embedding
 from .flatten import Flatten
 from .input import Input
 from .layer_normalization import LayerNormalization
