@@ -18,10 +18,6 @@ class TestUpSampling2DLayer(unittest.TestCase):
         Set up the test case.
         This method will be called before each test.
         """
-        
-        # Set the seeds for reproducibility
-        np.random.seed(42)
-        torch.manual_seed(42)
 
         # Create random input data
         self.x_np = np.random.randn(2, 4, 4, 3).astype(np.float32)

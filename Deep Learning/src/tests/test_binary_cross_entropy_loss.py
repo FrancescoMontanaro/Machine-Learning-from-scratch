@@ -18,10 +18,6 @@ class TestBCELoss(unittest.TestCase):
         Set up the test case.
         This method will be called before each test.
         """
-        
-        # Set seeds for reproducibility
-        np.random.seed(42)
-        tf.random.set_seed(42)
 
         # Create random prediction and target arrays
         self.y_pred_np = np.random.randn(4, 5).astype(np.float32)

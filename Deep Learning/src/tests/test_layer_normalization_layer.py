@@ -18,10 +18,6 @@ class TestLayerNormalizationLayer(unittest.TestCase):
         Set up the test case.
         This method will be called before each test.
         """
-        
-        # Set the seeds for reproducibility
-        np.random.seed(42)
-        torch.manual_seed(42)
 
         # Create random input data
         self.x_np = np.random.randn(3, 8).astype(np.float32)

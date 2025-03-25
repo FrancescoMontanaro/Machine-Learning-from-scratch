@@ -18,10 +18,6 @@ class TestEmbeddingLayer(unittest.TestCase):
         Set up the test case.
         This method will be called before each test.
         """
-        
-        # Set seeds for reproducibility
-        np.random.seed(42)
-        torch.manual_seed(42)
 
         # Define vocabulary size, embedding dimension and batch size
         self.vocab_size = 10

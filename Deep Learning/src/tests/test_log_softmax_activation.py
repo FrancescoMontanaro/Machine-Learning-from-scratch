@@ -19,10 +19,6 @@ class TestLogSoftmaxActivation(unittest.TestCase):
         Set up the test case.
         This method will be called before each test.
         """
-        
-        # Set seeds for reproducibility
-        np.random.seed(42)
-        tf.random.set_seed(42)
 
         # Create random input data
         self.x_np = np.random.randn(3, 5).astype(np.float32)
