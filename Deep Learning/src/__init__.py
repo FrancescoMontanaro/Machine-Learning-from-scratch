@@ -1,2 +1,1 @@
-from .model import Model
-from .core import Tensor
+from .core import Tensor, Module, ModuleList, Sequential

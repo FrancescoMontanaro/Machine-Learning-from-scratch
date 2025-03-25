@@ -1,8 +1,8 @@
 import numpy as np
 from typing import Literal
 
+from ..core import Sequential
 from .base import Callback
-from ..model import Model
 
 
 class EarlyStopping(Callback):
@@ -30,7 +30,7 @@ class EarlyStopping(Callback):
         self.counter = 0
         
     
-    def __call__(self, model_instance: Model) -> bool:
+    def __call__(self, model_instance: Sequential) -> bool:
         """
         Method to call the callback. This method will check if the training should be stopped by
         setting the stop_training attribute of the model instance.

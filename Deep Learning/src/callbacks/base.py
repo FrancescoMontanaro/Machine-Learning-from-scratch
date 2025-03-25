@@ -1,13 +1,13 @@
 from typing import Any
 
-from ..model import Model
+from ..core import Sequential
 
 
 class Callback:
     
     ### Magic methods ###
     
-    def __call__(self, model_instance: Model) -> Any:
+    def __call__(self, model_instance: Sequential) -> Any:
         """
         This method is called when the callback is called.
         

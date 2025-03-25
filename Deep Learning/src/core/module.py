@@ -6,6 +6,9 @@ from .modules_list import ModuleList
 
 class Module:
     
+    # Counter to generate unique module names
+    _module_counter = 0
+    
     #####################
     ### Magic methods ###
     #####################
@@ -18,10 +21,18 @@ class Module:
         - name (Optional[str]): Name of the module
         """
         
-        # Set the class attributes
-        self.name = name # Name of the module
-        self.training = True # Flag to check if the module is in training mode
-        self.initialized = False # Flag to check if the module is initialized
+        # Check if the name is None
+        if name is None:
+            # Generate a unique name for the module
+            name = f"{self.__class__.__name__}_{Module._module_counter}"
+            
+            # Increment the counter for the number of modules
+            Module._module_counter += 1
+        
+        # Set the class attributes    
+        self.name: str = name # Name of the module
+        self.training: bool = True # Flag to check if the module is in training mode
+        self.initialized: bool = False # Flag to check if the module is initialized
         
         # Initialize the dictionaries for the parameters and sub-modules
         self._parameters: dict[str, Tensor] = {} # Dictionary for the parameters of the module
@@ -44,17 +55,20 @@ class Module:
             self.__dict__.setdefault("_modules", {})[name] = value
             
             # Set a hierarchical name for the sub-module
-            value.name = f"{self.name}.{name}" if self.name else name
+            value.name = f"{self.name}{name}" if self.name else name
+            value.name = value.name.lower().replace(" ", "_")
             
         # If the value is a ModuleList, add the modules to the dictionary of sub-modules
         elif isinstance(value, ModuleList):
             # Iterate over the modules in the ModuleList
             for i, module in enumerate(value.modules):
                 # Add the module to the dictionary of sub-modules
-                self.__dict__.setdefault("_modules", {})[f"{name}_{i}"] = module
+                self.__dict__.setdefault("_modules", {})[f"{name}.{i}"] = module
                 
                 # Set a hierarchical name for the sub-module
-                module.name = f"{self.name}.{name}_{i}" if self.name else f"{name}_{i}"
+                module.name = module.name if module.name else f"{name}.{i}"
+                module.name = f"{self.name}.{name}.{module.name}" if self.name else module.name
+                module.name = module.name.lower().replace(" ", "_")
 
         elif isinstance(value, Tensor) and value.requires_grad and value.is_parameter:
             # Add the parameter to the dictionary of parameters
@@ -224,7 +238,7 @@ class Module:
         # Check if the module is initialized  
         if not self.initialized:
             # Raise an error if the module is not initialized
-            raise ValueError("Layer is not initialized. Please call the forward method with some input data.")
+            raise ValueError("Module is not initialized. Please call the forward method with some input data.")
     
     
     def init_params(self, *args, **kwargs) -> None:

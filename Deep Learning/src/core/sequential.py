@@ -3,66 +3,46 @@ import gc
 import math
 import time
 import numpy as np
-from itertools import count
-from typing import Callable, Union, Optional
+from typing import Callable, Optional
 
-from .core import Tensor, Module
-from .optimizers import Optimizer
-from .loss_functions import LossFn
-from .core.utils.data_processing import *
-from .core.utils.context_manager import no_grad
-from .core.utils.data_analysis import format_summary_output
+from .tensor import Tensor
+from .module import Module
+from ..optimizers import Optimizer
+from ..loss_functions import LossFn
+from .utils.data_processing import *
+from .modules_list import ModuleList
+from .utils.context_manager import no_grad
+from .utils.data_analysis import format_summary_output
 
 
-class Model:
-    
-    ### Static attributes ###
-    
-    _ids = count(0) # Counter to keep track of the number of NeuralNetwork instances
-    
+class Sequential(Module):
     
     ### Magic methods ###
     
-    def __init__(self, modules: list[Union[Module, 'Model']], name: Optional[str] = None) -> None:
+    def __init__(self, modules: list[Module], name: Optional[str] = None) -> None:
         """
         Class constructor
         
         Parameters:
-        - modules (list[Union[Module, 'Model']]): List of modules (modules or models themselves) to be added to the model
+        - modules (list[Module]): List of modules to add to the sequential model
         - name (Optional[str]): Name of the model
-        
-        Raises:
-        - ValueError: If the modules names are not unique
         """
         
-        # Get the count of how many NeuralNetwork instances have been created
-        self.id = next(self._ids)
+        # Initialize the parent class
+        super().__init__(name)
         
-        # List of modules (layers or models) in the neural network
-        self.modules = modules
+        # List of modules of the sequential model
+        self.modules: ModuleList = ModuleList(modules)
         
         # Model settings
-        self.training = False
         self.stop_training = False
         self.history = {}
         self.epoch = 0
-        self.name = name if name else f"model_{self.id}"
-        
-        # Set the name of the layers
-        for i, module in enumerate(self.modules):
-            # Set the layer name if it is not set
-            if not module.name and isinstance(module, Module):
-                # Get the class name of the layer
-                module.name = f"{re.sub(r'(?<!^)(?=[A-Z0-9])', '_', module.__class__.__name__).lower()}_{i+1}"
-                
-        # Check if the modules have unique names
-        if len(set([module.name for module in self.modules])) != len(self.modules):
-            raise ValueError("Moduels names must be unique!")
         
         
     def __call__(self, x: Tensor, batch_size: Optional[int] = None, verbose: bool = False) -> Tensor:
         """
-        Call method to initialize and execute the forward pass of the neural network
+        Call method to execute the forward pass of the model
         
         Parameters:
         - x (Tensor): Input data.
@@ -73,18 +53,13 @@ class Model:
         - Tensor: Output of the neural network
         """
         
-        # Disable gradient computation
-        with no_grad():
-            # Set the model in evaluation mode
-            self.eval()
-            
-            # Execute a first forward pass to initialize the parameters
-            return self.forward(
-                x = x,
-                batch_size = batch_size,
-                verbose = verbose
-            )
-        
+        # Execute the forward pass of the model
+        return self.forward(
+            x = x,
+            batch_size = batch_size,
+            verbose = verbose
+        )
+
         
     ### Public methods ###      
 
@@ -315,7 +290,7 @@ class Model:
         """
              
         # Check if the number of modules is greater than 0
-        assert len(self.modules) > 0, "No modules in the neural network. Add modules to the model!"
+        assert len(self._modules.values()) > 0, "No modules in the neural network. Add modules to the model!"
         
         # Compute the number of steps to iterate over the batches
         # If the batch size is not provided, set it to 1
@@ -336,7 +311,7 @@ class Model:
             batch_out = x[step * batch_size:(step + 1) * batch_size] if batch_size else x
             
             # Iterate over the modules
-            for module in self.modules:
+            for module in list(self._modules.values()):
                 # Compute the output of the module and pass it to the next one
                 batch_out = module(batch_out)
                 
@@ -364,58 +339,7 @@ class Model:
         # Return the output tensor
         return out
     
-    
-    def parameters(self) -> list[Tensor]:
-        """
-        Method to get the parameters of the model
-        
-        Returns:
-        - list[Tensor]: List of parameters of the model
-        """
-        
-        # Initialize the parameters list
-        params = []
-        
-        # Iterate over the modules
-        for module in self.modules:
-            # Get the parameters of the module
-            module_params = module.parameters()
-            
-            # Add the parameters to the dictionary
-            params.extend(module_params)
-            
-        # Return the parameters
-        return params
-    
-    
-    def train(self) -> None:
-        """
-        Method to set the model in training mode
-        """
-        
-        # Set the training flag to True
-        self.training = True
-        
-        # Iterate over the modules
-        for module in self.modules:
-            # Set the module in training mode
-            module.train()
-
-
-    def eval(self) -> None:
-        """
-        Method to set the model in evaluation mode
-        """
-        
-        # Set the training flag to False
-        self.training = False
-        
-        # Iterate over the modules
-        for module in self.modules:
-            # Set the module in evaluation mode
-            module.eval()
-
-            
+      
     def summary(self) -> None:
         """
         Method to display the summary of the model
@@ -425,14 +349,14 @@ class Model:
         model_name_pattern = re.compile(r'^model_\d+$')
         
         # Display the header
-        print(f"\n{'Model' if re.match(model_name_pattern, self.name) else self.name} (ID: {self.id})\n")
-        header = f"{'Module (type)':<40}{'Output Shape':<20}{'Trainable params #':<20}"
+        print(f"\n{'Model' if re.match(model_name_pattern, self.name) else self.name}\n")
+        header = f"{'Module (type)':<55}{'Output Shape':<20}{'Trainable params #':<20}"
         print(f"{'-' * len(header)}")
         print(header)
         print(f"{'=' * len(header)}")
 
         # Iterate over the modules
-        for idx, module in enumerate(self.modules):
+        for idx, module in enumerate(self._modules.values()):
             # Composing the module name
             module_name = f"{module.name} ({module.__class__.__name__})"
             
@@ -456,13 +380,13 @@ class Model:
                 pass
             
             # format the output
-            module_name = format_summary_output(module_name, 40)
+            module_name = format_summary_output(module_name, 50) + " " * 5
             output_shape = format_summary_output(str(output_shape), 20)
             num_params = format_summary_output(str(num_params), 20)
             
             # Display the module information
-            print(f"{module_name:<40}{str(output_shape):<20}{str(num_params):<20}")
-            if idx < len(self.modules) - 1 : print(f"{'-' * len(header)}")
+            print(f"{module_name:<55}{str(output_shape):<20}{str(num_params):<20}")
+            if idx < len(self._modules.values()) - 1 : print(f"{'-' * len(header)}")
             
         # Compute the total number of parameters
         total_params = "?"
@@ -476,18 +400,6 @@ class Model:
         print(f"{'=' * len(header)}")
         print(f"Total trainable parameters: {total_params}")
         print(f"{'-' * len(header)}")
-                
-                
-    def count_params(self) -> int:
-        """
-        Method to count the number of parameters of the model
-        
-        Returns:
-        - int: Number of parameters of the model
-        """
-        
-        # Get the number of parameters of each module
-        return sum([module.count_params() for module in self.modules])
     
     
     def output_shape(self) -> Optional[tuple]:
@@ -501,4 +413,4 @@ class Model:
         # Get the output shape of the last module by calling the output_shape method
         # This will evetually be called recursively until the last the module is a layer
         # which returns the output shape
-        return self.modules[-1].output_shape()
+        return list(self._modules.values())[-1].output_shape()
