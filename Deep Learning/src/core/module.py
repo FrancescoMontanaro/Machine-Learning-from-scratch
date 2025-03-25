@@ -1,6 +1,7 @@
 from typing import Optional, Any
 
 from ..core import Tensor
+from .modules_list import ModuleList
 
 
 class Module:
@@ -44,6 +45,16 @@ class Module:
             
             # Set a hierarchical name for the sub-module
             value.name = f"{self.name}.{name}" if self.name else name
+            
+        # If the value is a ModuleList, add the modules to the dictionary of sub-modules
+        elif isinstance(value, ModuleList):
+            # Iterate over the modules in the ModuleList
+            for i, module in enumerate(value.modules):
+                # Add the module to the dictionary of sub-modules
+                self.__dict__.setdefault("_modules", {})[f"{name}_{i}"] = module
+                
+                # Set a hierarchical name for the sub-module
+                module.name = f"{self.name}.{name}_{i}" if self.name else f"{name}_{i}"
 
         elif isinstance(value, Tensor) and value.requires_grad and value.is_parameter:
             # Add the parameter to the dictionary of parameters
