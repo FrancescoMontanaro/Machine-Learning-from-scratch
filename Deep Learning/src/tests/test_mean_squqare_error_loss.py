@@ -78,7 +78,7 @@ class TestMSELoss(unittest.TestCase):
         
         # Check if the gradients are not None
         if self.y_pred_tensor.grad is None or self.y_pred_torch.grad is None:
-            raise AssertionError("Gradients are None!")
+            self.fail("Gradients are None!")
 
         # Compare the gradients for the predictions
         self.assertTrue(

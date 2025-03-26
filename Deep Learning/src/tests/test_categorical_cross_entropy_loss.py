@@ -79,7 +79,7 @@ class TestCCELoss(unittest.TestCase):
         
         # Check if the gradients are not None
         if self.y_pred_tensor.grad is None or grad_tf is None:
-            raise AssertionError("Gradients are None!")
+            self.fail("Gradients are None!")
         
         # Compare the gradients for the predictions
         self.assertTrue(

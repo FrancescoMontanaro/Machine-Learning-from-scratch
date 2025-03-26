@@ -86,7 +86,7 @@ class TestEmbeddingLayer(unittest.TestCase):
         
         # Check if the gradients are not None
         if self.layer_custom.embedding.grad is None or self.layer_torch.weight.grad is None:
-            raise AssertionError("Gradients are None!")
+            self.fail("Gradients are None!")
 
         # Compare the gradients of the embedding matrix
         self.assertTrue(

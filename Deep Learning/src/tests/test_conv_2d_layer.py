@@ -85,7 +85,7 @@ class TestConv2DLayer(unittest.TestCase):
         
         # Check if the gradients are not None
         if self.x_tensor.grad is None or self.x_torch.grad is None:
-            raise AssertionError("Gradients are None!")
+            self.fail("Gradients are None!")
 
         # Compare the backward gradients
         self.assertTrue(

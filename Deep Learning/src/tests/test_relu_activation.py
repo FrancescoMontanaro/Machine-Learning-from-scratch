@@ -75,7 +75,7 @@ class TestReLUActivation(unittest.TestCase):
         
         # Check if the gradients are not None
         if custom_grad is None or tf_grad is None:
-            raise AssertionError("Gradients are None!")
+            self.fail("Gradients are None!")
         
         # Compare the backward activation values
         self.assertTrue(
