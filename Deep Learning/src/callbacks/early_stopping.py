@@ -1,8 +1,8 @@
 import numpy as np
 from typing import Literal
 
-from ..core import Sequential
 from .base import Callback
+from ..core import Module, Tensor
 
 
 class EarlyStopping(Callback):
@@ -30,13 +30,13 @@ class EarlyStopping(Callback):
         self.counter = 0
         
     
-    def __call__(self, model_instance: Sequential) -> bool:
+    def __call__(self, module: Module) -> bool:
         """
         Method to call the callback. This method will check if the training should be stopped by
         setting the stop_training attribute of the model instance.
         
         Parameters:
-        - model_instance (Model): The model instance that is being trained.
+        - module (Module): The model instance that is being trained.
         
         Returns:
         - bool: True if the training should be stopped, False otherwise.
@@ -45,15 +45,23 @@ class EarlyStopping(Callback):
         - ValueError: If the target value is not found in the history.
         """
         
+        # Get the history of the module
+        history = getattr(module, "history")
+        
+        # Check if the history is None
+        if history is None:
+            # Raise an error
+            raise ValueError("History not found in the module.")
+        
         # Get the target value
-        target = model_instance.history.get(self.monitor, None)
+        target: Tensor = history.get(self.monitor)
         
         # Check if the target value is None
         if target is None:
             raise ValueError(f"Target value '{self.monitor}' not found in the history.")
         
         # Get the current value
-        value = target[-1]
+        value = target.data[-1]
         
         # Check if the value is better
         if self.mode == "min":
@@ -72,11 +80,16 @@ class EarlyStopping(Callback):
             
         # Check if the training should be stopped
         if self.counter >= self.patience:
+            # Extract the epoch number
+            epoch = len(target.data)
+            
             # Print a message
-            print(f"Early stopping: stopping training after {model_instance.epoch} epochs.")
+            print(f"Early stopping: stopping training after {epoch} epochs.")
             
             # Set the stop_training attribute
-            model_instance.stop_training = True
+            setattr(module, "stop_training", True)
+            
+            # The training should be stopped
             return True
         
         # The training should not be stopped

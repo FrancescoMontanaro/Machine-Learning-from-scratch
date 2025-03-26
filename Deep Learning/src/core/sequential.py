@@ -34,11 +34,6 @@ class Sequential(Module):
         # List of modules of the sequential model
         self.modules: ModuleList = ModuleList(modules)
         
-        # Model settings
-        self.stop_training = False
-        self.history = {}
-        self.epoch = 0
-        
         
     def __call__(self, x: Tensor, batch_size: Optional[int] = None, verbose: bool = False) -> Tensor:
         """
@@ -76,7 +71,7 @@ class Sequential(Module):
         epochs: int = 10,
         metrics: list[Callable] = [],
         callbacks: list[Callable] = []
-    ) -> dict[str, np.ndarray]:
+    ) -> dict[str, Tensor]:
         """
         Method to train the neural network
         
@@ -94,26 +89,28 @@ class Sequential(Module):
         - callbacks (list[Callback]): List of callbacks to execute
         
         Returns:
-        - dict[str, np.ndarray]: Dictionary containing the training and validation losses
+        - dict[str, Tensor]: Dictionary containing the training and validation losses
         """
         
         #######################
         ### Initializations ###
         #######################
         
+        # Initialize the history of the model
+        self.init_history(metrics)
+        
         # Initialize the control variables
-        self.history = {
-            "loss": np.array([]),
-            **{f"{metric.__name__}": np.array([]) for metric in metrics},
-            "val_loss": np.array([]),
-            **{f"val_{metric.__name__}": np.array([]) for metric in metrics}
-        }
         self.epoch, self.stop_training = 0, False
         n_training_steps = max(1, math.ceil(X_train.shape()[0] / batch_size))
         n_valid_steps = max(1, math.ceil(X_valid.shape()[0] / batch_size))
         
         # Execute a first forward pass in evaluation mode to initialize the parameters and their shapes
-        self(X_train[:1])
+        with no_grad():
+            # Set the model in evaluation mode
+            self.eval()
+            
+            # Compute the output of the model
+            self(X_train[:1])
         
         # Set the parameters of the optimizer
         optimizer.set_parameters(self.parameters())
@@ -228,14 +225,14 @@ class Sequential(Module):
             ##########################
                   
             # Store the training and validation losses
-            self.history["loss"] = np.append(self.history["loss"], training_epoch_loss / n_training_steps)
-            self.history["val_loss"] = np.append(self.history["val_loss"], valid_epoch_loss / n_valid_steps)
+            self.history["loss"].data = np.append(self.history["loss"].data, training_epoch_loss / n_training_steps)
+            self.history["val_loss"].data = np.append(self.history["val_loss"].data, valid_epoch_loss / n_valid_steps)
             
             # Compute the average metrics
             for metric in metrics:
                 # Compute the average of the metrics for the training and validation sets and store them
-                self.history[metric.__name__] = np.append(self.history[metric.__name__], train_metrics[metric.__name__] / n_training_steps)
-                self.history[f"val_{metric.__name__}"] = np.append(self.history[f"val_{metric.__name__}"], valid_metrics[metric.__name__] / n_valid_steps)
+                self.history[metric.__name__].data = np.append(self.history[metric.__name__].data, train_metrics[metric.__name__] / n_training_steps)
+                self.history[f"val_{metric.__name__}"].data = np.append(self.history[f"val_{metric.__name__}"].data, valid_metrics[metric.__name__] / n_valid_steps)
             
             #############################
             ### Display the progress  ###
@@ -244,13 +241,13 @@ class Sequential(Module):
             # Display progress with metrics
             print(
                 f"\rEpoch {self.epoch + 1}/{epochs} --> "
-                f"loss: {self.history['loss'][-1]:.4f} "
+                f"loss: {self.history['loss'].data[-1]:.4f} "
                 + " ".join(
-                    [f"- {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__][-1]:.4f}" for metric in metrics]
+                    [f"- {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__].data[-1]:.4f}" for metric in metrics]
                 )
-                + f" | Validation loss: {self.history['val_loss'][-1]:.4f} "
+                + f" | Validation loss: {self.history['val_loss'].data[-1]:.4f} "
                 + " ".join(
-                    [f"- Validation {metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'][-1]:.4f}" for metric in metrics]
+                    [f"- Validation {metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'].data[-1]:.4f}" for metric in metrics]
                 ).ljust(50)
             )
             
@@ -414,3 +411,20 @@ class Sequential(Module):
         # This will evetually be called recursively until the last the module is a layer
         # which returns the output shape
         return list(self._modules.values())[-1].output_shape()
+    
+    
+    def init_history(self, metrics: list[Callable]) -> None:
+        """
+        Method to initialize the history of the model
+        
+        Parameters:
+        - metrics (list[Callable]): List of metrics to evaluate the model
+        """
+        
+        # Initialize the history of the model
+        self.history = {
+            "loss": Tensor(np.array([])),
+            **{f"{metric.__name__}": Tensor(np.array([])) for metric in metrics},
+            "val_loss": Tensor(np.array([])),
+            **{f"val_{metric.__name__}": Tensor(np.array([])) for metric in metrics}
+        }
