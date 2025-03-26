@@ -1,8 +1,5 @@
 .vscode
 .DS_Store
 __pycache__/
-venv
-dataset/
+venv/
 .dev/
-compare_models.py
-checkpoints/

@@ -1,5 +1,8 @@
 tqdm
 numpy
-keras
+regex
 matplotlib
+
+# Used only for downloading datasets
+keras
 scikit-learn

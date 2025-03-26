@@ -9,13 +9,14 @@ class Dense(Module):
     
     ### Magic methods ###
     
-    def __init__(self, num_units: int, activation: Optional[Activation] = None, name: Optional[str] = None) -> None:
+    def __init__(self, num_units: int, activation: Optional[Activation] = None, add_bias: bool = True, name: Optional[str] = None) -> None:
         """
         Class constructor
         
         Parameters:
         - num_units (int): Number of units in the layer
         - activation (Callable): Activation function of the layer. Default is ReLU
+        - add_bias (bool): Whether to include a bias term in the layer. Default is True
         - name (str): Name of the layer
         """
         
@@ -25,6 +26,7 @@ class Dense(Module):
         # Store the activation function
         self.activation = activation
         self.num_units = num_units
+        self.add_bias = add_bias
         
         # Initialize the weights and bias
         self.weights: Tensor
@@ -67,7 +69,11 @@ class Dense(Module):
         assert isinstance(self.bias, Tensor), "Bias is not initialized. Please call the layer with some input data to initialize the bias."
         
         # Compute the linear combination of the weights and features
-        linear_comb = x @ self.weights + self.bias
+        linear_comb = x @ self.weights
+        
+        # Add the bias term if necessary
+        if self.add_bias:
+            linear_comb += self.bias
         
         # Return the output of the neuron
         return self.activation(linear_comb) if self.activation is not None else linear_comb

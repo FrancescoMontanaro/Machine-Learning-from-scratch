@@ -5,6 +5,9 @@ from .utils.types_registry import get_module_class
 
 
 class ModuleList:
+    
+    ### Magic methods ###
+    
     def __init__(self, modules: list['Module']) -> None:
         """
         Constructor for the ModuleList class
@@ -25,3 +28,27 @@ class ModuleList:
         
         # Store the list of modules
         self.modules = modules
+        
+        
+    def __iter__(self):
+        """
+        Method to iterate over the list of modules
+        """
+        
+        # Return the iterator over the list of modules
+        return iter(self.modules)
+    
+    
+    def __getitem__(self, idx: int) -> 'Module':
+        """
+        Method to get a module from the list
+        
+        Parameters:
+        - idx (int): Index of the module to retrieve
+        
+        Returns:
+        - Module: The module at the given index
+        """
+        
+        # Return the module at the given index
+        return self.modules[idx]
