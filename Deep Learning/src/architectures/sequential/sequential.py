@@ -1,9 +1,9 @@
-import gc
 import math
 import time
 import numpy as np
 from typing import Callable, Optional
 
+from ..base import Architecture
 from ...optimizers import Optimizer
 from ...loss_functions import LossFn
 from ...core.utils.data_processing import *
@@ -11,7 +11,7 @@ from ...core import Tensor, Module, ModuleList
 from ...core.utils.context_manager import no_grad
 
 
-class Sequential(Module):
+class Sequential(Architecture):
     
     ### Magic methods ###
     
@@ -161,7 +161,7 @@ class Sequential(Module):
                 end_time = time.time() # Store the end time
                 elapsed_time += (end_time - start_time) # Update the elapsed time
                 ms_per_step = elapsed_time / (training_step + 1) * 1000 # Compute the milliseconds per step
-                tensors_in_memory = len([t for t in gc.get_objects() if isinstance(t, Tensor)]) # Compute the number of tensors in memory
+                tensors_in_memory = self.count_tensors_in_memory() # Compute the number of tensors in memory
                 
                 # Display epoch progress
                 print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {tensors_in_memory} tensors in memory | {round(ms_per_step, 2)} ms/step --> loss: {training_loss.data:.4f}", end="")
@@ -238,29 +238,12 @@ class Sequential(Module):
                 callback(self)
                 
             # Call the garbage collector to free up memory
-            gc.collect()
+            self.clear_cache()
          
         # Return the history of the training   
         return self.history
     
-    
-    def init_history(self, metrics: list[Callable]) -> None:
-        """
-        Method to initialize the history of the model
-        
-        Parameters:
-        - metrics (list[Callable]): List of metrics to evaluate the model
-        """
-        
-        # Initialize the history of the model
-        self.history = {
-            "loss": Tensor(np.array([])),
-            **{f"{metric.__name__}": Tensor(np.array([])) for metric in metrics},
-            "val_loss": Tensor(np.array([])),
-            **{f"val_{metric.__name__}": Tensor(np.array([])) for metric in metrics}
-        }
-        
-        
+
     ### Protected methods ###
     
     def _forward(self, x: Tensor, batch_size: Optional[int] = None, verbose: bool = False) -> Tensor:

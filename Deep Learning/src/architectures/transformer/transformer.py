@@ -1,17 +1,17 @@
-import gc
 import numpy as np
 from typing import Union, Generator
 
+from ...core import Tensor
 from .decoder import Decoder
 from ...optimizers import Adam
-from ...core import Tensor, Module
+from ..base import Architecture
 from .data_loader import DataLoader
 from ...loss_functions import CrossEntropy
 from ...core.utils.data_processing import concat
 from ...core.utils.context_manager import no_grad
 
 
-class Transformer(Module):
+class Transformer(Architecture):
     
     ### Magic methods ###
     
@@ -48,7 +48,7 @@ class Transformer(Module):
     
     ### Public methods ###
     
-    def fit(self, data_loader: DataLoader, epochs: int, lr: float, batch_size: int, eval_iters: int = 200) -> None:
+    def fit(self, data_loader: DataLoader, epochs: int, lr: float, batch_size: int, eval_iters: int = 200) -> dict[str, Tensor]:
         """
         Method to train the model.
         
@@ -64,10 +64,13 @@ class Transformer(Module):
         optimizer = Adam(learning_rate=lr, parameters=self.parameters(), weight_decay=0.01)
         loss_fn = CrossEntropy()
         
+        # Initialize the history of the model
+        self.init_history()
+        
         # Iterate over the epochs
         for epoch in range(epochs):
             # Call the garbage collector to free up memory
-            gc.collect()
+            self.clear_cache()
             
             # Get the batch
             x, y = data_loader.get_batch(split='train', batch_size=batch_size, sequence_length=self.sequence_length) # (B, S), (B, S)
@@ -96,6 +99,9 @@ class Transformer(Module):
             
             # Print the losses
             print(f'Epoch {epoch+1}/{epochs} - Train Loss: {loss.data:.4f}')
+            
+        # Return the training history
+        return self.history
             
         
     def generate(self, input_tokens: Tensor, max_new_tokens: int, stream: bool = False) -> Union[Tensor, Generator[Tensor, None, None]]:
