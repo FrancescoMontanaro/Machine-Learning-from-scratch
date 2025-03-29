@@ -56,12 +56,9 @@ class LayerNormalization(Module):
             # Initialize the layer
             self.init_params()
         
-        # Extract the axis along which to compute the mean and variance: all except the batch dimension
-        axes = tuple(range(1, len(x.shape())))
-        
         # Compute mean and variance along the feature dimension for each sample
-        layer_mean = x.mean(axis=axes, keepdims=True)
-        layer_var = x.var(axis=axes, keepdims=True, ddof=0)
+        layer_mean = x.mean(axis=-1, keepdims=True)
+        layer_var = x.var(axis=-1, keepdims=True, ddof=0)
         
         # Scale and shift
         return self.gamma * ((x - layer_mean) * (1 / (layer_var + self.epsilon).sqrt())) + self.beta
@@ -94,7 +91,7 @@ class LayerNormalization(Module):
         assert self.input_shape is not None, "Input shape is not set. Please call the layer with input data."
         
         # Extract the shape of the parameters: all except the batch dimension
-        feature_shape = self.input_shape[1:]
+        feature_shape = (self.input_shape[-1],)
         
         # Initialize the scale parameter
         self.gamma = Tensor(

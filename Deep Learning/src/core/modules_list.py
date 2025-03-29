@@ -1,54 +1,107 @@
-from typing import Type, TYPE_CHECKING, cast
-
-if TYPE_CHECKING: from .module import Module
+from typing import Type, Generic, TypeVar, Union, TYPE_CHECKING, cast, overload
 from .utils.types_registry import get_module_class
 
+if TYPE_CHECKING: from .module import Module
 
-class ModuleList:
+# Define a type variable T that is bound to the Module class
+T = TypeVar('T', bound='Module')
+
+
+class ModuleList(Generic[T]):
     
-    ### Magic methods ###
-    
-    def __init__(self, modules: list['Module']) -> None:
+    def __init__(self, modules: list[T]) -> None:
         """
-        Constructor for the ModuleList class
+        Class constructor.
         
         Parameters:
-        - modules (list[Module]): List of modules to store
+        - modules (list[Module]): List of modules to be stored in the ModuleList.
         
         Raises:
-        - TypeError: If the input is not a list of modules
+        - TypeError: If any of the elements in the list are not of type Module.
         """
         
-        # Get the module class
+        # Get the Module class from the registry
         Module = cast(Type['Module'], get_module_class())
         
-        # Check if the input is a list of modules
+        # Check if all elements in the list are of type Module
         if not all(isinstance(module, Module) for module in modules):
-            raise TypeError("All elements in the list must be of type Module!")
+            raise TypeError("All elements in the list must be of type Module.")
         
-        # Store the list of modules
-        self.modules = modules
+        # Store the modules
+        self.modules: list[T] = modules
         
-        
+    
     def __iter__(self):
         """
-        Method to iterate over the list of modules
+        Returns an iterator over the modules in the ModuleList.
+        
+        Returns:
+        - iterator: An iterator over the modules in the ModuleList.
         """
         
-        # Return the iterator over the list of modules
+        # Iterate over the modules
         return iter(self.modules)
     
     
-    def __getitem__(self, idx: int) -> 'Module':
+    @overload
+    def __getitem__(self, idx: int) -> T: 
         """
-        Method to get a module from the list
+        Returns the module at the specified index.
         
         Parameters:
-        - idx (int): Index of the module to retrieve
+        - idx (int): The index of the module to be returned.
         
         Returns:
-        - Module: The module at the given index
+        - Module: The module at the specified index.
         """
         
-        # Return the module at the given index
+        # Just to satisfy the overload
+        ...
+    
+    
+    @overload
+    def __getitem__(self, idx: slice) -> list[T]: 
+        """
+        Returns a list of modules at the specified slice.
+        
+        Parameters:
+        - idx (slice): The slice of the modules to be returned.
+        
+        Returns:
+        - list[Module]: A list of modules at the specified slice.
+        """
+        
+        # Just to satisfy the overload
+        ...
+    
+    
+    def __getitem__(self, idx: Union[int, slice]) -> Union[T, list[T]]:
+        """
+        Returns the module at the specified index or a list of modules at the specified slice.
+        
+        Parameters:
+        - idx (Union[int, slice]): The index or slice of the modules to be returned.
+        
+        Returns:
+        - Union[Module, list[Module]]: The module at the specified index or a list of modules at the specified slice.
+        """
+        
+        # Check if the index is an integer or a slice
+        if isinstance(idx, slice):
+            # Return a list of modules at the specified slice
+            return self.modules[idx]
+        
+        # Return the module at the specified index
         return self.modules[idx]
+    
+    
+    def __len__(self) -> int:
+        """
+        Returns the number of modules in the ModuleList.
+        
+        Returns:
+        - int: The number of modules in the ModuleList.
+        """
+        
+        # Return the length of the modules list
+        return len(self.modules)

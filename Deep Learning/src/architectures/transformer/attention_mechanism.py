@@ -1,8 +1,9 @@
 import numpy as np
 from typing import Optional
 
-from ...src.core.utils.data_processing import concat
-from ...src import Tensor, Module, ModuleList, layers
+from ...layers import Dense, Dropout
+from ...core import Tensor, Module, ModuleList
+from ...core.utils.data_processing import concat
 
 
 class SingleHeadAttention(Module):
@@ -26,12 +27,12 @@ class SingleHeadAttention(Module):
         self.head_size = head_size
         
         # Define the key, query and value matrices
-        self.key = layers.Dense(head_size, add_bias=False) # (B, S, E) -> (B, S, H)
-        self.query = layers.Dense(head_size, add_bias=False) # (B, S, E) -> (B, S, H)
-        self.value = layers.Dense(head_size, add_bias=False) # (B, S, E) -> (B, S, H)
+        self.key = Dense(head_size, add_bias=False) # (B, S, E) -> (B, S, H)
+        self.query = Dense(head_size, add_bias=False) # (B, S, E) -> (B, S, H)
+        self.value = Dense(head_size, add_bias=False) # (B, S, E) -> (B, S, H)
         
         # Creating a dropout layer
-        self.dropout = layers.Dropout(dropout) # (B, S, H) -> (B, S, H)
+        self.dropout = Dropout(dropout) # (B, S, H) -> (B, S, H)
         
         # Registering the attention mask as a buffer
         self.attention_mask: Tensor # (S, S) -> (S, S)
@@ -80,7 +81,7 @@ class SingleHeadAttention(Module):
         v = self.value(x) # (B, S, E) -> (B, S, H)
         
         # Compute the attention weights, apply the attention mask and normalize the weights using softmax
-        attention_weights: Tensor = k @ q.transpose((-2, -1)) * self.head_size ** -0.5 # (B, S, H) @ (B, H, S) -> (B, S, S)
+        attention_weights: Tensor = k @ q.transpose((0, 2, 1)) * self.head_size ** -0.5 # (B, S, H) @ (B, H, S) -> (B, S, S)
         attention_weights = attention_weights.masked_fill(self.attention_mask.data[:S, :S] == 0, float('-inf')) # (B, S, S) -> (B, S, S)
         attention_weights = attention_weights.softmax(axis=-1) # (B, S, S) -> (B, S, S)
         
@@ -147,15 +148,15 @@ class MultiHeadAttention(Module):
         super().__init__(name)
         
         # Creating the attention heads
-        self.heads = ModuleList([SingleHeadAttention(head_size) for _ in range(n_heads)]) # (B, S, E) -> (B, S, H * n_heads)
+        self.heads: ModuleList[SingleHeadAttention] = ModuleList([SingleHeadAttention(head_size) for _ in range(n_heads)]) # (B, S, E) -> (B, S, H * n_heads)
         
         # Create the output linear layer to project the embeddings back to the original size
         # This will be initialize lazily, since we do not need the embedding size (E) until 
         # the first forward pass (by design of this DL framework)
-        self.output_linear: Module # (B, S, H * n_heads) -> (B, S, E)
+        self.output_linear: Dense # (B, S, H * n_heads) -> (B, S, E)
         
         # Create the dropout layer
-        self.dropout = layers.Dropout(dropout) # (B, S, E) -> (B, S, E)
+        self.dropout: Dropout = Dropout(dropout) # (B, S, E) -> (B, S, E)
         
         
     ### Public methods ###
@@ -225,7 +226,7 @@ class MultiHeadAttention(Module):
         """
         
         # Initialize the output linear layer
-        self.output_linear = layers.Dense(E) # (B, S, H * n_heads) -> (B, S, E)
+        self.output_linear = Dense(E) # (B, S, H * n_heads) -> (B, S, E)
         
         # Call the parent class method to set the layer as initialized
         super().init_params()

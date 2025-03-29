@@ -248,6 +248,22 @@ class Tokenizer:
         self.vocab_size = len(vocab.keys())
         
     
+    def get_vocab_size(self) -> int:
+        """
+        Function to get the size of the vocabulary
+        
+        Returns:
+        - int: The size of the vocabulary
+        """
+        
+        # Check if the vocabulary size is set
+        if self.vocab_size is None:
+            raise ValueError("The vocabulary size is not set. Train the tokenizer before getting the vocabulary size or load the parameters from a file")
+        
+        # Return the vocabulary size
+        return self.vocab_size
+    
+    
     ### Protected methods ###
     
     @classmethod

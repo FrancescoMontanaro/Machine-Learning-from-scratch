@@ -1,8 +1,8 @@
 from typing import Optional
 
-from ...src import Tensor, Module, layers
-
 from .mlp import MLP
+from ...core import Tensor, Module
+from ...layers import LayerNormalization
 from .attention_mechanism import MultiHeadAttention
 
 
@@ -29,10 +29,10 @@ class DecoderBlock(Module):
         
         # Define the modules of the transformer's decoder block
         # Some of them will be lazily initialized in the forward pass, since we do not know the embedding size yet
-        self.attention_heads: Module # (B, S, E) -> (B, S, E)
-        self.mlp = MLP(dropout) # (B, S, E) -> (B, S, E)
-        self.layer_norm_1 = layers.LayerNormalization() # (B, S, E) -> (B, S, E)
-        self.layer_norm_2 = layers.LayerNormalization() # (B, S, E) -> (B, S, E)
+        self.layer_norm_1 = LayerNormalization() # (B, S, E) -> (B, S, E)
+        self.attention_heads: MultiHeadAttention # (B, S, E) -> (B, S, E)
+        self.mlp: MLP = MLP(dropout) # (B, S, E) -> (B, S, E)
+        self.layer_norm_2 = LayerNormalization() # (B, S, E) -> (B, S, E)
       
     
     ### Public methods ###  

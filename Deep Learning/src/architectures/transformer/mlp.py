@@ -1,7 +1,8 @@
 from typing import Optional
 
-from ...src.activations import ReLU
-from ...src import Tensor, Module, layers
+from ...activations import ReLU
+from ...core import Tensor, Module
+from ...layers import Dense, Dropout
 
 
 class MLP(Module):
@@ -23,11 +24,11 @@ class MLP(Module):
         # Define the MLP layers
         # Define the dense layers
         # This will be lazily initialized in the forward pass, since we do not know the embedding size yet
-        self.input_dense: Module # (B, S, E) -> (B, S, 4 * E)
-        self.output_dense: Module # (B, S, 4 * E) -> (B, S, E)
+        self.input_dense: Dense # (B, S, E) -> (B, S, 4 * E)
+        self.output_dense: Dense # (B, S, 4 * E) -> (B, S, E)
         
         # Final dropout layer
-        self.dropout = layers.Dropout(dropout) # (B, S, E) -> (B, S, E)
+        self.dropout: Dropout = Dropout(dropout) # (B, S, E) -> (B, S, E)
        
        
     ### Public methods ### 
@@ -62,7 +63,6 @@ class MLP(Module):
             # Initialize the layer
             self.init_params(E)
             
-            
         # Apply the forward pass through the MLP
         out = self.input_dense(x) # (B, S, E) -> (B, S, 4 * E)
         out = self.dropout(self.output_dense(out)) # (B, S, 4 * E) -> (B, S, E)
@@ -84,8 +84,8 @@ class MLP(Module):
         
         # Return the output shape
         return self.input_shape # (B, S, E)
-        
-                
+
+
     def init_params(self, E: int) -> None:
         """
         Method to initialize the module
@@ -95,8 +95,8 @@ class MLP(Module):
         """
         
         # Initialize the dense layers
-        self.input_dense = layers.Dense(4 * E, activation=ReLU()) # (B, S, E) -> (B, S, 4 * E)
-        self.output_dense = layers.Dense(E) # (B, S, 4 * E) -> (B, S, E)
+        self.input_dense = Dense(4 * E, activation=ReLU()) # (B, S, E) -> (B, S, 4 * E)
+        self.output_dense = Dense(E) # (B, S, 4 * E) -> (B, S, E)
         
         # Call the parent class method to set the layer as initialized
         super().init_params()

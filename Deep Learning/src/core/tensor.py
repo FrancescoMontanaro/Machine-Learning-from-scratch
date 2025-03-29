@@ -688,6 +688,21 @@ class Tensor:
         return gather(self, indices, axis)
     
     
+    def squeeze(self, axis: int) -> 'Tensor':
+        """
+        Method to squeeze the tensor along the specified axis
+        
+        Parameters:
+        - axis (int): Axis along which to squeeze the tensor
+        
+        Returns:
+        - Tensor: Sequeezed tensor
+        """
+        
+        # Compute and return the sequeezed tensor
+        return squeeze(self, axis)
+    
+    
     def unsqueeze(self, axis: int) -> 'Tensor':
         """
         Method to unsqueeze the tensor along the specified axis

@@ -1,4 +1,3 @@
-import re
 import gc
 import math
 import time
@@ -12,7 +11,6 @@ from ..loss_functions import LossFn
 from .utils.data_processing import *
 from .modules_list import ModuleList
 from .utils.context_manager import no_grad
-from .utils.data_analysis import format_summary_output
 
 
 class Sequential(Module):
@@ -335,68 +333,6 @@ class Sequential(Module):
         
         # Return the output tensor
         return out
-    
-      
-    def summary(self) -> None:
-        """
-        Method to display the summary of the model
-        """
-        
-        # Regular expression pattern to check if the model name is the default one
-        model_name_pattern = re.compile(r'^model_\d+$')
-        
-        # Display the header
-        print(f"\n{'Model' if re.match(model_name_pattern, self.name) else self.name}\n")
-        header = f"{'Module (type)':<55}{'Output Shape':<20}{'Trainable params #':<20}"
-        print(f"{'-' * len(header)}")
-        print(header)
-        print(f"{'=' * len(header)}")
-
-        # Iterate over the modules
-        for idx, module in enumerate(self._modules.values()):
-            # Composing the module name
-            module_name = f"{module.name} ({module.__class__.__name__})"
-            
-            # Composing the output shape
-            output_shape = "?"
-            try:
-                # Get the output shape of the module
-                output_shape = module.output_shape() 
-                
-                # Format the output shape
-                output_shape = f"({', '.join(str(dim) for dim in output_shape)})" if output_shape else "?"
-            except:
-                pass
-            
-            # Composing the number of parameters
-            num_params = "?"
-            try:
-                # Get the number of parameters of the module
-                num_params = module.count_params()
-            except:
-                pass
-            
-            # format the output
-            module_name = format_summary_output(module_name, 50) + " " * 5
-            output_shape = format_summary_output(str(output_shape), 20)
-            num_params = format_summary_output(str(num_params), 20)
-            
-            # Display the module information
-            print(f"{module_name:<55}{str(output_shape):<20}{str(num_params):<20}")
-            if idx < len(self._modules.values()) - 1 : print(f"{'-' * len(header)}")
-            
-        # Compute the total number of parameters
-        total_params = "?"
-        try:
-            # Get the total number of parameters
-            total_params = self.count_params()
-        except:
-            pass
-        
-        # Display the footer 
-        print(f"{'=' * len(header)}")
-        print(f"Total trainable parameters: {total_params}")
-        print(f"{'-' * len(header)}")
     
     
     def output_shape(self) -> Optional[tuple]:

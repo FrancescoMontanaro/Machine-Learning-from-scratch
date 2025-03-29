@@ -1,7 +1,9 @@
+import re
 from typing import Optional, Any
 
 from ..core import Tensor
 from .modules_list import ModuleList
+from .utils.data_analysis import format_summary_output
 
 
 class Module:
@@ -45,7 +47,7 @@ class Module:
             
             # Set a hierarchical name for the sub-module
             value.name = f"{self.name}.{name}" if self.name else name
-            value.name = value.name.lower().replace(" ", "_")
+            value.name = re.sub(r'([a-z])([A-Z])', r'\1_\2', value.name.replace(" ", "_")).lower()
             
         # If the value is a ModuleList, add the modules to the dictionary of sub-modules
         elif isinstance(value, ModuleList):
@@ -57,7 +59,7 @@ class Module:
                 # Set a hierarchical name for the sub-module
                 sub_module_name = f"{self.name}.{name}[{i}]" if self.name else f"{name}[{i}]"
                 if module.name: sub_module_name += f".{module.name}"
-                module.name = sub_module_name.lower().replace(" ", "_")
+                module.name = re.sub(r'([a-z])([A-Z])', r'\1_\2', sub_module_name.replace(" ", "_")).lower()
 
         elif isinstance(value, Tensor) and value.requires_grad and value.is_parameter:
             # Add the parameter to the dictionary of parameters
@@ -67,7 +69,7 @@ class Module:
         super().__setattr__(name, value)
 
 
-    def __call__(self, x: Tensor) -> Tensor:
+    def __call__(self, x: Tensor, *args, **kwargs) -> Tensor:
         """
         Method to call the forward method of the module
         
@@ -201,7 +203,7 @@ class Module:
         return total
     
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, *args, **kwargs) -> Tensor:
         """
         Abstract method to define the forward pass of the module
         
@@ -238,3 +240,138 @@ class Module:
         
         # Set the flag to True to indicate that the module is initialized
         self.initialized = True
+        
+    
+    def summary(self, recursive: bool = False, is_root: bool = True, prefix: str = "") -> None:
+        """
+        Method to display the summary of the model.
+        
+        Parameters:
+        - recursive (bool): 
+            If False (default), prints the original table-based summary.
+            If True, prints a tree by descending into submodules.
+        - is_root (bool): 
+            If True, prints headers/footers or the top-level node (depending on the mode).
+            Internally used for recursion.
+        - prefix (str): 
+            Used internally to manage indentation for the tree layout.
+        """
+
+        # If NOT recursive, print the summary in tabular format
+        if not recursive:
+            # Diaplay the header
+            print(f"\n{self.name}\n")
+            header = f"{'Module (type)':<55}{'Output Shape':<20}{'Trainable params #':<20}"
+            print(f"{'-' * len(header)}")
+            print(header)
+            print(f"{'=' * len(header)}")
+
+            # Iterate over the modules
+            modules = list(self._modules.values())
+            for idx, module in enumerate(modules):
+                # Composing the module name
+                module_name = f"{module.name} ({module.__class__.__name__})"
+
+                # Composing the output shape
+                output_shape = "?"
+                try:
+                    # Get the output shape of the module
+                    output_shape = module.output_shape()
+                    
+                    # Format the output shape
+                    output_shape = (f"({', '.join(str(dim) for dim in output_shape)})" if output_shape else "?")
+                except:
+                    pass
+
+                # Composing the number of parameters
+                num_params = "?"
+                try:
+                    # Get the number of parameters of the module
+                    num_params = module.count_params()
+                except:
+                    pass
+
+                # format the output
+                module_name = format_summary_output(module_name, 50) + " " * 5
+                output_shape = format_summary_output(str(output_shape), 20)
+                num_params = format_summary_output(str(num_params), 20)
+
+                # Display the module information
+                print(f"{module_name:<55}{str(output_shape):<20}{str(num_params):<20}")
+                
+                # Print separator if not the last module
+                if idx < len(modules) - 1:
+                    header = f"{'Module (type)':<55}{'Output Shape':<20}{'Trainable params #':<20}"
+                    print(f"{'-' * len(header)}")
+
+            # Compute the total number of parameters
+            total_params = "?"
+            try:
+                total_params = self.count_params()
+            except:
+                pass
+
+            # Display the footer 
+            header = f"{'Module (type)':<55}{'Output Shape':<20}{'Trainable params #':<20}"
+            print(f"{'=' * len(header)}")
+            print(f"Total trainable parameters: {total_params}")
+            print(f"{'-' * len(header)}")
+
+        # If recursive, print the summary in tree format
+        else:
+            # For the root module, print its name/class (and optional shape/params)
+            if is_root:
+                # Try to get shape
+                shape_str = "?"
+                try:
+                    # Get the output shape of the module
+                    shape = self.output_shape()
+                    
+                    # Format the output shape
+                    shape_str = f"({', '.join(str(dim) for dim in shape)})" if shape else "?"
+                except:
+                    pass
+                
+                # Try to get number of parameters
+                num_params_str = "?"
+                try:
+                    num_params_str = str(self.count_params())
+                except:
+                    pass
+                
+                # Print the top-level module
+                print(f"{self.name} ({self.__class__.__name__}) " f"[output_shape={shape_str}, params={num_params_str}]")
+
+            # Go through each child module and print in a tree-like structure
+            modules = list(self._modules.values())
+            for i, module in enumerate(modules):
+                # Determine if this is the last child for tree-drawing symbols
+                is_last = (i == len(modules) - 1)
+                branch_symbol = "└──" if is_last else "├──"
+
+                # Try to get shape
+                shape_str = "?"
+                try:
+                    # Get the output shape of the module
+                    shape = module.output_shape()
+                    
+                    # Format the output shape
+                    shape_str = f"({', '.join(str(dim) for dim in shape)})" if shape else "?"
+                except:                
+                    pass
+
+                # Try to get number of parameters
+                num_params_str = "?"
+                try:
+                    num_params_str = str(module.count_params())
+                except:
+                    pass
+
+                # Print this module line
+                print(f"{prefix}{branch_symbol} {module.name} ({module.__class__.__name__}) " f"[output_shape={shape_str}, params={num_params_str}]")
+
+                # If the module has children, recurse
+                if len(module._modules) > 0:
+                    # Update the prefix for the child
+                    child_prefix = prefix + ("    " if is_last else "│   ")
+                    module.summary(recursive=True, is_root=False, prefix=child_prefix)

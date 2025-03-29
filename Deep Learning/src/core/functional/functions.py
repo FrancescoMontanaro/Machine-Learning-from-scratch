@@ -610,6 +610,59 @@ def gather(x: 'Tensor', indices: 'Tensor', axis: int = 0) -> 'Tensor':
     return out
 
 
+def squeeze(x: 'Tensor', axis: Optional[int] = None) -> 'Tensor':
+    """
+    Squeeze the tensor by removing singleton dimensions along the specified axis.
+    
+    Parameters:
+    - x (Tensor): Input tensor
+    - axis (int or None): Axis along which to squeeze the tensor. If None, all singleton dimensions are removed.
+    
+    Returns:
+    - Tensor: Squeezed tensor
+    
+    Raises:
+    - AssertionError: If the input is not a tensor
+    - ValueError: If the specified axis is not a singleton dimension
+    """
+    
+    # Get the tensor class
+    Tensor = cast(Type['Tensor'], get_tensor_class())
+    
+    # Check if the input is a tensor
+    assert isinstance(x, Tensor), "Input must be a tensor"
+    
+    # Squeeze the tensor along the specified axis
+    out = Tensor(np.squeeze(x.data, axis=axis), requires_grad=x.requires_grad)
+    
+    # Define the backward function
+    def _backward() -> None:
+        # If the gradient needs to be computed, backpropagate the gradient
+        if x.requires_grad and out.grad is not None:
+            # Unsqueeze the gradient along the same axis to match the original shape
+            if axis is None:
+                # For None case, we need to restore all squeezed dims
+                grad_squeezed = out.grad
+                original_shape = x.data.shape
+                for dim in sorted([i for i, size in enumerate(original_shape) if size == 1], reverse=True):
+                    grad_squeezed = np.expand_dims(grad_squeezed, axis=dim)
+            else:
+                # For specific axis case
+                grad_squeezed = np.expand_dims(out.grad, axis=axis)
+            
+            # Update the gradient of the input tensor
+            x.grad = x.grad + grad_squeezed if x.grad is not None else grad_squeezed
+            
+    # Store the backward function with respect to the squeeze operation
+    out._backward = _backward
+    
+    # Store the previous tensors in the computation graph
+    out._prev = {x} if x.requires_grad else set()
+    
+    # Return the output tensor
+    return out
+
+
 def unsqueeze(x: 'Tensor', axis: int) -> 'Tensor':
     """
     Unsqueeze the tensor along the specified axis.
@@ -619,7 +672,7 @@ def unsqueeze(x: 'Tensor', axis: int) -> 'Tensor':
     - axis (int): Axis along which to unsqueeze the tensor
     
     Returns:
-    - Tensor: Unsqueeze tensor
+    - Tensor: Unsqueezed tensor
     
     Raises:
     - AssertionError: If the input is not a tensor

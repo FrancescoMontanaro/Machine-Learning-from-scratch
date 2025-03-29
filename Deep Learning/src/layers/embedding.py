@@ -47,7 +47,15 @@ class Embedding(Module):
         """
         
         # Check if the input shape is valid
-        assert len(x.shape()) == 2, f"Invalid input shape. Input must be a 2D array. The shape must be (Batch size, number of features). Got shape: {x.shape()}"
+        assert len(x.shape()) <= 2, f"Invalid input shape. Input must be at maximum a 2D array. Got shape: {x.shape()}"
+        
+        # Check if the input is 1D or 2D
+        self.was_1d = len(x.shape()) == 1
+        
+        # If the input is 1D, reshape it to 2D
+        if self.was_1d:
+            # reshape the input to 2D
+            x = x.reshape((1, -1)) 
         
         # Save the input shape
         self.input_shape = x.shape()
@@ -63,8 +71,8 @@ class Embedding(Module):
         # Return the embeddings
         out = self.embedding[x.data.astype(int)]
         
-        # Return the output
-        return out
+        # Squeeze the output if the input was 1D and return the it
+        return out.squeeze(0) if self.was_1d else out
 
     
     def output_shape(self) -> tuple:
@@ -82,7 +90,7 @@ class Embedding(Module):
         batch_size, _ = self.input_shape
         
         # The output shape
-        return (batch_size, self.output_dim) # (Batch size, embedding dimension)
+        return (batch_size, self.output_dim) if not self.was_1d else (self.output_dim,)
     
         
     def init_params(self) -> None:
