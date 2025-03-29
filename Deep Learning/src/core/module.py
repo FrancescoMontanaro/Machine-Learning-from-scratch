@@ -24,6 +24,7 @@ class Module:
         self.name: str = name or self.__class__.__name__ # Name of the module
         self.training: bool = True # Flag to check if the module is in training mode
         self.initialized: bool = False # Flag to check if the module is initialized
+        self._output_shape: Optional[tuple] = None # Output shape of the module
         
         # Initialize the dictionaries for the parameters and sub-modules
         self._parameters: dict[str, Tensor] = {} # Dictionary for the parameters of the module
@@ -214,8 +215,25 @@ class Module:
         - Tensor: Output of the module after the forward pass
         """
         
-        # Raise an error if the method is not implemented
-        raise NotImplementedError("Subclasses must implement forward()")
+        ### Step 1: Lazy init ###
+        
+        # Check if the module is initialized
+        if not self._output_shape:
+            # Initialize the parameters of the module
+            self._lazy_init(x, *args, **kwargs)
+        
+        ### Step 2: Forward pass, to be implemented in the child class ###
+        
+        # Call the forward method of the module
+        out = self._forward(x, *args, **kwargs)
+        
+        ### Step 3: Update the output shape ###
+        
+        # Save the output shape of the module
+        self._output_shape = out.shape()
+        
+        # Return the output tensor
+        return out
     
     
     def output_shape(self) -> Optional[tuple]:
@@ -226,21 +244,9 @@ class Module:
         - tuple: The shape of the output of the module if the module is initialized, None otherwise
         """
         
-        # Check if the module is initialized  
-        if not self.initialized:
-            # Raise an error if the module is not initialized
-            raise ValueError("Module is not initialized. Please call the forward method with some input data.")
-    
-    
-    def init_params(self, *args, **kwargs) -> None:
-        """
-        Method to initialize the parameters of the module
-        In general, it is called in the first forward pass of the module to initialize the parameters
-        """
-        
-        # Set the flag to True to indicate that the module is initialized
-        self.initialized = True
-        
+        # Return the output shape of the module
+        return self._output_shape
+            
     
     def summary(self, recursive: bool = False, is_root: bool = True, prefix: str = "") -> None:
         """
@@ -375,3 +381,32 @@ class Module:
                     # Update the prefix for the child
                     child_prefix = prefix + ("    " if is_last else "│   ")
                     module.summary(recursive=True, is_root=False, prefix=child_prefix)
+                    
+    
+    #########################
+    ### Protected methods ###
+    #########################
+            
+            
+    def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
+        """
+        Abstract Method to lazily initialize the parameters of the module
+        
+        Parameters:
+        - x (Tensor): Input tensor
+        """
+        
+        # Check if the module is initialized
+        pass
+    
+    
+    def _forward(self, x: Tensor, *args, **kwargs) -> Tensor:
+        """
+        Abstract method to define the forward pass of the module
+        This method should be implemented in the child classes
+        
+        Parameters:
+        - x (Tensor): Input tensor
+        """
+        
+        raise NotImplementedError("The forward method must be implemented in the child class.")

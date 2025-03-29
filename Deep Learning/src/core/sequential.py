@@ -266,9 +266,28 @@ class Sequential(Module):
          
         # Return the history of the training   
         return self.history
-
+    
+    
+    def init_history(self, metrics: list[Callable]) -> None:
+        """
+        Method to initialize the history of the model
         
-    def forward(self, x: Tensor, batch_size: Optional[int] = None, verbose: bool = False) -> Tensor:
+        Parameters:
+        - metrics (list[Callable]): List of metrics to evaluate the model
+        """
+        
+        # Initialize the history of the model
+        self.history = {
+            "loss": Tensor(np.array([])),
+            **{f"{metric.__name__}": Tensor(np.array([])) for metric in metrics},
+            "val_loss": Tensor(np.array([])),
+            **{f"val_{metric.__name__}": Tensor(np.array([])) for metric in metrics}
+        }
+        
+        
+    ### Protected methods ###
+    
+    def _forward(self, x: Tensor, batch_size: Optional[int] = None, verbose: bool = False) -> Tensor:
         """
         Forward pass of the model
         
@@ -333,34 +352,3 @@ class Sequential(Module):
         
         # Return the output tensor
         return out
-    
-    
-    def output_shape(self) -> Optional[tuple]:
-        """
-        Method to get the output shape of the model
-        
-        Returns:
-        - tuple[int]: Output shape of the model if available, None otherwise
-        """
-        
-        # Get the output shape of the last module by calling the output_shape method
-        # This will evetually be called recursively until the last the module is a layer
-        # which returns the output shape
-        return list(self._modules.values())[-1].output_shape()
-    
-    
-    def init_history(self, metrics: list[Callable]) -> None:
-        """
-        Method to initialize the history of the model
-        
-        Parameters:
-        - metrics (list[Callable]): List of metrics to evaluate the model
-        """
-        
-        # Initialize the history of the model
-        self.history = {
-            "loss": Tensor(np.array([])),
-            **{f"{metric.__name__}": Tensor(np.array([])) for metric in metrics},
-            "val_loss": Tensor(np.array([])),
-            **{f"val_{metric.__name__}": Tensor(np.array([])) for metric in metrics}
-        }
