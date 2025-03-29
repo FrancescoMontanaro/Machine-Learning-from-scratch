@@ -31,7 +31,8 @@ class TestMaxPool2DLayer(unittest.TestCase):
         self.max_pool_torch = MaxPool2d(kernel_size=2, stride=2)
 
         # Initialize the custom layer
-        self.max_pool_custom.init_params()
+        self.max_pool_custom.eval()
+        self.max_pool_custom(self.x_tensor)
 
 
     def test_max_pool_2d_forward(self) -> None:

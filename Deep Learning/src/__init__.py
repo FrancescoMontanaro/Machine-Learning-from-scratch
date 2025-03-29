@@ -1,1 +1,1 @@
-from .core import Tensor, Module, ModuleList, Sequential
+from .core import Tensor, Module, ModuleList

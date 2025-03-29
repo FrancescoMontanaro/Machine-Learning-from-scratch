@@ -36,7 +36,8 @@ class TestEmbeddingLayer(unittest.TestCase):
         self.layer_torch = TorchEmbedding(num_embeddings=self.vocab_size, embedding_dim=self.embedding_dim)
 
         # Initialize the custom layer's parameters
-        self.layer_custom.init_params()
+        self.layer_custom.eval()
+        self.layer_custom(self.x_tensor)
 
         # Copy the parameters from the custom layer to the PyTorch layer for a fair comparison.
         with torch.no_grad():

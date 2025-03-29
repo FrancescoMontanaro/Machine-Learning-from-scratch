@@ -31,8 +31,8 @@ class TestBatchNormalizationLayer(unittest.TestCase):
         self.layer_torch = BatchNorm1d(num_features=self.x_np.shape[-1])
 
         # Initialize the custom layer
-        self.layer_custom.input_shape = self.x_np.shape
-        self.layer_custom.init_params()
+        self.layer_custom.eval()
+        self.layer_custom(self.x_tensor)
 
         # Copy the parameters from the custom layer to the PyTorch layer
         with torch.no_grad():

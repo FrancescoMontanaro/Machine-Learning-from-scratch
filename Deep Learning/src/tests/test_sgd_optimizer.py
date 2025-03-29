@@ -35,7 +35,8 @@ class TestSGDOptimizer(unittest.TestCase):
         self.model_torch = nn.Linear(in_features=self.x_np.shape[1], out_features=1)
 
         # Initialize the custom model
-        self.model_custom.init_params(num_features=self.x_tensor.shape()[1])
+        self.model_custom.eval()
+        self.model_custom(self.x_tensor)
 
         # Copy the weights and bias from the custom model to the PyTorch model
         with torch.no_grad():

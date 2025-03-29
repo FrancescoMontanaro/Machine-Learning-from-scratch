@@ -31,7 +31,8 @@ class TestDenseLayer(unittest.TestCase):
         self.layer_torch = Linear(in_features=self.x_np.shape[1], out_features=3)
 
         # Initialize the custom layer
-        self.layer_custom.init_params(num_features=self.x_tensor.shape()[1])
+        self.layer_custom.eval()
+        self.layer_custom(self.x_tensor)
 
         # Copy the weights and bias from the custom layer to the PyTorch layer
         with torch.no_grad():

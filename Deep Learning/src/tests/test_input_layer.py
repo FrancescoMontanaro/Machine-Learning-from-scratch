@@ -26,7 +26,7 @@ class TestInputLayer(unittest.TestCase):
         self.x_torch = torch.tensor(self.x_np, requires_grad=True)
 
         # Create the Flatten layers
-        self.layer_custom = Input(shape=self.x_np.shape)
+        self.layer_custom = Input()
         self.layer_torch = lambda x: x
 
 

@@ -31,7 +31,8 @@ class TestConv2DLayer(unittest.TestCase):
         self.conv_torch = Conv2d(in_channels=self.x_np.shape[3], out_channels=3, kernel_size=3, padding=1)
 
         # Initialize the custom layer
-        self.conv_custom.init_params(num_channels=self.x_tensor.shape()[3])
+        self.conv_custom.eval()
+        self.conv_custom(self.x_tensor)
 
         # Copy the weights and bias from the custom layer to the PyTorch layer
         with torch.no_grad():

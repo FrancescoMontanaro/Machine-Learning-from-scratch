@@ -4,55 +4,31 @@ import time
 import numpy as np
 from typing import Callable, Optional
 
-from .tensor import Tensor
-from .module import Module
-from ..optimizers import Optimizer
-from ..loss_functions import LossFn
-from .utils.data_processing import *
-from .modules_list import ModuleList
-from .utils.context_manager import no_grad
+from ...optimizers import Optimizer
+from ...loss_functions import LossFn
+from ...core.utils.data_processing import *
+from ...core import Tensor, Module, ModuleList
+from ...core.utils.context_manager import no_grad
 
 
 class Sequential(Module):
     
     ### Magic methods ###
     
-    def __init__(self, modules: list[Module], name: Optional[str] = None) -> None:
+    def __init__(self, modules: list[Module], *args, **kwargs) -> None:
         """
         Class constructor
         
         Parameters:
         - modules (list[Module]): List of modules to add to the sequential model
-        - name (Optional[str]): Name of the model
         """
         
         # Initialize the parent class
-        super().__init__(name)
+        super().__init__(*args, **kwargs)
         
         # List of modules of the sequential model
         self.modules: ModuleList = ModuleList(modules)
         
-        
-    def __call__(self, x: Tensor, batch_size: Optional[int] = None, verbose: bool = False) -> Tensor:
-        """
-        Call method to execute the forward pass of the model
-        
-        Parameters:
-        - x (Tensor): Input data.
-        - batch_size (Optional[int]): Number of samples to use for each batch
-        - verbose (bool): Flag to display the progress
-        
-        Returns:
-        - Tensor: Output of the neural network
-        """
-        
-        # Execute the forward pass of the model
-        return self.forward(
-            x = x,
-            batch_size = batch_size,
-            verbose = verbose
-        )
-
         
     ### Public methods ###      
 
@@ -298,13 +274,7 @@ class Sequential(Module):
         
         Returns:
         - Tensor: Output of the neural network
-        
-        Raises:
-        - Assert: If no modules are added to the model
         """
-             
-        # Check if the number of modules is greater than 0
-        assert len(self._modules.values()) > 0, "No modules in the neural network. Add modules to the model!"
         
         # Compute the number of steps to iterate over the batches
         # If the batch size is not provided, set it to 1
@@ -352,3 +322,18 @@ class Sequential(Module):
         
         # Return the output tensor
         return out
+    
+    
+    def _lazy_init(self, x: Tensor) -> None:
+        """
+        Method to initialize the module
+        
+        Parameters:
+        - x (Tensor): Input data. Shape: (Batch size, sequence length, embedding size)
+        
+        Raises:
+        - AssertionError: If the shape of the input data is not valid
+        """
+        
+        # Check if the number of modules is greater than 0
+        assert len(self._modules.values()) > 0, "No modules in the neural network. Add modules to the model!"
