@@ -274,31 +274,17 @@ class Module:
             # Iterate over the modules
             modules = list(self._modules.values())
             for idx, module in enumerate(modules):
-                # Composing the module name
+                # Composing the module name and format it
                 module_name = f"{module.name} ({module.__class__.__name__})"
-
-                # Composing the output shape
-                output_shape = "?"
-                try:
-                    # Get the output shape of the module
-                    output_shape = module.output_shape()
-                    
-                    # Format the output shape
-                    output_shape = (f"({', '.join(str(dim) for dim in output_shape)})" if output_shape else "?")
-                except:
-                    pass
-
-                # Composing the number of parameters
-                num_params = "?"
-                try:
-                    # Get the number of parameters of the module
-                    num_params = module.count_params()
-                except:
-                    pass
-
-                # format the output
                 module_name = format_summary_output(module_name, 50) + " " * 5
-                output_shape = format_summary_output(str(output_shape), 20)
+                
+                # Extract the output shape and format it
+                output_shape = module.output_shape()
+                output_shape = f"({', '.join(str(dim) for dim in output_shape)})" if isinstance(output_shape, tuple) else "?"
+                output_shape = format_summary_output(output_shape, 20)
+
+                # Extract the number of parameters and format it
+                num_params = module.count_params()
                 num_params = format_summary_output(str(num_params), 20)
 
                 # Display the module information
@@ -309,43 +295,25 @@ class Module:
                     header = f"{'Module (type)':<55}{'Output Shape':<20}{'Trainable params #':<20}"
                     print(f"{'-' * len(header)}")
 
-            # Compute the total number of parameters
-            total_params = "?"
-            try:
-                total_params = self.count_params()
-            except:
-                pass
-
             # Display the footer 
             header = f"{'Module (type)':<55}{'Output Shape':<20}{'Trainable params #':<20}"
             print(f"{'=' * len(header)}")
-            print(f"Total trainable parameters: {total_params}")
+            print(f"Total trainable parameters: {self.count_params()}")
             print(f"{'-' * len(header)}")
 
         # If recursive, print the summary in tree format
         else:
             # For the root module, print its name/class (and optional shape/params)
             if is_root:
-                # Try to get shape
-                shape_str = "?"
-                try:
-                    # Get the output shape of the module
-                    shape = self.output_shape()
-                    
-                    # Format the output shape
-                    shape_str = f"({', '.join(str(dim) for dim in shape)})" if shape else "?"
-                except:
-                    pass
+                # Extract the shape of the module and format it
+                shape = self.output_shape()
+                shape_str = f"({', '.join(str(dim) for dim in shape)})" if isinstance(shape, tuple) else "?"
                 
-                # Try to get number of parameters
-                num_params_str = "?"
-                try:
-                    num_params_str = str(self.count_params())
-                except:
-                    pass
+                # Extract the number of parameters
+                num_params = self.count_params()
                 
                 # Print the top-level module
-                print(f"{self.name} ({self.__class__.__name__}) " f"[output_shape={shape_str}, params={num_params_str}]")
+                print(f"{self.name} ({self.__class__.__name__}) " f"[output_shape={shape_str}, params={str(num_params)}]")
 
             # Go through each child module and print in a tree-like structure
             modules = list(self._modules.values())
@@ -355,25 +323,14 @@ class Module:
                 branch_symbol = "└──" if is_last else "├──"
 
                 # Try to get shape
-                shape_str = "?"
-                try:
-                    # Get the output shape of the module
-                    shape = module.output_shape()
-                    
-                    # Format the output shape
-                    shape_str = f"({', '.join(str(dim) for dim in shape)})" if shape else "?"
-                except:                
-                    pass
+                shape = module.output_shape()
+                shape_str = f"({', '.join(str(dim) for dim in shape)})" if isinstance(shape, tuple) else "?"
 
                 # Try to get number of parameters
-                num_params_str = "?"
-                try:
-                    num_params_str = str(module.count_params())
-                except:
-                    pass
+                num_params = module.count_params()
 
                 # Print this module line
-                print(f"{prefix}{branch_symbol} {module.name} ({module.__class__.__name__}) " f"[output_shape={shape_str}, params={num_params_str}]")
+                print(f"{prefix}{branch_symbol} {module.name} ({module.__class__.__name__}) " f"[output_shape={shape_str}, params={str(num_params)}]")
 
                 # If the module has children, recurse
                 if len(module._modules) > 0:
