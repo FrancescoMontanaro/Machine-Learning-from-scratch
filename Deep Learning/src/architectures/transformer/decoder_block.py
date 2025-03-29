@@ -1,5 +1,3 @@
-from typing import Optional
-
 from .mlp import MLP
 from ...core import Tensor, Module
 from ...layers import LayerNormalization
@@ -10,18 +8,17 @@ class DecoderBlock(Module):
     
     ### Magic methods ###
     
-    def __init__(self, n_heads: int, dropout: float = 0.1, name: Optional[str] = None) -> None:
+    def __init__(self, n_heads: int, dropout: float = 0.1, *args, **kwargs) -> None:
         """
         Initialize the transformer's decoder block.
         
         Parameters:
         - n_heads (int): The number of attention heads.
         - dropout (float): The dropout rate.
-        - name (Optional[str]): The name of the module.
         """
         
         # Initialize the superclass
-        super().__init__(name)
+        super().__init__(*args, **kwargs)
         
         # Store the number of heads and dropout rate
         self.n_heads = n_heads
@@ -35,9 +32,9 @@ class DecoderBlock(Module):
         self.layer_norm_2 = LayerNormalization() # (B, S, E) -> (B, S, E)
       
     
-    ### Public methods ###  
+    ### Protected methods ###  
         
-    def forward(self, x: Tensor) -> Tensor:
+    def _forward(self, x: Tensor) -> Tensor:
         """
         Forward pass of the transformer block.
         
@@ -46,6 +43,26 @@ class DecoderBlock(Module):
         
         Returns:
         - Tensor: The output embeddings.
+        """
+        
+        # Dimensions are:
+        # - B: batch size
+        # - S: sequence length
+        # - E: embedding size (embedding dimension of the original data)
+        
+        # Apply the multi-attention mechanism with skip connections
+        out = x + self.attention_heads(self.layer_norm_1(x)) # (B, S, E) + (B, S, E) -> (B, S, E)
+        
+        # Apply the MLP module with skip connections
+        return out + self.mlp(self.layer_norm_2(out)) # (B, S, E) + (B, S, E) -> (B, S, E)
+        
+        
+    def _lazy_init(self, x: Tensor) -> None:
+        """
+        Method to initialize the module
+        
+        Parameters:
+        - x (Tensor): Input data. Shape: (Batch size, sequence length, embedding size)
         
         Raises:
         - AssertionError: If the shape of the input data is not valid
@@ -54,54 +71,8 @@ class DecoderBlock(Module):
         # Check if the input shape is valid
         assert len(x.shape()) == 3, f"Invalid input shape. Input must be a 3D array. The shape must be (Batch size, sequence length, embedding size). Got shape: {x.shape()}"
         
-        # Dimensions are:
-        # - B: batch size
-        # - S: sequence length
-        # - E: embedding size (embedding dimension of the original data)
-        
         # Store the input shape of the layer
-        self.input_shape = x.shape()
-        
-        # Unpack the shape of the input data for better readability
-        B, S, E = self.input_shape 
-        
-        # Check if the layer is initialized
-        if not self.initialized:
-            # Initialize the layer
-            self.init_params(E)
-        
-        # Apply the multi-attention mechanism with skip connections
-        out = x + self.attention_heads(self.layer_norm_1(x)) # (B, S, E) + (B, S, E) -> (B, S, E)
-        
-        # Apply the MLP modlue with skip connections
-        out = out + self.mlp(self.layer_norm_2(out)) # (B, S, E) + (B, S, E) -> (B, S, E)
-        
-        # Return the output embeddings
-        return out # (B, S, E)
-    
-    
-    def output_shape(self) -> tuple:
-        """
-        Method to return the output shape of the module
-        
-        Returns:
-        - tuple: The shape of the output of the module
-        """
-        
-        # Call the parent class method to check if the layer is initialized
-        super().output_shape()
-        
-        # Return the output shape
-        return self.input_shape # (B, S, E)
-    
-    
-    def init_params(self, E: int) -> None:
-        """
-        Method to initialize the module
-        
-        Parameters:
-        - E (int): The embedding size of the input data
-        """
+        _, _, E = x.shape() # (B, S, E)
         
         # A good head size is the embedding size divided by the number of heads
         head_size = E // self.n_heads
@@ -112,6 +83,3 @@ class DecoderBlock(Module):
             head_size = head_size, 
             dropout = self.dropout
         )
-        
-        # Call the parent class method to set the layer as initialized
-        super().init_params()

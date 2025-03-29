@@ -23,7 +23,6 @@ class Module:
         # Set the class attributes    
         self.name: str = name or self.__class__.__name__ # Name of the module
         self.training: bool = True # Flag to check if the module is in training mode
-        self.initialized: bool = False # Flag to check if the module is initialized
         self._output_shape: Optional[tuple] = None # Output shape of the module
         
         # Initialize the dictionaries for the parameters and sub-modules
@@ -82,7 +81,7 @@ class Module:
         """
         
         # Call the forward method
-        return self.forward(x)
+        return self.forward(x, *args, **kwargs)
 
 
     ######################

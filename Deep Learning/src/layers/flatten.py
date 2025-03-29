@@ -5,7 +5,7 @@ from ..core import Tensor, Module
 
 class Flatten(Module):
         
-    ### Public methods ###
+    ### Protected methods ###
     
     def _forward(self, x: Tensor) -> Tensor:
         """

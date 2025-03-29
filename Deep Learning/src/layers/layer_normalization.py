@@ -28,7 +28,7 @@ class LayerNormalization(Module):
         self.beta: Tensor
      
      
-    ### Public methods ###
+    ### Protected methods ###
     
     def _forward(self, x: Tensor) -> Tensor:
         """

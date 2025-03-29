@@ -51,7 +51,7 @@ class Conv2D(Module):
         self.bias: Tensor
 
 
-    ### Public methods ###
+    ### Protected methods ###
         
     def _forward(self, x: Tensor) -> Tensor:
         """

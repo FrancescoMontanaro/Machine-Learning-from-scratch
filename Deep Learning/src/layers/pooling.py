@@ -26,7 +26,7 @@ class MaxPool2D(Module):
         self.padding = padding
         
 
-    ### Public methods ###
+    ### Protected methods ###
     
     def _forward(self, x: Tensor) -> Tensor:
         """

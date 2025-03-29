@@ -1,5 +1,4 @@
 import numpy as np
-from typing import Optional
 
 from .decoder_block import DecoderBlock
 from ...core import Tensor, Module, ModuleList
@@ -10,7 +9,7 @@ class Decoder(Module):
     
     ### Magic methods ###
     
-    def __init__(self, vocab_size: int, n_embed: int, n_attention_heads: int, sequence_length: int, n_decoder_blocks: int = 4, dropout: float = 0.1, name: Optional[str] = None) -> None:
+    def __init__(self, vocab_size: int, n_embed: int, n_attention_heads: int, sequence_length: int, n_decoder_blocks: int = 4, dropout: float = 0.1, *args, **kwargs) -> None:
         """
         Initialize the transformer's decoder.
         
@@ -21,11 +20,10 @@ class Decoder(Module):
         - sequence_length (int): The sequence length of the input data.
         - n_decoder_blocks (int): The number of transformer blocks.
         - dropout (float): The dropout rate.
-        - name (Optional[str]): The name of the module.
         """
         
         # Initialize the superclass
-        super().__init__(name)
+        super().__init__(*args, **kwargs)
         
         # Store the parameters
         self.vocab_size = vocab_size
@@ -54,9 +52,9 @@ class Decoder(Module):
         self.output_layer: Dense = Dense(vocab_size) # (B, S, E) -> (B, S, V)
         
         
-    ### Public methods ###
+    ### Protected methods ###
     
-    def forward(self, x: Tensor) -> Tensor:
+    def _forward(self, x: Tensor) -> Tensor:
         """
         Forward pass of the transformer's decoder.
         
@@ -65,13 +63,7 @@ class Decoder(Module):
         
         Returns:
         - Tensor: The output logits.
-        
-        Raises:
-        - AssertionError: If the shape of the input data is not valid
         """
-        
-        # Check if the input shape is valid
-        assert len(x.shape()) == 2, f"Invalid input shape. Input must be a 2D array. The shape must be (Batch size, sequence length). Got shape: {x.shape()}"
         
         # Dimensions are:
         # - B: batch size
@@ -79,16 +71,8 @@ class Decoder(Module):
         # - E: embedding size (the dimension of the embedding space)
         # - V: vocabulary size
         
-        # Store the input shape of the layer
-        self.input_shape = x.shape()
-        
         # Unpack the shape of the input data for better readability
-        B, S = self.input_shape
-        
-        # Check if the layer is initialized
-        if not self.initialized:
-            # Initialize the layer
-            self.init_params()
+        _, S = x.shape() # (B, S)
             
         # Token embeddings
         token_embeddings = self.embedding(x) # (B, S) -> (B, S, E)
@@ -104,22 +88,19 @@ class Decoder(Module):
             embeddings = block(embeddings) # (B, S, E) -> (B, S, E)
             
         # Apply the output layer to get the logits
-        logits = self.output_layer(self.layer_norm(embeddings)) # (B, S, E) -> (B, S, V)
-        
-        # Return the logits
-        return logits # (B, S, V)
-        
+        return self.output_layer(self.layer_norm(embeddings)) # (B, S, E) -> (B, S, V)
     
-    def output_shape(self) -> tuple:
+    
+    def _lazy_init(self, x: Tensor) -> None:
         """
-        Method to return the output shape of the module
+        Method to initialize the module
         
-        Returns:
-        - tuple: The shape of the output of the module
+        Parameters:
+        - x (Tensor): Input data. Shape: (Batch size, sequence length, embedding size)
+        
+        Raises:
+        - AssertionError: If the shape of the input data is not valid
         """
         
-        # Call the parent class method to check if the layer is initialized
-        super().output_shape()
-        
-        # Return the output shape
-        return (*self.input_shape[:-1], self.vocab_size) # (B, S, V)
+        # Check if the input shape is valid
+        assert len(x.shape()) == 2, f"Invalid input shape. Input must be a 2D array. The shape must be (Batch size, sequence length). Got shape: {x.shape()}"

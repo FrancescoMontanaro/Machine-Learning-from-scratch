@@ -1,6 +1,6 @@
 import gc
 import numpy as np
-from typing import Optional, Union, Generator
+from typing import Union, Generator
 
 from .decoder import Decoder
 from ...optimizers import Adam
@@ -15,7 +15,7 @@ class Transformer(Module):
     
     ### Magic methods ###
     
-    def __init__(self, vocab_size: int, n_embed: int, n_attention_heads: int, sequence_length: int, n_decoder_blocks: int = 4, dropout: float = 0.1, name: Optional[str] = None) -> None:
+    def __init__(self, vocab_size: int, n_embed: int, n_attention_heads: int, sequence_length: int, n_decoder_blocks: int = 4, dropout: float = 0.1, *args, **kwargs) -> None:
         """
         Initialize the transformer model.
         
@@ -26,11 +26,10 @@ class Transformer(Module):
         - sequence_length (int): The sequence length of the input data.
         - n_decoder_blocks (int): The number of transformer blocks.
         - dropout (float): The dropout rate.
-        - name (Optional[str]): The name of the module.
         """
         
         # Initialize the superclass
-        super().__init__(name)
+        super().__init__(*args, **kwargs)
         
         # Store the parameters
         self.vocab_size = vocab_size
@@ -48,62 +47,6 @@ class Transformer(Module):
     
     
     ### Public methods ###
-    
-    def forward(self, x: Tensor) -> Tensor:
-        """
-        Forward pass of the transformer model.
-        
-        Parameters:
-        - x (Tensor): The input tensor.
-        
-        Returns:
-        - Tensor: The output tensor.
-        
-        Raises:
-        - AssertionError: If the shape of the input data is not valid
-        """
-        
-        # Check if the input shape is valid
-        assert len(x.shape()) == 2, f"Invalid input shape. Input must be a 2D array. The shape must be (Batch size, sequence length). Got shape: {x.shape()}"
-        
-        # Dimensions are:
-        # - B: batch size
-        # - S: sequence length
-        # - E: embedding size (the dimension of the embedding space)
-        # - V: vocabulary size
-        
-        # Store the input shape of the layer
-        self.input_shape = x.shape()
-        
-        # Unpack the shape of the input data for better readability
-        B, S = self.input_shape
-        
-        # Check if the layer is initialized
-        if not self.initialized:
-            # Initialize the layer
-            self.init_params()
-            
-        # Run the forward pass of the decoder
-        logits = self.decoder(x) # (B, S) -> (B, S, V)
-        
-        # Return the logits
-        return logits # (B, S, V)
-    
-    
-    def output_shape(self) -> tuple:
-        """
-        Method to return the output shape of the module
-        
-        Returns:
-        - tuple: The shape of the output of the module
-        """
-        
-        # Call the parent class method to check if the layer is initialized
-        super().output_shape()
-        
-        # Return the output shape
-        return (*self.input_shape[:-1], self.vocab_size) # (B, S, V)
-    
     
     def fit(self, data_loader: DataLoader, epochs: int, lr: float, batch_size: int, eval_iters: int = 200) -> None:
         """
@@ -133,7 +76,7 @@ class Transformer(Module):
             optimizer.zero_grad()
             
             # Get the logits and loss
-            out = self.forward(x) # (B, S, V)
+            out = self(x) # (B, S, V)
             
             # Reshape the logits and labels to 2D
             out = out.reshape((-1, self.vocab_size)) # (B*S, V)
@@ -194,7 +137,7 @@ class Transformer(Module):
                         cropped_input_tokens = local_tokens[:, -self.sequence_length:]
                         
                         # Get the predictions
-                        logits = self.forward(cropped_input_tokens)
+                        logits = self(cropped_input_tokens)
                         
                         # Focus only on the last time step
                         logits = logits[:, -1, :]
@@ -250,3 +193,43 @@ class Transformer(Module):
                     
                 # Return the generated tokens
                 return input_tokens
+
+
+    ### Protected methods ###
+            
+    def _forward(self, x: Tensor) -> Tensor:
+        """
+        Forward pass of the transformer model.
+        
+        Parameters:
+        - x (Tensor): The input tensor.
+        
+        Returns:
+        - Tensor: The output tensor.
+        """
+        
+        # Dimensions are:
+        # - B: batch size
+        # - S: sequence length
+        # - V: vocabulary size
+            
+        # Run the forward pass of the decoder
+        logits = self.decoder(x) # (B, S) -> (B, S, V)
+        
+        # Return the logits
+        return logits # (B, S, V)
+    
+    
+    def _lazy_init(self, x: Tensor) -> None:
+        """
+        Method to initialize the module
+        
+        Parameters:
+        - x (Tensor): Features of the dataset
+        
+        Raises:
+        - AssertionError: If the shape of the input data is not valid
+        """
+        
+        # Check if the input shape is valid
+        assert len(x.shape()) == 2, f"Invalid input shape. Input must be a 2D array. The shape must be (Batch size, sequence length). Got shape: {x.shape()}"

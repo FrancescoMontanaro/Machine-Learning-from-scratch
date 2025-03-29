@@ -27,7 +27,7 @@ class Embedding(Module):
         self.embedding: Tensor
     
     
-    ### Public methods ###
+    ### Protected methods ###
 
     def _forward(self, x: Tensor) -> Tensor:
         """

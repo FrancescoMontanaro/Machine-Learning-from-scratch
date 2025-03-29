@@ -20,7 +20,7 @@ class Reshape(Module):
         self.target_shape = shape
     
     
-    ### Public methods ###
+    ### Protected methods ###
     
     def _forward(self, x: Tensor) -> Tensor:
         """

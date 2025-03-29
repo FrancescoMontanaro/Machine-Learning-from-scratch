@@ -32,7 +32,7 @@ class Dense(Module):
         self.bias: Tensor
     
     
-    ### Public methods ###
+    ### Protected methods ###
 
     def _forward(self, x: Tensor) -> Tensor:
         """
@@ -90,7 +90,7 @@ class Dense(Module):
         
     def _lazy_init(self, x: Tensor) -> None:
         """
-        Method to initialize the weights and bias of the layer
+        Method to initialize the module
         
         Parameters:
         - x (Tensor): Features of the dataset

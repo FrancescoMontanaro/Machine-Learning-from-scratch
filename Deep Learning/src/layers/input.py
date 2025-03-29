@@ -3,7 +3,7 @@ from ..core import Tensor, Module
 
 class Input(Module):
     
-    ### Public methods ###
+    ### Protected methods ###
     
     def _forward(self, x: Tensor) -> Tensor:
         """

@@ -31,7 +31,7 @@ class UpSampling2D(Module):
         self.interpolation = interpolation
 
 
-    ### Public methods ###
+    ### Protected methods ###
         
     def _forward(self, x: Tensor) -> Tensor:
         """

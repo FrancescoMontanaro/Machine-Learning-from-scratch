@@ -22,7 +22,7 @@ class Dropout(Module):
         self.rate = rate
     
     
-    ### Public methods ###
+    ### Protected methods ###
     
     def _forward(self, x: Tensor) -> Tensor:
         """

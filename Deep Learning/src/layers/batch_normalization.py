@@ -32,7 +32,7 @@ class BatchNormalization(Module):
         self.running_var: Tensor
 
      
-    ### Public methods ###
+    ### Protected methods ###
     
     def _forward(self, x: Tensor) -> Tensor:
         """
