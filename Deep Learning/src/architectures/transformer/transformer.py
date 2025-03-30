@@ -65,9 +65,12 @@ class Transformer(Architecture):
         - steps (int): The number of training steps.
         - lr (float): The learning rate.
         - batch_size (int): The batch size.
-        - eval_iters (int): The number of iterations to evaluate the loss on the training and validation sets.
+        - eval_iters (int): The number of iterations to evaluate the loss on the training and validation sets. If it is less than the number of gradient accumulation steps, it will be set to the number of gradient accumulation steps.
         - grad_accumulation_steps (int): The number of gradient accumulation steps.
         """
+        
+        # Ensure that eval_iters is greater than or equal to grad_accumulation_steps
+        eval_iters = max(eval_iters, grad_accumulation_steps)
         
         # Define the optimizer and loss function
         optimizer = Adam(learning_rate=lr, parameters=self.parameters(), weight_decay=0.01)
@@ -77,7 +80,7 @@ class Transformer(Architecture):
         self.init_history()
         
         # Initialize the control variables
-        elapsed_time, ms_per_step = 0.0, float("nan")
+        elapsed_time = 0.0
         
         # Iterate over the steps
         for step in range(steps):
@@ -88,12 +91,16 @@ class Transformer(Architecture):
             self.clear_cache()
             
             # If the step is a multiple of eval_iters, evaluate the loss on the validation set
-            if step % eval_iters == 0:
+            if (step + 1) % eval_iters == 0:
                 # Count the number of tensors in memory
                 tensors_in_memory = self.count_tensors_in_memory()
                 
                 # Estimate the losses
                 self.evaluate_losses(data_loader, eval_iters, batch_size)
+                
+                # Compute the time statistics
+                elapsed_time += time.time() - start_time
+                ms_per_step = (elapsed_time / (step + 1)) * 1000
                 
                 # Print the validation loss
                 print(f'Step {step+1}/{steps} | {tensors_in_memory} tensors in memory | {ms_per_step:.2f} ms/step - Train Loss: {self.history["loss"].data[-1]:.4f} | Validation loss: {self.history["val_loss"].data[-1]:.4f}')
@@ -126,10 +133,6 @@ class Transformer(Architecture):
                 
                 # Zero the gradients
                 optimizer.zero_grad()
-                
-            # Compute the time statistics
-            elapsed_time += time.time() - start_time
-            ms_per_step = (elapsed_time / (step + 1)) * 1000 # Compute the milliseconds per step
             
         # Return the training history
         return self.history
