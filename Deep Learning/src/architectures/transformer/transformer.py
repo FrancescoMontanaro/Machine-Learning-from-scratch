@@ -1,3 +1,4 @@
+import time
 import numpy as np
 from typing import Union, Generator
 
@@ -48,16 +49,24 @@ class Transformer(Architecture):
     
     ### Public methods ###
     
-    def fit(self, data_loader: DataLoader, epochs: int, lr: float, batch_size: int, eval_iters: int = 200) -> dict[str, Tensor]:
+    def fit(
+        self, 
+        data_loader: DataLoader, 
+        steps: int, lr: float, 
+        batch_size: int, 
+        eval_iters: int = 10,
+        grad_accumulation_steps: int = 1
+    ) -> dict[str, Tensor]:
         """
         Method to train the model.
         
         Parameters:
         - data_loader (DataLoader): The data loader object to get the data from.
-        - epochs (int): The number of epochs.
+        - steps (int): The number of training steps.
         - lr (float): The learning rate.
         - batch_size (int): The batch size.
         - eval_iters (int): The number of iterations to evaluate the loss on the training and validation sets.
+        - grad_accumulation_steps (int): The number of gradient accumulation steps.
         """
         
         # Define the optimizer and loss function
@@ -67,16 +76,30 @@ class Transformer(Architecture):
         # Initialize the history of the model
         self.init_history()
         
-        # Iterate over the epochs
-        for epoch in range(epochs):
+        # Initialize the control variables
+        elapsed_time, ms_per_step = 0.0, float("nan")
+        
+        # Iterate over the steps
+        for step in range(steps):
+            # Start the timer
+            start_time = time.time()
+            
             # Call the garbage collector to free up memory
             self.clear_cache()
             
+            # If the step is a multiple of eval_iters, evaluate the loss on the validation set
+            if step % eval_iters == 0:
+                # Count the number of tensors in memory
+                tensors_in_memory = self.count_tensors_in_memory()
+                
+                # Estimate the losses
+                self.evaluate_losses(data_loader, eval_iters, batch_size)
+                
+                # Print the validation loss
+                print(f'Step {step+1}/{steps} | {tensors_in_memory} tensors in memory | {ms_per_step:.2f} ms/step - Train Loss: {self.history["loss"].data[-1]:.4f} | Validation loss: {self.history["val_loss"].data[-1]:.4f}')
+            
             # Get the batch
             x, y = data_loader.get_batch(split='train', batch_size=batch_size, sequence_length=self.sequence_length) # (B, S), (B, S)
-            
-            # Zero the gradients
-            optimizer.zero_grad()
             
             # Get the logits and loss
             out = self(x) # (B, S, V)
@@ -88,20 +111,77 @@ class Transformer(Architecture):
             # Compute the loss
             loss = loss_fn(y, out)
             
-            # Perform the backward pass
+            # Check if the gradient accumulation steps are greater than 1
+            if grad_accumulation_steps > 1:
+                # Scale the loss for gradient accumulation
+                loss /= grad_accumulation_steps
+                
+            # Backpropagate the loss
             loss.backward()
             
-            # Update the parameters
-            optimizer.update()
-            
-            # Clear the computational graph
-            loss.clear_graph()
-            
-            # Print the losses
-            print(f'Epoch {epoch+1}/{epochs} - Train Loss: {loss.data:.4f}')
+            # If the number of accumulation steps is reached or it is the last step, update the parameters
+            if step % grad_accumulation_steps == 0 or step == steps - 1:
+                # Update the parameters
+                optimizer.update()
+                
+                # Zero the gradients
+                optimizer.zero_grad()
+                
+            # Compute the time statistics
+            elapsed_time += time.time() - start_time
+            ms_per_step = (elapsed_time / (step + 1)) * 1000 # Compute the milliseconds per step
             
         # Return the training history
         return self.history
+    
+    
+    def evaluate_losses(self, data_loader: DataLoader, eval_iters: int, batch_size: int) -> None:
+        """
+        Method to evaluate the losses on the training and validation sets and store them in the history.
+        
+        Parameters:
+        - data_loader (DataLoader): The data loader object to get the data from.
+        - eval_iters (int): The number of iterations to evaluate the loss.
+        - batch_size (int): The batch size.
+        """
+                
+        # Initialize the loss function
+        loss_fn = CrossEntropy()
+        
+        # Set the model to evaluation mode
+        self.eval()
+        
+        # Disable gradient computation
+        with no_grad():
+            # Iterate over the splits
+            for split in ['train', 'validation']:
+                # Initialize the losses tensor
+                losses = np.zeros(eval_iters)
+                
+                # Iterate over the evaluation iterations
+                for iter in range(eval_iters):
+                    # Getting a batch of data
+                    x, y = data_loader.get_batch(split=split, batch_size=batch_size, sequence_length=self.sequence_length) # type: ignore
+                    
+                    # Get the logits and loss
+                    logits = self(x)
+                    
+                    # Reshape the logits and labels to 2D
+                    logits = logits.reshape((-1, self.vocab_size)) # (B*S, V)
+                    y = y.reshape((-1,)) # (B*S,)
+                    
+                    # Compute the loss
+                    loss = loss_fn(y, logits)
+                    
+                    # Store the loss
+                    losses[iter] = loss.data
+                
+                # Compute the mean loss and store it in the history
+                history_loss_name = "loss" if split == "train" else "val_loss"
+                self.history[history_loss_name].data = np.append(self.history[history_loss_name].data, losses.mean())
+            
+        # Set the model back to training mode
+        self.train()
             
         
     def generate(self, input_tokens: Tensor, max_new_tokens: int, stream: bool = False) -> Union[Tensor, Generator[Tensor, None, None]]:

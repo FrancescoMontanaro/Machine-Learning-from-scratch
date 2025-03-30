@@ -109,7 +109,6 @@ class Sequential(Architecture):
             # Iterate over the batches
             elapsed_time = 0.0
             training_epoch_loss = 0.0
-            n_micro_steps, accumulated_loss = 0, None
             train_metrics = {metric.__name__: 0.0 for metric in metrics}
             for training_step in range(n_training_steps):
                 # Store the start time
@@ -119,36 +118,27 @@ class Sequential(Architecture):
                 X_training_batch = X_train_shuffled[training_step * batch_size:(training_step + 1) * batch_size]
                 y_training_batch = Y_train_shuffled[training_step * batch_size:(training_step + 1) * batch_size]
                 
-                # Zero the gradients of the parameters
-                optimizer.zero_grad()
-                
                 # Forward pass: Compute the output of the model
                 training_batch_output = self.forward(X_training_batch)
                 
                 # Compute the loss of the model
                 training_loss = loss_fn(y_training_batch, training_batch_output)
                 
-                # Accumulate the gradients and update the counter
-                accumulated_loss = training_loss if accumulated_loss is None else accumulated_loss + training_loss
-                n_micro_steps += 1
+                # Check if the number of accumulation steps is greater than 1
+                if gradient_accumulation_steps > 1:
+                    # Scale the loss by the number of accumulation steps
+                    training_loss /= gradient_accumulation_steps
+                    
+                # Execute the backward pass
+                training_loss.backward()
                 
                 # If the number of accumulation steps is reached or it is the last step, update the parameters
-                if n_micro_steps == gradient_accumulation_steps or training_step == n_training_steps - 1:
-                    # Compute the average gradient
-                    average_loss = accumulated_loss / n_micro_steps
-                    
-                    # Compute the gradients of the parameters
-                    average_loss.backward()
-                    
+                if training_step % gradient_accumulation_steps == 0 or training_step == n_training_steps - 1:
                     # Update the parameters of the model
                     optimizer.update()
                     
-                    # Clear the computational graph
-                    average_loss.clear_graph()
-                    
-                    # Reset the accumulation counter and the accumulated gradient
-                    n_micro_steps = 0
-                    accumulated_loss = None
+                    # Zero the gradients of the parameters
+                    optimizer.zero_grad()
                 
                 # Update the epoch loss
                 training_epoch_loss += training_loss.data

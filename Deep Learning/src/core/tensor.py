@@ -357,9 +357,12 @@ class Tensor:
         self.grad = None
 
 
-    def backward(self) -> None:
+    def backward(self, retain_graph: bool = False) -> None:
         """
         Method to backpropagate the gradient through the computation graph
+        
+        Parameters:
+        - retain_graph (bool): Flag to indicate if the computation graph should be retained
         
         Raises:
         - ValueError: If the gradient is not computed for the tensor
@@ -396,6 +399,11 @@ class Tensor:
         for t in reversed(topological_order):
             # Backpropagate the gradient
             t._backward()
+            
+        # Clear the graph after backpropagation
+        if not retain_graph:
+            # Clear the graph to free up memory
+            self.clear_graph()
       
     
     def detach(self) -> 'Tensor':
