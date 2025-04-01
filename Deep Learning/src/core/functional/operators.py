@@ -2,8 +2,10 @@ import numpy as np
 from typing import Union, Type, Tuple, TYPE_CHECKING, cast
 
 if TYPE_CHECKING: from ..tensor import Tensor
+from ..utils.context_manager import _NO_GRAD
 from ..utils.data_analysis import unbroadcast
 from ..utils.types_registry import get_tensor_class
+
 
 
 def add(a: 'Tensor', b: 'Tensor') -> 'Tensor':
@@ -29,6 +31,9 @@ def add(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     
     # Compute the sum of the two tensors
     out = Tensor(a.data + b.data, requires_grad=a.requires_grad or b.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     def _backward() -> None:
         if a.requires_grad and out.grad is not None:
@@ -87,6 +92,9 @@ def sub(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     
     # Compute the difference of the two tensors
     out = Tensor(a.data - b.data, requires_grad=a.requires_grad or b.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:
@@ -150,6 +158,9 @@ def mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     # Compute the product of the two tensors
     out = Tensor(a.data * b.data, requires_grad=a.requires_grad or b.requires_grad)
     
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
+    
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
@@ -212,6 +223,9 @@ def div(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     # Compute the division of the two tensors
     out = Tensor(a.data / b.data, requires_grad=a.requires_grad or b.requires_grad)
     
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
+    
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
@@ -272,6 +286,9 @@ def mat_mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     
     # Compute the matrix multiplication of the two tensors
     out = Tensor(np.matmul(a.data, b.data), requires_grad=a.requires_grad or b.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:
@@ -337,6 +354,9 @@ def pow(x: 'Tensor', power: Union[int, float]) -> 'Tensor':
     # Compute the power of the tensor
     out = Tensor(x.data ** power, requires_grad=x.requires_grad)
     
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
+    
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
@@ -380,6 +400,9 @@ def get_item(x: 'Tensor', key: Union[int, slice, np.ndarray, Tuple[Union[int, sl
     
     # Get the sliced data from the underlying NumPy array.
     out = Tensor(x.data[key], requires_grad=x.requires_grad, dtype=type(x.data.dtype))
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
 
     # Define the backward function
     def _backward() -> None:

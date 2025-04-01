@@ -163,6 +163,9 @@ class Transformer(Architecture):
                 
                 # Iterate over the evaluation iterations
                 for iter in range(eval_iters):
+                    # Call the garbage collector to free up memory
+                    self.clear_cache()
+                    
                     # Getting a batch of data
                     x, y = data_loader.get_batch(split=split, batch_size=batch_size, sequence_length=self.sequence_length) # type: ignore
                     

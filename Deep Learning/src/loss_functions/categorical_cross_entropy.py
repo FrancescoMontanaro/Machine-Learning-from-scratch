@@ -4,6 +4,7 @@ from typing import Literal, Optional
 from .base import LossFn
 from ..core import Tensor
 from ..core.utils.constants import *
+from ..core.utils.context_manager import _NO_GRAD
     
     
 class CategoricalCrossEntropy(LossFn):
@@ -57,6 +58,8 @@ class CategoricalCrossEntropy(LossFn):
         elif self.reduction == "mean":
             # Return the mean loss
             loss = loss.mean()
+            
+        if _NO_GRAD: return loss # If gradient computation is disabled, return the loss tensor without a backward function
         
         # Override backward pass when from_logits=True
         # This is to avoid numerical instability when computing the gradient

@@ -2,6 +2,7 @@ import numpy as np
 from typing import Type, TYPE_CHECKING, cast
 
 if TYPE_CHECKING: from ..tensor import Tensor
+from ..utils.context_manager import _NO_GRAD
 from ..utils.types_registry import get_tensor_class
 
 
@@ -41,6 +42,9 @@ def sigmoid(x: 'Tensor') -> 'Tensor':
     
     # Compute the sigmoid of the tensor
     out = Tensor(data=out_data, requires_grad=x.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:
@@ -85,6 +89,9 @@ def relu(x: 'Tensor') -> 'Tensor':
     # Compute the ReLU of the tensor
     out = Tensor(np.maximum(0, x.data), requires_grad=x.requires_grad)
     
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
+    
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
@@ -124,6 +131,9 @@ def tanh(x: 'Tensor') -> 'Tensor':
     
     # Compute the hyperbolic tangent of the tensor
     out = Tensor(np.tanh(x.data), requires_grad=x.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:
@@ -171,6 +181,9 @@ def softmax(x: 'Tensor', axis: int = -1) -> 'Tensor':
     
     # Crea un nuovo Tensor con i dati di s
     out = exp_x / sum_exp
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:
@@ -225,6 +238,9 @@ def log_softmax(x: 'Tensor', axis: int = -1) -> 'Tensor':
     
     # Compute the log softmax
     out = x_shifted - sum_exp.log()
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:

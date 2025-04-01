@@ -3,6 +3,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 from typing import Optional, Tuple, List, Union, Type, TYPE_CHECKING, cast
 
 if TYPE_CHECKING: from ..tensor import Tensor
+from ..utils.context_manager import _NO_GRAD
 from ..utils.types_registry import get_tensor_class
 
 
@@ -30,6 +31,9 @@ def sum(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Ten
     
     # Compute the sum of the tensor along the specified axis
     out = Tensor(x.data.sum(axis=axis, keepdims=keepdims), requires_grad=x.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
 
     # Define the backward function
     def _backward() -> None:
@@ -85,6 +89,9 @@ def max(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
     
     # Compute the maximum value of the tensor along the specified axis
     out = Tensor(np.max(x.data, axis=axis, keepdims=keepdims), requires_grad=x.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
             
     # Define the backward function
     def _backward() -> None:
@@ -164,6 +171,9 @@ def sqrt(x: 'Tensor') -> 'Tensor':
     # Compute the square root of the tensor
     out = Tensor(np.sqrt(x.data), requires_grad=x.requires_grad)
     
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
+    
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
@@ -207,6 +217,9 @@ def mean(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdi
     
     # Compute the mean of the tensor along the specified axis
     out = Tensor(np.mean(x.data, axis=axis, keepdims=keepdims), requires_grad=x.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
 
     # Define the backward function
     def _backward() -> None:
@@ -343,6 +356,9 @@ def exp(x: 'Tensor') -> 'Tensor':
     # Compute the exponential of the tensor
     out = Tensor(np.exp(x.data), requires_grad=x.requires_grad)
     
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
+    
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
@@ -379,6 +395,9 @@ def log(x: 'Tensor') -> 'Tensor':
     
     # Forward pass: compute the natural logarithm
     out = Tensor(np.log(x.data), requires_grad=x.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:
@@ -420,6 +439,9 @@ def transpose(x: 'Tensor', axes: Tuple[int]) -> 'Tensor':
     
     # Compute the transpose of the tensor
     out = Tensor(x.data.transpose(axes), requires_grad=x.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:
@@ -477,6 +499,9 @@ def masked_fill(x: 'Tensor', mask: Union[np.ndarray, 'Tensor'], value: float) ->
     # Create a new tensor with the filled data
     out = Tensor(out_data, requires_grad=x.requires_grad)
     
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
+    
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
@@ -523,6 +548,9 @@ def clip(x: 'Tensor', min_value: float, max_value: float) -> 'Tensor':
     
     # Compute forward pass using np.clip.
     out = Tensor(np.clip(x.data, min_value, max_value), requires_grad=x.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
 
     # Define the backward function.
     def _backward() -> None:
@@ -571,6 +599,9 @@ def gather(x: 'Tensor', indices: 'Tensor', axis: int = 0) -> 'Tensor':
     
     # Compute the gathered tensor
     out = Tensor(np.take_along_axis(x.data, indices.data.astype(int), axis=axis), requires_grad=x.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:
@@ -635,6 +666,9 @@ def squeeze(x: 'Tensor', axis: Optional[int] = None) -> 'Tensor':
     # Squeeze the tensor along the specified axis
     out = Tensor(np.squeeze(x.data, axis=axis), requires_grad=x.requires_grad)
     
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
+    
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
@@ -687,6 +721,9 @@ def unsqueeze(x: 'Tensor', axis: int) -> 'Tensor':
     # Unsqueeze the tensor along the specified axis
     out = Tensor(np.expand_dims(x.data, axis=axis), requires_grad=x.requires_grad)
     
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
+    
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
@@ -732,6 +769,9 @@ def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
     # The output tensor requires grad if any of the inputs require grad.
     requires_grad = any(t.requires_grad for t in tensors)
     out = Tensor(np.concatenate([t.data for t in tensors], axis=axis), requires_grad=requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:
@@ -798,6 +838,9 @@ def reshape(x: 'Tensor', new_shape: Tuple[int, ...]) -> 'Tensor':
     # Compute the reshaped tensor
     out = Tensor(x.data.reshape(new_shape), requires_grad=x.requires_grad)
     
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
+    
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
@@ -842,6 +885,9 @@ def repeat(x: 'Tensor', repeats: int, axis: Optional[int] = None) -> 'Tensor':
     
     # Compute the output tensor by repeating the input tensor
     out = Tensor(np.repeat(x.data, repeats, axis=axis), requires_grad=x.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:
@@ -902,6 +948,9 @@ def pad(x: 'Tensor', pad_width: Tuple[Tuple[int, int], ...]) -> 'Tensor':
     
     # Compute the padded tensor
     out = Tensor(np.pad(x.data, pad_width, mode="constant"), requires_grad=x.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:
@@ -966,6 +1015,9 @@ def sliding_window(x: 'Tensor', window_shape: Union[int, Tuple[int, ...]], axis:
         # Compute the sliding window view.
         out = Tensor(np.lib.stride_tricks.sliding_window_view(flat, window_shape), requires_grad=x.requires_grad)
         
+        # If gradient computation is disabled, return the output tensor without a backward function
+        if _NO_GRAD: return out
+        
         # Define the backward function.
         def _backward() -> None:
             # If the gradient needs to be computed, backpropagate the gradient.
@@ -1009,6 +1061,9 @@ def sliding_window(x: 'Tensor', window_shape: Union[int, Tuple[int, ...]], axis:
 
         # Compute the sliding window view.
         out = Tensor(np.lib.stride_tricks.sliding_window_view(x.data, window_shape, axis=axis), requires_grad=x.requires_grad) # type: ignore
+        
+        # If gradient computation is disabled, return the output tensor without a backward function
+        if _NO_GRAD: return out
         
         # Compute the shape of the sliding window view.
         sliding_shape: List[int] = []
@@ -1107,6 +1162,9 @@ def tensordot(a: 'Tensor', b: 'Tensor', axes: Union[int, Tuple[List[int], List[i
     
     # Compute the tensordot operation
     out = Tensor(np.tensordot(a.data, b.data, axes=axes), requires_grad=(a.requires_grad or b.requires_grad))
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:
@@ -1282,6 +1340,9 @@ def conv_2d(x: 'Tensor', kernel: 'Tensor', stride: Tuple[int, int] = (1,1)) -> '
     # Create the output tensor
     out = Tensor(out_data, requires_grad=x.requires_grad or kernel.requires_grad)
     
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
+    
     # Define the backward function
     def _backward():
         # Check if the gradient needs to be computed
@@ -1408,6 +1469,9 @@ def max_pool_2d(x: 'Tensor', kernel_size: Tuple[int,int] = (2,2), stride: Tuple[
     
     # Compute the max pooling operation and store the output tensor
     out = Tensor(np.max(windows, axis=(3, 4)), requires_grad=x.requires_grad)
+    
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward():
