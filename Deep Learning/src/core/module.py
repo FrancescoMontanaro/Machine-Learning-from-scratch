@@ -1,8 +1,11 @@
+import os
 import re
+import numpy as np
 from typing import Optional, Any
 
 from ..core import Tensor
 from .modules_list import ModuleList
+from .utils.context_manager import no_grad
 from .utils.data_analysis import format_summary_output
 
 
@@ -24,6 +27,7 @@ class Module:
         self.name: str = name or self.__class__.__name__ # Name of the module
         self.training: bool = True # Flag to check if the module is in training mode
         self._output_shape: Optional[tuple] = None # Output shape of the module
+        self._input_shape: Optional[tuple] = None # Input shape of the module
         
         # Initialize the dictionaries for the parameters and sub-modules
         self._parameters: dict[str, Tensor] = {} # Dictionary for the parameters of the module
@@ -107,40 +111,6 @@ class Module:
         
         # Set the attribute of the module
         setattr(self, name, tensor)
-        
-    
-    def named_parameters(self, prefix: str = "") -> dict[str, Tensor]:
-        """
-        Function to recursively collect the parameters of the module and its sub-modules
-        
-        Parameters:
-        - prefix (str): Prefix for the name of the parameters
-        
-        Returns:
-        - dict: Dictionary with the parameters of the module and its sub-modules
-        """
-        
-        # Initialize the dictionary of parameters
-        params = {}
-        
-        # Iterate over the parameters of the current module
-        for name, param in self._parameters.items():
-            # Compose the full name of the parameter
-            full_name = f"{prefix}.{name}" if prefix else name
-            
-            # Add the parameter to the dictionary
-            params[full_name] = param
-            
-        # Recursively collect the parameters of the sub-modules
-        for name, module in self._modules.items():
-            # Compose the new prefix for the sub-module
-            new_prefix = f"{prefix}.{name}" if prefix else name
-            
-            # Update the parameters with the parameters of the sub-module
-            params.update(module.named_parameters(new_prefix))
-            
-        # Return the parameters
-        return params
 
 
     def parameters(self) -> list[Tensor]:
@@ -151,8 +121,11 @@ class Module:
         - dict: Dictionary with the parameters of the module
         """
         
+        # Get the parameters of the module and its sub-modules
+        params, _ = self._collect_state_tensors()
+        
         # Return the parameters of the module
-        return list(self.named_parameters().values())
+        return list(params.values())
 
 
     def train(self) -> None:
@@ -228,8 +201,9 @@ class Module:
         
         ### Step 3: Update the output shape ###
         
-        # Save the output shape of the module
+        # Save the input and  output shape of the module
         self._output_shape = out.shape()
+        self._input_shape = x.shape()
         
         # Return the output tensor
         return out
@@ -337,13 +311,166 @@ class Module:
                     # Update the prefix for the child
                     child_prefix = prefix + ("    " if is_last else "│   ")
                     module.summary(recursive=True, is_root=False, prefix=child_prefix)
-                    
+      
+
+    def save(self, path: str) -> None:
+        """
+        Method to save the state of the module to a file
+        
+        Parameters:
+        - path (str): Path to the file where the state of the module will be saved
+        """
+        
+        # Extract the parameters and buffers of the module
+        params, buffers = self._collect_state_tensors()
+        
+        # Create a dictionary to store the state of the module
+        state_dict = {
+            **{"__input_shape__": self._input_shape},
+            **{name: param.data for name, param in params.items()},
+            **{name: buffer.data for name, buffer in buffers.items()}
+        }
+        
+        # Create the output directory if it doesn't exist
+        if os.path.isdir(os.path.dirname(path)):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+        
+        # Save the state of the module to a file
+        np.savez(path, **state_dict)
+
+        
+    def load(self, path: str) -> None:
+        """
+        Method to load the state of the module from a file
+        
+        Parameters:
+        - path (str): Path to the file containing the state of the module
+        
+        Raises:
+        - FileNotFoundError: If the file does not exist
+        - ValueError: If the input shape is not present in the state dictionary and the module is not initialized
+        - ValueError: If the dimensions of the parameters or buffers do not match
+        - KeyError: If the key is not found in the parameters or buffers
+        """
+        
+        # Check if the file exists
+        if not os.path.exists(path):
+            # If the file does not exist, raise an error
+            raise FileNotFoundError(f'The file "{path}" does not exist.')
+        
+        # Load the state of the module from a file
+        state_dict = np.load(path)
+        
+        # Check if the input shape is present in the state dictionary
+        if "__input_shape__" in state_dict.keys():
+            # Disable gradient computation
+            with no_grad():
+                # Create a dummy tensor with the input shape
+                dummy_tensor = Tensor(np.zeros(state_dict["__input_shape__"]))
+                
+                # Set the model in evaluation mode
+                self.eval()
+                
+                # Call the forward method with the dummy tensor to initialize the parameters
+                self.forward(dummy_tensor)
+                
+        else:
+            # Check if the input shape is None
+            if self._input_shape is None:
+                # If the input shape is not present, raise an error
+                raise ValueError(f'The input shape "__input_shape__" is not present in the state dictionary. Call the forward method before loading the state, even with a dummy tensor.')
+        
+        # Estrai i mapping attuali di parametri e buffer
+        params, buffers = self._collect_state_tensors()
+        
+        # Itera sulle chiavi salvate e aggiorna i dati dei tensori corrispondenti
+        for key in state_dict.files:
+            # Exclude the input shape key
+            if key == "__input_shape__":
+                continue
+            
+            # Load the parameters
+            if key in params.keys():
+                # Chekc the dimensions of the parameter
+                if params[key].data is not None and state_dict[key].shape != params[key].data.shape:
+                    # Raise an error if the dimensions do not match
+                    raise ValueError(f"Dimension mismatch for parameter '{key}': expected {params[key].data.shape}, got {state_dict[key].shape}")
+                
+                # Update the parameter data
+                params[key].data = state_dict[key]
+                
+            # Load the buffers
+            elif key in buffers.keys():
+                # Check the dimensions of the buffer
+                if buffers[key].data is not None and state_dict[key].shape != buffers[key].data.shape:
+                    # Raise an error if the dimensions do not match
+                    raise ValueError(f"Dimension mismatch for buffer '{key}': expected {buffers[key].data.shape}, got {state_dict[key].shape}")
+                
+                # Update the buffer data
+                buffers[key].data = state_dict[key]
+                
+            # If the key is not found in the parameters or buffers, raise an error
+            else:
+                # If the key is not found in the parameters or buffers, raise an error
+                raise ValueError(f"Key '{key}' not found in the module's parameters or buffers.")
+                  
     
     #########################
     ### Protected methods ###
     #########################
+    
+    def _collect_state_tensors(self, prefix: str = "") -> tuple[dict[str, Tensor], dict[str, Tensor]]:
+        """
+        Method to traverse the computational tree of the module and collect the parameters and buffers
+        
+        Parameters:
+        - prefix (str): Prefix for the parameter names
+        
+        Returns:
+        - tuple[dict[str, Tensor], dict[str, Tensor]]: a tuple containing two dictionaries of parameters and buffers
+        """
+        
+        # Create dictionaries to store the parameters and buffers
+        params, buffers = {}, {}
+        
+        if len(self._parameters) > 0:
+            # Iterate over the parameters of the current module
+            for name, param in self._parameters.items():
+                # Compose the parameter name
+                param_name = f"{prefix}.{name}" if prefix else name
+                
+                # Add the parameter to the dictionary
+                params.update({param_name: param})
+                
+                
+        if len(self._buffers) > 0:
+            # Iterate over the buffers of the current module
+            for name, buffer in self._buffers.items():
+                # Compose the buffer name
+                buffer_name = f"{prefix}.{name}" if prefix else name
+                
+                # Add the buffer to the dictionary
+                buffers.update({buffer_name: buffer})
+                
+                
+        # Check if the module has sub-modules
+        if len(self._modules) > 0:
+            # Iterate over the modules of the current module
+            for name, module in self._modules.items():
+                # Compose the module name
+                module_name = f"{prefix}.{name}" if prefix else name
+                
+                # Recursively call the method for sub-modules
+                sub_params, sub_buffers = module._collect_state_tensors(prefix=module_name)
+                
+                # Update the dictionaries with the parameters and buffers of the sub-module
+                params.update(sub_params)
+                buffers.update(sub_buffers)
+                
+        # Return the parameters and buffers 
+        return params, buffers
             
-            
+
     def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
         """
         Abstract Method to lazily initialize the parameters of the module
