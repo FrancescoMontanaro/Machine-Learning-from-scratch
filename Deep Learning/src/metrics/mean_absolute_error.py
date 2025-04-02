@@ -1,17 +1,19 @@
 import numpy as np
 
+from ..core import Tensor
 
-def mean_absolute_error(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+
+def mean_absolute_error(y_true: Tensor, y_pred: Tensor) -> Tensor:
     """
     Compute the mean absolute error of the model.
 
     Parameters:
-    - y_true (np.ndarray): True target variable
-    - y_pred (np.ndarray): Predicted target variable
+    - y_true (Tensor): True target variable
+    - y_pred (Tensor): Predicted target variable
 
     Returns:
-    - float: Mean absolute error of the model
+    - Tensor: Mean absolute error of the model
     """
     
-    # Compute the mean absolute error
-    return float(np.mean(np.abs(y_true - y_pred)))
+    # Compute and return the mean absolute error as a tensor
+    return Tensor(float(np.mean(np.abs(y_true.data - y_pred.data))), requires_grad=False)

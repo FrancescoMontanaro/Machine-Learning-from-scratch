@@ -1,5 +1,6 @@
 import numpy as np
 
+from ..core import Tensor
 from .base import Activation
 
 
@@ -7,33 +8,16 @@ class ReLU(Activation):
     
     ### Magic methods ###
     
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: Tensor) -> Tensor:
         """
         Compute the output of the ReLU activation function.
         
         Parameters:
-        - x (np.ndarray): Input to the activation function
+        - x (Tensor): Input to the activation function
         
         Returns:
-        - np.ndarray: Output of the activation function
+        - Tensor: Output of the activation function
         """
         
         # Compute the ReLU
-        return np.maximum(0, x)
-
-
-    ### Public methods ###
-
-    def derivative(self, x: np.ndarray) -> np.ndarray:
-        """
-        Compute the derivative of the ReLU activation function.
-        
-        Parameters:
-        - x (np.ndarray): Input to the activation function
-        
-        Returns:
-        - np.ndarray: Derivative of the activation function
-        """
-        
-        # Compute the derivative of the ReLU
-        return np.where(x > 0, 1, 0)
+        return x.relu()

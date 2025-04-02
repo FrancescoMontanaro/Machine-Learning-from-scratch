@@ -1,18 +1,18 @@
 from typing import Any
 
-from ..model import Model
+from ..core import Module
 
 
 class Callback:
     
     ### Magic methods ###
     
-    def __call__(self, model_instance: Model) -> Any:
+    def __call__(self, module: Module) -> Any:
         """
         This method is called when the callback is called.
         
         Parameters:
-        - model_instance: Model: The model instance that is being trained.
+        - module (Module): The module that is being trained.
         
         Returns:
         - Any: the output of the callback.

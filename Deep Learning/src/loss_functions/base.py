@@ -1,23 +1,20 @@
-import numpy as np
+from ..core import Tensor
 
 
-class LossFn:
-    
-    epsilon = 1e-7  # Small constant for numerical stability
-    
+class LossFn:    
     
     ### Magic methods ###
 
-    def __call__(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    def __call__(self, y_true: Tensor, y_pred: Tensor) -> Tensor:
         """
         Compute the loss.
 
         Parameters:
-        - y_true (np.ndarray): True target variable
-        - y_pred (np.ndarray): Predicted target variable
+        - y_true (Tensor): True target variable
+        - y_pred (Tensor): Predicted target variable
 
         Returns:
-        - float: Loss value
+        - Tensor: the loss value as a tensor
         
         Raises:
         - NotImplementedError: If the method is not implemented
@@ -25,24 +22,3 @@ class LossFn:
         
         # Raise an error if the method is not implemented
         raise NotImplementedError("The method '__call__' is not implemented.")
-
-
-    ### Public methods ###
-
-    def gradient(self, y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
-        """
-        Compute the gradient of the loss with respect to y_pred.
-
-        Parameters:
-        - y_true (np.ndarray): True target variable
-        - y_pred (np.ndarray): Predicted target variable
-
-        Returns:
-        - np.ndarray: Gradient of the loss with respect to y_pred
-        
-        Raises:
-        - NotImplementedError: If the method is not implemented
-        """
-        
-        # Raise an error if the method is not implemented
-        raise NotImplementedError("The method 'gradient' is not implemented.")

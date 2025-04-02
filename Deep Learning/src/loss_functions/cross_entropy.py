@@ -1,85 +1,67 @@
 import numpy as np
-from typing import Literal
+from typing import Literal, Optional
 
 from .base import LossFn
-from ..activations import Sigmoid
-    
-    
+from ..core import Tensor
+from ..core.utils.constants import *
+
+
 class CrossEntropy(LossFn):
-        
-    ### Magic methods ###
     
-    def __init__(self, from_logits: bool = False, reduction: Literal["sum", "sum_over_batch_size"] = "sum_over_batch_size") -> None:
+    def __init__(self, reduction: Optional[Literal["mean", "sum"]] = "mean", label_smoothing: float = 0.0) -> None:
         """
-        Initialize the cross-entropy loss function.
+        Class constructor for CrossEntropy loss function.
         
         Parameters:
-        - from_logits (bool): Whether the input is logits or probabilities. Default is False
-        - reduction (Literal["sum", "sum_over_batch_size"]): Reduction method. Default is "sum_over_batch_size"
+        - reduction (str): Specifies the reduction to apply to the output. Default is "mean".
+        - label_smoothing (float): If greater than 0, applies label smoothing. Default is 0.0.
         """
         
         # Store the attributes
-        self.from_logits = from_logits
         self.reduction = reduction
-        
+        self.label_smoothing = label_smoothing
 
-    def __call__(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+
+    def __call__(self, y_true: Tensor, y_pred: Tensor) -> Tensor:
         """
         Compute the cross-entropy loss.
         
         Parameters:
-        - y_true (np.ndarray): True target variable
-        - y_pred (np.ndarray): Predicted target variable
-        
-        Returns:
-        - float: Loss value
+        - input (Tensor): The input tensor (predictions).
         """
         
-        # Extract the batch size
-        batch_size = y_true.shape[0]
-        
-        if self.from_logits:
-            # Convert logits to probabilities
-            y_pred = Sigmoid()(y_pred)
+        # Convert target to one-hot if needed
+        if len(y_true.shape()) == len(y_pred.shape()):
+            # Target is already one-hot
+            target_one_hot = y_true
         else:
-            # Clip values for numerical stability
-            y_pred = np.clip(y_pred, self.epsilon, 1 - self.epsilon)
-
-        # Compute the cross-entropy loss for one-hot encoded labels
-        loss = -np.sum(y_true * np.log(y_pred)) / batch_size
-        
-        # Apply the reduction method
-        if self.reduction == "sum":
-            return loss
-        else:
-            return loss / batch_size
-
-
-    ### Public methods ###
-
-    def gradient(self, y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
-        """
-        Compute the gradient of the loss with respect to y_pred.
-        
-        Parameters:
-        - y_true (np.ndarray): True target variable
-        - y_pred (np.ndarray): Predicted target variable
-        
-        Returns:
-        - np.ndarray: Gradient of the loss with respect to y_pred
-        """
-        
-        # Extract the batch size
-        batch_size = y_true.shape[0]
-        
-        if self.from_logits:
-            # For logits, compute probabilities first.
-            prob = Sigmoid()(y_pred)
+            # Extract the number of classes
+            num_classes = y_pred.shape()[-1]
             
-            # Compute the gradient
-            return (prob - y_true) / batch_size
-        else:
-            # Compute the gradient
-            grad = (y_pred - y_true) / batch_size
+            # Convert target to one-hot encoding
+            target_one_hot = Tensor(np.eye(num_classes)[y_true.data.astype(int)], requires_grad=False)
+
+        # Apply label smoothing
+        if self.label_smoothing > 0:
+            # Smooth the labels
+            smoothing_value = self.label_smoothing / (y_pred.shape()[-1] - 1)
             
-        return grad
+            # Apply label smoothing
+            target_one_hot = target_one_hot * (1 - self.label_smoothing - smoothing_value) + smoothing_value
+
+        # Compute log softmax
+        log_probs = y_pred.log_softmax(axis=-1)
+        
+        # Compute negative log likelihood
+        loss = - (target_one_hot * log_probs).sum(axis=-1)
+        
+        # Apply reduction
+        if self.reduction == "mean":
+            # Return the mean loss
+            return loss.mean()
+        elif self.reduction == "sum":
+            # Return the sum loss
+            return loss.sum()
+        
+        # Return the per-sample loss
+        return loss

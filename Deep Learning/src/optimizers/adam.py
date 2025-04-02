@@ -1,14 +1,16 @@
 import numpy as np
-from typing import Any
+from typing import Optional
 
+from ..core import Tensor
 from .base import Optimizer
+from ..core.utils.context_manager import no_grad
     
 
 class Adam(Optimizer):
         
     ### Magic methods ###
         
-    def __init__(self, learning_rate: float, beta1: float = 0.9, beta2: float = 0.999, epsilon: float = 1e-8, weight_decay: float = 0.00) -> None:
+    def __init__(self, learning_rate: float, beta1: float = 0.9, beta2: float = 0.999, epsilon: float = 1e-8, weight_decay: float = 0.00, parameters: Optional[list[Tensor]] = None) -> None:
         """
         Class constructor
         
@@ -18,10 +20,11 @@ class Adam(Optimizer):
         - beta2 (float): Exponential decay rate for the second moment estimates
         - epsilon (float): Small value to prevent division by zero
         - weight_decay (float): Weight decay for the optimizer
+        - parameters (Optional[list[Tensor]]): List of tensors containing the parameters of the optimizer
         """
         
         # Initialize the parent class
-        super().__init__()
+        super().__init__(parameters)
         
         # Store the parameters
         self.learning_rate = learning_rate
@@ -33,62 +36,51 @@ class Adam(Optimizer):
         
     ### Public methods ###
     
-    def update(self, layer: Any, param_name: str, params: np.ndarray, grad_params: np.ndarray) -> np.ndarray:
+    def update(self) -> None:
         """
         Method to update the parameters of the model
-        
-        Parameters:
-        - layer (Any): Instance of the Layer being optimized
-        - param_name (str): Name of the parameters to be updated
-        - params (np.ndarray): Parameters of the model
-        - grad_params (np.ndarray): Gradient of the parameters
-        
-        Returns:
-        - np.ndarray: Updated parameters
         """
         
-        # Getting the layer id
-        layer_id = id(layer)
-        
-        # Initialize the layer registry if missing
-        if layer_id not in self.params_registry:
-            self.params_registry[layer_id] = {}
-        
-        # Initialize velocity for the layer if missing
-        if param_name not in self.params_registry[layer_id]:
-            self.params_registry[layer_id][param_name] = {}
-            
-        # Initialize the moments
-        if "moments" not in self.params_registry[layer_id][param_name]:
-            self.params_registry[layer_id][param_name]["moments"] = {
-                "m": np.zeros_like(grad_params),
-                "v": np.zeros_like(grad_params)
-            }
-            
-        # Initialize the time step
-        if "t" not in self.params_registry[layer_id][param_name]:
-            self.params_registry[layer_id][param_name]["t"] = 0
-        
-        # Get the moments and time step from the registry
-        m = self.params_registry[layer_id][param_name]["moments"]["m"]
-        v = self.params_registry[layer_id][param_name]["moments"]["v"]
-        t = self.params_registry[layer_id][param_name]["t"]
-        
-        # Update the time step
-        t += 1
-        
-        # Compute the first and second moment estimates
-        m = self.beta1 * m + (1 - self.beta1) * grad_params
-        v = self.beta2 * v + (1 - self.beta2) * (grad_params ** 2)
-        
-        # Compute the bias-corrected first and second moment estimates
-        m_hat = m / (1 - self.beta1 ** t)
-        v_hat = v / (1 - self.beta2 ** t)
-        
-        # Save updated moments and time step to the registry
-        self.params_registry[layer_id][param_name]["moments"]["m"] = m
-        self.params_registry[layer_id][param_name]["moments"]["v"] = v
-        self.params_registry[layer_id][param_name]["t"] = t
-        
-        # Update the parameters
-        return params - self.learning_rate * (m_hat / (np.sqrt(v_hat) + self.epsilon) + self.weight_decay * params)
+        # Disable gradient computation
+        with no_grad():
+            # Iterate over the parameters and update them
+            for param in self.parameters:
+                # Get the name and id of the parameter
+                param_id = id(param)
+                
+                # Check if the parameter has a gradient
+                if param.grad is None:
+                    # Raise an error if the gradient is missing
+                    raise ValueError(f"Impossible to update the parameters. Missing gradient for the parameter {param_id}")
+                
+                # Check if state of the optimizer is initialized for the parameter
+                if param_id not in self.state or len(self.state[param_id]) == 0:
+                    self.state[param_id] = {
+                        "m": np.zeros_like(param.grad),
+                        "v": np.zeros_like(param.grad),
+                        "t": 0
+                    }
+                    
+                # Get the moments and time step from the state
+                m = self.state[param_id]["m"]
+                v = self.state[param_id]["v"]
+                t = self.state[param_id]["t"]
+                
+                # Update the time step
+                t += 1
+                
+                # Compute the first and second moment estimates
+                m = self.beta1 * m + (1 - self.beta1) * param.grad
+                v = self.beta2 * v + (1 - self.beta2) * (param.grad ** 2)
+                
+                # Compute the bias-corrected first and second moment estimates
+                m_hat = m / (1 - self.beta1 ** t)
+                v_hat = v / (1 - self.beta2 ** t)
+                
+                # Save updated moments and time step to the state
+                self.state[param_id]["m"] = m
+                self.state[param_id]["v"] = v
+                self.state[param_id]["t"] = t
+                
+                # Update the parameters
+                param.data -= self.learning_rate * (m_hat / (np.sqrt(v_hat) + self.epsilon) + self.weight_decay * param.data)

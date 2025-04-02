@@ -1,5 +1,9 @@
 tqdm
+dill
 numpy
-tensorflow
+regex
 matplotlib
+
+# Used only for downloading datasets
+keras
 scikit-learn

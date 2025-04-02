@@ -1,0 +1,1 @@
+EPSILON = 1e-7 # Small value for numerical stability

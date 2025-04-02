@@ -1,21 +1,23 @@
 import numpy as np
 
+from ..core import Tensor
 
-def recall(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+
+def recall(y_true: Tensor, y_pred: Tensor) -> Tensor:
     """
     Compute the recall of the model.
 
     Parameters:
-    - y_true (np.ndarray): True target variable
-    - y_pred (np.ndarray): Predicted target variable
+    - y_true (Tensor): True target variable
+    - y_pred (Tensor): Predicted target variable
 
     Returns:
-    - float: Recall of the model
+    - Tensor: Recall of the model
     """
     
     # Compute the recall
-    tp = np.sum((y_true == 1) & (y_pred == 1))
-    fn = np.sum((y_true == 1) & (y_pred == 0))
+    tp = np.sum((y_true.data == 1) & (y_pred.data == 1))
+    fn = np.sum((y_true.data == 1) & (y_pred.data == 0))
     
-    # Return the recall
-    return tp / (tp + fn)
+    # Compute and return the recall as a tensor
+    return Tensor((tp / (tp + fn)), requires_grad=False)

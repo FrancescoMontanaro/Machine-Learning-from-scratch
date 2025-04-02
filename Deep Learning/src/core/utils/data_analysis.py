@@ -2,32 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def shuffle_data(X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Method to shuffle the dataset
-    
-    Parameters:
-    - X (np.ndarray): Features of the dataset
-    - y (np.ndarray): Target of the dataset
-    
-    Returns:
-    - tuple[np.ndarray, np.ndarray]: Shuffled features and target
-    """
-    
-    # Get the number of samples
-    n_samples = X.shape[0]
-    
-    # Generate random indices
-    indices = np.random.permutation(n_samples)
-    
-    # Shuffle the dataset
-    X_shuffled = X[indices]
-    y_shuffled = y[indices]
-    
-    # Return the shuffled dataset
-    return X_shuffled, y_shuffled
-
-
 def plot_data(datasets: list[dict], title: str, xlabel: str, ylabel: str) -> None:
     """
     Method to plot multiple sets of samples in a 2D space, with options for scatter and line plots.
@@ -70,8 +44,8 @@ def plot_data(datasets: list[dict], title: str, xlabel: str, ylabel: str) -> Non
     
     # Show the plot
     plt.show()
-    
-    
+
+
 def plot_history(train_loss: np.ndarray, valid_loss: np.ndarray, title: str, xlabel: str, ylabel: str) -> None:
     """
     Method to plot the training and validation loss
@@ -128,28 +102,6 @@ def plot_confusion_matrix(cm: np.ndarray, title: str = "Confusion Matrix") -> No
     plt.ylabel('Actuals', fontsize=12)
     plt.title(title, fontsize=12)
     plt.show()
-   
-    
-def one_hot_encoding(y: np.ndarray, n_classes: int) -> np.ndarray:
-    """
-    Method to perform one-hot encoding on the target variable
-    
-    Parameters:
-    - y (np.ndarray): Target variable
-    - n_classes (int): Number of classes
-    
-    Returns:
-    - np.ndarray: One-hot encoded target variable
-    """
-    
-    # Initialize the one-hot encoded target variable
-    one_hot = np.zeros((y.shape[0], n_classes))
-    
-    # Set the appropriate index to 1
-    one_hot[np.arange(y.shape[0]), y] = 1
-    
-    # Return the one-hot encoded target variable
-    return one_hot.astype(int)
 
 
 def format_summary_output(value: str, width: int) -> str:
@@ -186,3 +138,35 @@ def format_summary_output(value: str, width: int) -> str:
         
     # Format each line to fit the specified width
     return "\n".join(line.ljust(width) for line in formatted_lines)
+
+
+def unbroadcast(arr: np.ndarray, shape: tuple) -> np.ndarray:
+    """
+    Unbroadcasts an array to a specified shape.
+    
+    Parameters:
+    - arr (np.ndarray): Array to unbroadcast
+    - shape (tuple): Shape to unbroadcast to
+    
+    Returns:
+    - np.ndarray: Unbroadcasted array
+    """
+            
+    # Compare the number of dimensions of the array and the target shape
+    extra_dims = arr.ndim - len(shape)
+    
+    # If the array has more dimensions than the target shape, sum along the extra dimensions
+    if extra_dims > 0:
+        # Sum along the extra dimensions
+        axes_to_sum = tuple(range(extra_dims))
+        arr = arr.sum(axis=axes_to_sum, keepdims=False)
+    
+    # For each axis, if the target shape is 1 but arr.shape has a larger dimension,
+    # sum along that axis (keeping dims to preserve the number of dimensions).
+    for i, (a_dim, target_dim) in enumerate(zip(arr.shape, shape)):
+        # If the target dimension is 1 but the array dimension is larger, sum along that axis
+        if target_dim == 1 and a_dim != 1:
+            arr = arr.sum(axis=i, keepdims=True)
+    
+    # Return the unbroadcasted array
+    return arr
