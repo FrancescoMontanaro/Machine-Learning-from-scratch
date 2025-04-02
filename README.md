@@ -1,5 +1,10 @@
 # Machine Learning from Scratch
 
+<div style="text-align: center; margin-bottom: 20px;">
+  <img src="./_images/ml.png" style="width: 40%; margin-right: 5%;" />
+  <img src="./_images/dl.png" style="width: 40%;" />
+</div>
+
 This repository contains implementations of various machine learning algorithms developed from scratch **using only Python and NumPy**. Each algorithm is implemented and organized according to its category (Supervised, Unsupervised, Reinforcement Learning, and Deep Learning). The code follows a clear structure, with each folder containing separate modules for the core algorithm and training routines.
 
 Unlike standard implementations using existing libraries, **every module has been built entirely from scratch using only Python and NumPy**. This includes the implementation of a custom **Deep Learning framework** that allows users to create and custom DL models without relying on external libraries like TensorFlow or PyTorch. The challenge of manually implementing features such as training pipelines, automatic differentiation, optimization algorithms, activation functions, and backpropagation adds has been a great educational and fun experience.
@@ -47,9 +52,11 @@ The project structure is organized into categories and subcategories for each al
 ├── Deep Learning
 │   ├── Auto-Encoder
 │   ├── Convolutional Neural Network (CNN)
-│   └── Multi-Layer Perceptron (MLP)
+│   ├── Multi-Layer Perceptron (MLP)
+│   └── Transformer
 ├── Machine Learning
 │   ├── Reinforcement Learning
+│   │   ├── Multi-Armed Bandit
 │   ├── Supervised Learning
 │   │   ├── Classification
 │   │   ├── General Algorithms
@@ -76,10 +83,11 @@ The project structure is organized into categories and subcategories for each al
    - **Backpropagation and automatic differentiation**
    - **Custom model definition and training pipeline**
    
-   The main modules implemented so far are:
+   The main architectures implemented so far are:
    1. [**Auto-Encoder**](Deep%20Learning/Auto-Encoder)
    2. [**Multi-Layer Perceptron (MLP)**](Deep%20Learning/Multi-Layer%20Perceptron%20(MLP))
    3. [**Convolutional Neural Network (CNN)**](Deep%20Learning/Convolutional%20Neural%20Network%20(CNN))
+   4. [**Transformer**](Deep%20Learning/Transformer)
 
 
 ### Reinforcement Learning
@@ -106,4 +114,4 @@ The project structure is organized into categories and subcategories for each al
 
 ## Usage
 
-Each algorithm comes with one or more training notebooks with the extension `.ipynb`, that can be used to train the model with sample data.
+Each algorithm comes with one or more training notebooks with the extension `.ipynb`, that can be used to train and test the model with sample data.
