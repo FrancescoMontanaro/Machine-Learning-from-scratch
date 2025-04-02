@@ -1,4 +1,5 @@
 tqdm
+dill
 numpy
 regex
 matplotlib

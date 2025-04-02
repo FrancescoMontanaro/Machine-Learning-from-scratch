@@ -267,10 +267,8 @@ class Sequential(Architecture):
             # Get the current batch
             batch_out = x[step * batch_size:(step + 1) * batch_size] if batch_size else x
             
-            # Iterate over the modules
-            for module in list(self._modules.values()):
-                # Compute the output of the module and pass it to the next one
-                batch_out = module(batch_out)
+            # Forward pass: Compute the output of the model
+            batch_out = self.modules.forward(batch_out)
                 
             # Append the output of the batch
             outputs.append(batch_out)

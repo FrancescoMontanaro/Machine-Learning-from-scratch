@@ -1,11 +1,10 @@
 import os
 import re
 import numpy as np
+import dill as pickle
 from typing import Optional, Any
 
 from ..core import Tensor
-from .modules_list import ModuleList
-from .utils.context_manager import no_grad
 from .utils.data_analysis import format_summary_output
 
 
@@ -48,22 +47,10 @@ class Module:
         if isinstance(value, Module):
             # Add the module to the dictionary of sub-modules
             self.__dict__.setdefault("_modules", {})[name] = value
-            
+                    
             # Set a hierarchical name for the sub-module
             value.name = f"{self.name}.{name}" if self.name else name
             value.name = re.sub(r'([a-z])([A-Z])', r'\1_\2', value.name.replace(" ", "_")).lower()
-            
-        # If the value is a ModuleList, add the modules to the dictionary of sub-modules
-        elif isinstance(value, ModuleList):
-            # Iterate over the modules in the ModuleList
-            for i, module in enumerate(value.modules):
-                # Add the module to the dictionary of sub-modules
-                self.__dict__.setdefault("_modules", {})[f"{name}.{i}"] = module
-                
-                # Set a hierarchical name for the sub-module
-                sub_module_name = f"{self.name}.{name}[{i}]" if self.name else f"{name}[{i}]"
-                if module.name: sub_module_name += f".{module.name}"
-                module.name = re.sub(r'([a-z])([A-Z])', r'\1_\2', sub_module_name.replace(" ", "_")).lower()
 
         elif isinstance(value, Tensor) and value.requires_grad and value.is_parameter:
             # Add the parameter to the dictionary of parameters
@@ -226,14 +213,9 @@ class Module:
         Method to display the summary of the model.
         
         Parameters:
-        - recursive (bool): 
-            If False (default), prints the original table-based summary.
-            If True, prints a tree by descending into submodules.
-        - is_root (bool): 
-            If True, prints headers/footers or the top-level node (depending on the mode).
-            Internally used for recursion.
-        - prefix (str): 
-            Used internally to manage indentation for the tree layout.
+        - recursive (bool): If False (default), prints the original table-based summary. If True, prints a tree by descending into submodules.
+        - is_root (bool): If True, prints headers/footers or the top-level node (depending on the mode). Internally used for recursion.
+        - prefix (str): Used internally to manage indentation for the tree layout.
         """
 
         # If NOT recursive, print the summary in tabular format
@@ -319,101 +301,142 @@ class Module:
         
         Parameters:
         - path (str): Path to the file where the state of the module will be saved
+        
+        Raises:
+        - ValueError: If the path is not a directory
         """
         
-        # Extract the parameters and buffers of the module
-        params, buffers = self._collect_state_tensors()
-        
-        # Create a dictionary to store the state of the module
-        state_dict = {
-            **{"__input_shape__": self._input_shape},
-            **{name: param.data for name, param in params.items()},
-            **{name: buffer.data for name, buffer in buffers.items()}
-        }
+        # If the path exists, check if it is a directory
+        if os.path.exists(path) and not os.path.isdir(path):
+            # Raise an error if the path is not a directory
+            raise ValueError(f"Path '{path}' must be a directory.")
         
         # Create the output directory if it doesn't exist
-        if os.path.isdir(os.path.dirname(path)):
-            os.makedirs(os.path.dirname(path), exist_ok=True)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         
-        # Save the state of the module to a file
-        np.savez(path, **state_dict)
-
+        # Save the module to a file
+        self.save_module(os.path.join(path, f"module.pkl"))
         
-    def load(self, path: str) -> None:
+        # Save the weights of the module to a file
+        self.save_weights(os.path.join(path, f"params.npz"))
+        
+        
+    @classmethod
+    def load(cls, path: str) -> 'Module':
         """
         Method to load the state of the module from a file
         
         Parameters:
         - path (str): Path to the file containing the state of the module
-        
-        Raises:
-        - FileNotFoundError: If the file does not exist
-        - ValueError: If the input shape is not present in the state dictionary and the module is not initialized
-        - ValueError: If the dimensions of the parameters or buffers do not match
-        - KeyError: If the key is not found in the parameters or buffers
         """
         
-        # Check if the file exists
-        if not os.path.exists(path):
-            # If the file does not exist, raise an error
-            raise FileNotFoundError(f'The file "{path}" does not exist.')
+        # Check if the path exists and is a directory
+        if not os.path.exists(path) or not os.path.isdir(path):
+            # Raise an error if the path is not a directory
+            raise ValueError(f"Path '{path}' must be a directory.")
         
-        # Load the state of the module from a file
-        state_dict = np.load(path)
+        # Load the module from a file
+        module = cls.load_module(os.path.join(path, f"module.pkl"))
         
-        # Check if the input shape is present in the state dictionary
-        if "__input_shape__" in state_dict.keys():
-            # Disable gradient computation
-            with no_grad():
-                # Create a dummy tensor with the input shape
-                dummy_tensor = Tensor(np.zeros(state_dict["__input_shape__"]))
-                
-                # Set the model in evaluation mode
-                self.eval()
-                
-                # Call the forward method with the dummy tensor to initialize the parameters
-                self.forward(dummy_tensor)
-                
-        else:
-            # Check if the input shape is None
-            if self._input_shape is None:
-                # If the input shape is not present, raise an error
-                raise ValueError(f'The input shape "__input_shape__" is not present in the state dictionary. Call the forward method before loading the state, even with a dummy tensor.')
+        # Load the weights of the module from a file
+        module.load_weights(os.path.join(path, f"params.npz"))
         
-        # Estrai i mapping attuali di parametri e buffer
+        # Return the loaded module
+        return module
+        
+        
+    def save_weights(self, path: str) -> None:
+        """
+        Method to save the weights and buffers of the module to a file
+        
+        Parameters:
+        - path (str): Path to the file where the weights of the module will be saved
+        """
+        
+        # Extract the parameters and buffers of the module
         params, buffers = self._collect_state_tensors()
         
-        # Itera sulle chiavi salvate e aggiorna i dati dei tensori corrispondenti
-        for key in state_dict.files:
-            # Exclude the input shape key
-            if key == "__input_shape__":
-                continue
+        # Create the output directory if it doesn't exist
+        os.makedirs(os.path.dirname(path), exist_ok=True)
             
-            # Load the parameters
-            if key in params.keys():
-                # Chekc the dimensions of the parameter
-                if params[key].data is not None and state_dict[key].shape != params[key].data.shape:
-                    # Raise an error if the dimensions do not match
-                    raise ValueError(f"Dimension mismatch for parameter '{key}': expected {params[key].data.shape}, got {state_dict[key].shape}")
+        # Save the state of the module to a file
+        np.savez(
+            file = path,
+            **{f"parameters.{p_name}": p.data for p_name, p in params.items()},
+            **{f"buffers.{b_name}": b.data for b_name, b in buffers.items()}
+        )
+        
+    
+    def load_weights(self, path: str) -> None:
+        """
+        Method to load the weights and buffers of the module from a file
+        
+        Parameters:
+        - path (str): Path to the file containing the weights of the module
+        """
+        
+        # Load the state of the module from a file
+        data = np.load(path, allow_pickle=True)
+        
+        # Extract the parameters and buffers of the module
+        params, buffers = self._collect_state_tensors()
+        
+        # Iterate over the params of the module
+        for param_name, param in params.items():
+            # Check if the parameter is present in the state dictionary
+            if f"parameters.{param_name}" not in data.files:
+                # Raise an error if the parameter is not found
+                raise KeyError(f"Key '{param_name}' not found in the state dictionary.")
                 
-                # Update the parameter data
-                params[key].data = state_dict[key]
+            # Update the parameter data
+            param.data = data[f"parameters.{param_name}"]
+            
+        # Iterate over the buffers of the module
+        for buffer_name, buffer in buffers.items():
+            # Check if the buffer is present in the state dictionary
+            if f"buffers.{buffer_name}" not in data.files:
+                # Raise an error if the buffer is not found
+                raise KeyError(f"Key '{buffer_name}' not found in the state dictionary.")
                 
-            # Load the buffers
-            elif key in buffers.keys():
-                # Check the dimensions of the buffer
-                if buffers[key].data is not None and state_dict[key].shape != buffers[key].data.shape:
-                    # Raise an error if the dimensions do not match
-                    raise ValueError(f"Dimension mismatch for buffer '{key}': expected {buffers[key].data.shape}, got {state_dict[key].shape}")
-                
-                # Update the buffer data
-                buffers[key].data = state_dict[key]
-                
-            # If the key is not found in the parameters or buffers, raise an error
-            else:
-                # If the key is not found in the parameters or buffers, raise an error
-                raise ValueError(f"Key '{key}' not found in the module's parameters or buffers.")
-                  
+            # Update the buffer data
+            buffer.data = data[f"buffers.{buffer_name}"]
+
+
+    def save_module(self, path: str) -> None:
+        """
+        Method to save the module to a file
+        
+        Parameters:
+        - path (str): Path to the file where the module will be saved
+        """
+
+        # Create the output directory if it doesn't exist
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        
+        # Save the state of the module to a file
+        with open(path, 'wb') as f:
+            pickle.dump(self, f)
+            
+     
+    @staticmethod       
+    def load_module(path: str) -> 'Module':
+        """
+        Method to load the module from a file
+        
+        Parameters:
+        - path (str): Path to the file containing the module
+        
+        Returns:
+        - Module: Loaded module
+        """
+        
+        # Load the module from a file
+        with open(path, 'rb') as f:
+            module = pickle.load(f)
+            
+        # Return the loaded module
+        return module
+
     
     #########################
     ### Protected methods ###
@@ -433,6 +456,7 @@ class Module:
         # Create dictionaries to store the parameters and buffers
         params, buffers = {}, {}
         
+        # Check if the module has parameters
         if len(self._parameters) > 0:
             # Iterate over the parameters of the current module
             for name, param in self._parameters.items():
@@ -442,7 +466,7 @@ class Module:
                 # Add the parameter to the dictionary
                 params.update({param_name: param})
                 
-                
+        # Check if the module has buffers     
         if len(self._buffers) > 0:
             # Iterate over the buffers of the current module
             for name, buffer in self._buffers.items():
@@ -451,7 +475,6 @@ class Module:
                 
                 # Add the buffer to the dictionary
                 buffers.update({buffer_name: buffer})
-                
                 
         # Check if the module has sub-modules
         if len(self._modules) > 0:
@@ -469,7 +492,7 @@ class Module:
                 
         # Return the parameters and buffers 
         return params, buffers
-            
+
 
     def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
         """
