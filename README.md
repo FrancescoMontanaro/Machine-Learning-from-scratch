@@ -7,7 +7,7 @@
 
 This repository contains implementations of various machine learning algorithms developed from scratch **using only Python and NumPy**. Each algorithm is implemented and organized according to its category (Supervised, Unsupervised, Reinforcement Learning, and Deep Learning). The code follows a clear structure, with each folder containing separate modules for the core algorithm and training routines.
 
-Unlike standard implementations using existing libraries, **every module has been built entirely from scratch using only Python and NumPy**. This includes the implementation of a custom **Deep Learning framework** that allows users to create and custom DL models without relying on external libraries like TensorFlow or PyTorch. The challenge of manually implementing features such as training pipelines, automatic differentiation, optimization algorithms, activation functions, and backpropagation adds has been a great educational and fun experience.
+Unlike standard implementations using existing libraries, **every module has been built entirely from scratch using only Python and NumPy**. This includes the implementation of a custom **Deep Learning framework** that allows users to create and train custom DL models without relying on external libraries like TensorFlow or PyTorch. The challenge of manually implementing features such as training pipelines, automatic differentiation, optimization algorithms, activation functions, and backpropagation adds has been a great educational and fun experience.
 
 ---
 
@@ -27,7 +27,7 @@ Unlike standard implementations using existing libraries, **every module has bee
 
 ## Overview
 
-This repository serves as a comprehensive collection of foundational machine learning algorithms, with each algorithm implemented from scratch. Each one is accompanied by its training pipeline, allowing users to test the algorithms on data.
+This repository serves as a comprehensive collection of foundational machine learning algorithms, with each algorithm implemented from scratch. Each one is accompanied by its training pipeline, allowing users to test the algorithms on sample data.
 
 ## Installation
 
@@ -72,16 +72,39 @@ The project structure is organized into categories and subcategories for each al
 
 ### Deep Learning
 
-1. **Custom Deep Learning framework built from scratch** without external libraries but Numpy, implementing:
-   - **Fully connected layers**
-   - **Convolutional layers**
-   - **Pooling layers**
-   - **Up-sampling layers**
-   - **Normalization layers**
-   - **Optimizers and loss functions**
-   - **Activation functions**
-   - **Backpropagation and automatic differentiation**
-   - **Custom model definition and training pipeline**
+A comprehensive, fully-customizable **Deep Learning framework developed entirely from scratch using only NumPy** as an external dependency. It provides a robust foundation for building, training, and evaluating neural networks, featuring a modular design that emphasizes flexibility.
+
+Key features included:
+
+- **Tensor-Based Computational Graph** with Automatic Differentiation:
+  - Forward and backward propagation mechanisms
+  - Dynamic computation graphs enabling flexible network architectures
+
+- **Rich Collection of Neural Network Layers**:
+  - Fully-connected (Dense) layers
+  - Convolutional layers
+  - Pooling layers (e.g., MaxPooling)
+  - Up-sampling layers
+  - Normalization layers (Batch Normalization, Layer Normalization)
+  - Dropout layers for regularization
+  - Embedding layers for handling discrete inputs
+
+- **Comprehensive Set of Activation Functions**:
+  - ReLU, Sigmoid, Tanh, Softmax, and LogSoftmax
+
+- **Flexible Architectures**:
+  - Sequential models
+  - Transformer-based architectures, including attention mechanisms, tokenizers, and custom data loaders
+
+- **Customizable Training Components**:
+  - Optimizers (e.g., SGD, Adam)
+  - Loss functions (Mean Squared Error, Binary and Categorical Cross-Entropy, etc.)
+  - Metrics for evaluation (Accuracy, Precision, Recall, F1 Score, etc.)
+  - Callbacks for training control (Early stopping, etc.)
+
+- **Structured Project Layout**:
+  - Clearly separated modules for core utilities, layers, activations, architectures, optimizers, loss functions, metrics, and testing suites
+  - Extensive test coverage to ensure reliability and correctness
    
    The main architectures implemented so far are:
    1. [**Auto-Encoder**](Deep%20Learning/Auto-Encoder)
