@@ -74,6 +74,8 @@ The project structure is organized into categories and subcategories for each al
 
 A comprehensive, fully-customizable **Deep Learning framework developed entirely from scratch using only NumPy** as an external dependency. It provides a robust foundation for building, training, and evaluating neural networks, featuring a modular design that emphasizes flexibility.
 
+This can be found here: [**Deep Learning Framework**](Deep%20Learning/src/)
+
 Key features included:
 
 - **Tensor-Based Computational Graph** with Automatic Differentiation:
