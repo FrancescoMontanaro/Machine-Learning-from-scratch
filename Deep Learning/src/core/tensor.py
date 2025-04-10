@@ -770,38 +770,6 @@ class Tensor:
         
         # Compute and return the padded tensor
         return pad(self, pad_width)
-
-    
-    def sliding_window(self, window_shape: Union[int, Tuple[int, ...]], axis: Optional[Union[int, Tuple[int, ...]]] = None) -> 'Tensor':
-        """
-        Method to extract sliding windows from the tensor
-        
-        Parameters:
-        - window_shape (Union[int, Tuple[int, ...]]): Shape of the sliding window
-        - axis (Union[int, Tuple[int, ...]]): Axis along which to extract the sliding windows
-        
-        Returns:
-        - Tensor: Sliding windows tensor
-        """
-        
-        # Compute and return the sliding windows tensor
-        return sliding_window(self, window_shape, axis)
-    
-    
-    def tensordot(self, other: 'Tensor', axes: Union[int, Tuple[List[int], List[int]]]) -> 'Tensor':
-        """
-        Method to compute the tensor dot product of two tensors
-        
-        Parameters:
-        - other (Tensor): Tensor to compute the dot product
-        - axes (Union[int, Tuple[List[int], List[int]]): Axes along which to compute the dot product
-        
-        Returns:
-        - Tensor: Tensor containing the dot product of the two tensors
-        """
-        
-        # Compute and return the tensor dot product of the two tensors
-        return tensordot(self, other, axes)
     
     
     def conv_2d(self, kernel: 'Tensor', stride: Tuple[int,int] = (1,1)) -> 'Tensor':
