@@ -2,6 +2,7 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from typing import Optional, Tuple, List, Union, Type, TYPE_CHECKING, cast
 
+from .utils import accumulate_gradient
 if TYPE_CHECKING: from ..tensor import Tensor
 from ..utils.context_manager import _NO_GRAD
 from ..utils.types_registry import get_tensor_class
@@ -53,7 +54,7 @@ def sum(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Ten
                 out.grad = np.broadcast_to(out.grad, x.data.shape)
                 
             # Update the gradient of the input tensor
-            x.grad = x.grad + out.grad if x.grad is not None else out.grad
+            accumulate_gradient(x, out.grad)
             
     # Store the backward function with respect to the sum operation
     out._backward = _backward
@@ -136,7 +137,7 @@ def max(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
                 grad_x = mask * (np.broadcast_to(out_grad_expanded, x.data.shape) / count)
             
             # Update the gradient of the input tensor
-            x.grad = x.grad + grad_x if x.grad is not None else grad_x
+            accumulate_gradient(x, grad_x)
 
     # Store the backward function with respect to the maximum operation
     out._backward = _backward
@@ -182,7 +183,7 @@ def sqrt(x: 'Tensor') -> 'Tensor':
             grad_self = out.grad / (2 * np.sqrt(x.data))
             
             # Update the gradient of the input tensor
-            x.grad = x.grad + grad_self if x.grad is not None else grad_self
+            accumulate_gradient(x, grad_self)
 
     # Store the backward function with respect to the square root operation
     out._backward = _backward
@@ -258,7 +259,7 @@ def mean(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdi
             grad_self = np.broadcast_to(grad_self, x.data.shape)
             
             # Update the gradient of the input tensor.
-            x.grad = x.grad + grad_self if x.grad is not None else grad_self
+            accumulate_gradient(x, grad_self)
 
     # Store the backward function with respect to the mean operation
     out._backward = _backward
@@ -363,8 +364,11 @@ def exp(x: 'Tensor') -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad:
+            # Comute the gradient of the loss with respect to the current tensor
+            grad = out.data * out.grad
+            
             # Compute the gradient of the loss with respect to the current tensor
-            x.grad = x.grad + out.data * out.grad if x.grad is not None else out.data * out.grad
+            accumulate_gradient(x, grad)
             
     # Store the backward function with respect to the exponential operation
     out._backward = _backward
@@ -403,8 +407,11 @@ def log(x: 'Tensor') -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Derivative of log(x) is 1/x; propagate the gradient accordingly.
-            x.grad = x.grad + (out.grad / x.data) if x.grad is not None else (out.grad / x.data)
+            # Compute the gradient of the loss with respect to the current tensor
+            gard = out.grad / x.data
+            
+            # Update the gradient of the input tensor
+            accumulate_gradient(x, gard)
     
     # Store the backward function with respect to the natural logarithm operation
     out._backward = _backward
@@ -454,7 +461,7 @@ def transpose(x: 'Tensor', axes: Tuple[int]) -> 'Tensor':
             transposed_grad = out.grad.transpose(inv_axes)
             
             # Update the gradient of the current tensor
-            x.grad = x.grad + transposed_grad if x.grad is not None else transposed_grad
+            accumulate_gradient(x, transposed_grad)
                 
     # Store the backward function with respect to the transpose operation
     out._backward = _backward
@@ -510,7 +517,7 @@ def masked_fill(x: 'Tensor', mask: Union[np.ndarray, 'Tensor'], value: float) ->
             grad_mask = np.where(mask, 0, out.grad if out.grad is not None else 0)
             
             # Update the gradient of the current tensor
-            x.grad = x.grad + grad_mask if x.grad is not None else grad_mask
+            accumulate_gradient(x, grad_mask)
     
     # Store the backward function with respect to the masked fill operation
     out._backward = _backward
@@ -563,7 +570,7 @@ def clip(x: 'Tensor', min_value: float, max_value: float) -> 'Tensor':
             grad_self = mask * out.grad
             
             # Update the gradient of the input tensor.
-            x.grad = x.grad + grad_self if x.grad is not None else grad_self
+            accumulate_gradient(x, grad_self)
 
     # Store the backward function with respect to the clip operation.
     out._backward = _backward
@@ -629,7 +636,7 @@ def gather(x: 'Tensor', indices: 'Tensor', axis: int = 0) -> 'Tensor':
             np.add.at(grad_self, tuple(idx), out.grad)
             
             # Update the gradient of the input tensor
-            x.grad = x.grad + grad_self if x.grad is not None else grad_self
+            accumulate_gradient(x, grad_self)
             
     # Store the backward function with respect to the gather operation
     out._backward = _backward
@@ -685,7 +692,7 @@ def squeeze(x: 'Tensor', axis: Optional[int] = None) -> 'Tensor':
                 grad_squeezed = np.expand_dims(out.grad, axis=axis)
             
             # Update the gradient of the input tensor
-            x.grad = x.grad + grad_squeezed if x.grad is not None else grad_squeezed
+            accumulate_gradient(x, grad_squeezed)
             
     # Store the backward function with respect to the squeeze operation
     out._backward = _backward
@@ -732,7 +739,7 @@ def unsqueeze(x: 'Tensor', axis: int) -> 'Tensor':
             grad_unsqueezed = np.squeeze(out.grad, axis=axis)
             
             # Update the gradient of the input tensor
-            x.grad = x.grad + grad_unsqueezed if x.grad is not None else grad_unsqueezed
+            accumulate_gradient(x, grad_unsqueezed)
             
     # Store the backward function with respect to the unsqueeze operation
     out._backward = _backward
@@ -798,17 +805,13 @@ def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
                 grad_piece = out.grad[tuple(slicer)]
                 
                 # Accumulate the gradient in the corresponding tensor
-                t.grad = t.grad + grad_piece if t.grad is not None else grad_piece
+                accumulate_gradient(t, grad_piece)
 
     # Store the backward function with respect to the concatenation operation
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    prev = set()
-    for t in tensors:
-        if t.requires_grad:
-            prev.add(t)
-    out._prev = prev
+    out._prev = {t for t in tensors if t.requires_grad}
     
     # Return the output tensor
     return out
@@ -849,7 +852,7 @@ def reshape(x: 'Tensor', new_shape: Tuple[int, ...]) -> 'Tensor':
             grad_back = out.grad.reshape(x.data.shape)
             
             # Accumulate the gradient in x.grad
-            x.grad = x.grad + grad_back if x.grad is not None else grad_back
+            accumulate_gradient(x, grad_back)
             
     # Store the backward function with respect to the reshape operation
     out._backward = _backward
@@ -912,7 +915,7 @@ def repeat(x: 'Tensor', repeats: int, axis: Optional[int] = None) -> 'Tensor':
                 grad_unrepeated = out.grad.reshape(new_shape).sum(axis=axis+1)
             
             # Accumulate the unrepeated gradient in x.grad
-            x.grad = x.grad + grad_unrepeated if x.grad is not None else grad_unrepeated
+            accumulate_gradient(x, grad_unrepeated)
 
     # Store the backward function with respect to the repeat operation
     out._backward = _backward
@@ -963,7 +966,7 @@ def pad(x: 'Tensor', pad_width: Tuple[Tuple[int, int], ...]) -> 'Tensor':
             grad_unpadded = out.grad[slices]
             
             # Update the gradient of the input tensor
-            x.grad = x.grad + grad_unpadded if x.grad is not None else grad_unpadded
+            accumulate_gradient(x, grad_unpadded)
     
     # Store the backward function with respect to the pad operation
     out._backward = _backward
@@ -1090,18 +1093,13 @@ def conv_2d(x: 'Tensor', kernel: 'Tensor', stride: Tuple[int, int] = (1,1)) -> '
                         dx_data[n, i0:i0+kernel_height, j0:j0+kernel_width, :] += patch_grad
             
             # Update the gradient of the input tensor
-            x.grad = dx_data if x.grad is None else x.grad + dx_data
+            accumulate_gradient(x, dx_data)
     
     # Store the backward function with respect to the convolution operation
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    prev = set()
-    if x.requires_grad:
-        prev.add(x)
-    if kernel.requires_grad:
-        prev.add(kernel)
-    out._prev = prev
+    out._prev = {t for t in (x, kernel) if t.requires_grad}
     
     # Return the output tensor
     return out

@@ -1,11 +1,11 @@
 import numpy as np
 from typing import Union, Type, Tuple, TYPE_CHECKING, cast
 
+from .utils import accumulate_gradient
 if TYPE_CHECKING: from ..tensor import Tensor
 from ..utils.context_manager import _NO_GRAD
 from ..utils.data_analysis import unbroadcast
 from ..utils.types_registry import get_tensor_class
-
 
 
 def add(a: 'Tensor', b: 'Tensor') -> 'Tensor':
@@ -42,8 +42,8 @@ def add(a: 'Tensor', b: 'Tensor') -> 'Tensor':
             if a.data.shape != out.data.shape:
                 grad_a = unbroadcast(grad_a, a.data.shape)
                 
-            # Update the gradient of the current tensor
-            a.grad = a.grad + grad_a if a.grad is not None else grad_a
+            # Accumulate the gradient of the current tensor
+            accumulate_gradient(a, grad_a)
             
         if b.requires_grad and out.grad is not None:
             # If the shapes are different, unbroadcast the gradient
@@ -52,18 +52,13 @@ def add(a: 'Tensor', b: 'Tensor') -> 'Tensor':
                 grad_b = unbroadcast(grad_b, b.data.shape)
                 
             # Update the gradient of the other tensor
-            b.grad = b.grad + grad_b if b.grad is not None else grad_b
+            accumulate_gradient(b, grad_b)
             
     # Store the backward function with respect to the sum operation
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    prev = set()
-    if a.requires_grad:
-        prev.add(a)
-    if b.requires_grad:
-        prev.add(b)
-    out._prev = prev
+    out._prev = {t for t in (a, b) if t.requires_grad}
     
     # Return the output tensor
     return out
@@ -107,7 +102,7 @@ def sub(a: 'Tensor', b: 'Tensor') -> 'Tensor':
                 grad_a = unbroadcast(grad_a, a.data.shape)
                 
             # Update the gradient of the current tensor
-            a.grad = a.grad + grad_a if a.grad is not None else grad_a
+            accumulate_gradient(a, grad_a)
 
         if b.requires_grad and out.grad is not None:
             # If the shapes are different, unbroadcast the gradient
@@ -117,18 +112,13 @@ def sub(a: 'Tensor', b: 'Tensor') -> 'Tensor':
                 grad_b = unbroadcast(grad_b, b.data.shape)
             
             # Update the gradient of the other tensor
-            b.grad = b.grad - grad_b if b.grad is not None else -grad_b
+            accumulate_gradient(b, -grad_b)
             
     # Store the backward function with respect to the subtraction operation
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    prev = set()
-    if a.requires_grad:
-        prev.add(a)
-    if b.requires_grad:
-        prev.add(b)
-    out._prev = prev
+    out._prev = {t for t in (a, b) if t.requires_grad}
     
     # Return the output tensor
     return out
@@ -172,7 +162,7 @@ def mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
                 grad_a = unbroadcast(grad_a, a.data.shape)
             
             # Update the gradient of the current tensor
-            a.grad = a.grad + grad_a if a.grad is not None else grad_a
+            accumulate_gradient(a, grad_a)
             
         if b.requires_grad:
             # If the shapes are different, unbroadcast the gradient
@@ -182,18 +172,13 @@ def mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
                 grad_b = unbroadcast(grad_b, b.data.shape)
             
             # Update the gradient of the other tensor
-            b.grad = b.grad + grad_b if b.grad is not None else grad_b
+            accumulate_gradient(b, grad_b)
             
     # Store the backward function with respect to the product operation
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    prev = set()
-    if a.requires_grad:
-        prev.add(a)
-    if b.requires_grad:
-        prev.add(b)
-    out._prev = prev
+    out._prev = {t for t in (a, b) if t.requires_grad}
     
     # Return the output tensor
     return out
@@ -237,7 +222,8 @@ def div(a: 'Tensor', b: 'Tensor') -> 'Tensor':
                 grad_a = unbroadcast(grad_a, a.data.shape)
             
             # Update the gradient of the current tensor
-            a.grad = a.grad + grad_a if a.grad is not None else grad_a
+            accumulate_gradient(a, grad_a)
+            
         if b.requires_grad:
             # If the shapes are different, unbroadcast the gradient
             grad_b = -a.data * out.grad / (b.data ** 2)
@@ -246,18 +232,13 @@ def div(a: 'Tensor', b: 'Tensor') -> 'Tensor':
                 grad_b = unbroadcast(grad_b, b.data.shape)
                 
             # Update the gradient of the other tensor
-            b.grad = b.grad + grad_b if b.grad is not None else grad_b
+            accumulate_gradient(b, grad_b)
             
     # Store the backward function with respect to the division operation
     out._backward = _backward
     
     # Store the previous tensors in the computation graph
-    prev = set()
-    if a.requires_grad:
-        prev.add(a)
-    if b.requires_grad:
-        prev.add(b)
-    out._prev = prev
+    out._prev = {t for t in (a, b) if t.requires_grad}
     
     # Return the output tensor
     return out
@@ -301,7 +282,7 @@ def mat_mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
             grad_self = unbroadcast(grad_self, a.data.shape)
             
             # Update the gradient of the current tensor
-            a.grad = a.grad + grad_self if a.grad is not None else grad_self
+            accumulate_gradient(a, grad_self)
             
         if b.requires_grad and out.grad is not None:
             # Gradient w.r.t. the other tensor
@@ -311,18 +292,13 @@ def mat_mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
             grad_other = unbroadcast(grad_other, b.data.shape)
             
             # Update the gradient of the other tensor
-            b.grad = b.grad + grad_other if b.grad is not None else grad_other
+            accumulate_gradient(b, grad_other)
             
     # Store the backward function with respect to the matrix multiplication operation
     out._backward = _backward
         
     # Store the previous tensors in the computation graph
-    prev = set()
-    if a.requires_grad:
-        prev.add(a)
-    if b.requires_grad:
-        prev.add(b)
-    out._prev = prev
+    out._prev = {t for t in (a, b) if t.requires_grad}
     
     # Return the output tensor
     return out
@@ -365,7 +341,7 @@ def pow(x: 'Tensor', power: Union[int, float]) -> 'Tensor':
             grad_self = power * (x.data ** (power - 1)) * out.grad
             
             # Update the gradient of the current tensor
-            x.grad = x.grad + grad_self if x.grad is not None else grad_self
+            accumulate_gradient(x, grad_self)
     
     # Store the backward function with respect to the power operation
     out._backward = _backward
@@ -415,7 +391,7 @@ def get_item(x: 'Tensor', key: Union[int, slice, np.ndarray, Tuple[Union[int, sl
             np.add.at(grad_self, key, out.grad) # type: ignore
             
             # Accumulate the gradient into self.grad.
-            x.grad = x.grad + grad_self if x.grad is not None else grad_self
+            accumulate_gradient(x, grad_self)
 
     # Store the backward function with respect to the negation operation
     out._backward = _backward

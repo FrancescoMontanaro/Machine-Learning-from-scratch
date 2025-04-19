@@ -5,7 +5,7 @@ from .base import LossFn
 from ..core import Tensor
 from ..core.utils.constants import *
 from ..core.utils.context_manager import _NO_GRAD
-    
+from ..core.functional.utils import accumulate_gradient
     
 class CategoricalCrossEntropy(LossFn):
         
@@ -81,7 +81,7 @@ class CategoricalCrossEntropy(LossFn):
                     grad = grad / y_true.shape()[0]
                 
                 # Accumulate gradient
-                y_pred.grad = y_pred.grad + grad if y_pred.grad is not None else grad
+                accumulate_gradient(y_pred, grad)
             
             # Store the backward function
             loss._backward = _backward

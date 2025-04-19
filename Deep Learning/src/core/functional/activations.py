@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Type, TYPE_CHECKING, cast
 
+from .utils import accumulate_gradient
 if TYPE_CHECKING: from ..tensor import Tensor
 from ..utils.context_manager import _NO_GRAD
 from ..utils.types_registry import get_tensor_class
@@ -54,7 +55,7 @@ def sigmoid(x: 'Tensor') -> 'Tensor':
             grad = out.data * (1 - out.data) * out.grad
             
             # Update the gradient of the input tensor
-            x.grad = x.grad + grad if x.grad is not None else grad
+            accumulate_gradient(x, grad)
             
     # Store the backward function with respect to the sigmoid operation
     out._backward = _backward
@@ -96,8 +97,11 @@ def relu(x: 'Tensor') -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Compute the gradient of the loss with respect to the current tensor
-            x.grad = x.grad + (x.data > 0) * out.grad if x.grad is not None else (x.data > 0) * out.grad
+            # Compute the gradient
+            grad = out.grad * (x.data > 0)
+            
+            # Accumulate the gradient
+            accumulate_gradient(x, grad)
             
     # Store the backward function with respect to the ReLU operation
     out._backward = _backward
@@ -138,9 +142,12 @@ def tanh(x: 'Tensor') -> 'Tensor':
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:                
-            # Compute the gradient of the loss with respect to the current tensor
-            x.grad = x.grad + (1 - np.tanh(x.data) ** 2) * out.grad if x.grad is not None else (1 - np.tanh(x.data) ** 2) * out.grad
+        if x.requires_grad and out.grad is not None:
+            # Compute the derivative of the tanh function
+            grad = out.grad * (1 - np.tanh(x.data) ** 2)
+            
+            # Accumulate the gradient
+            accumulate_gradient(x, grad)
             
     # Store the backward function with respect to the hyperbolic tangent operation
     out._backward = _backward
@@ -196,7 +203,7 @@ def softmax(x: 'Tensor', axis: int = -1) -> 'Tensor':
             grad_input = out.data * (out.grad - g_sum)
             
             # Add the gradient to the current tensor
-            x.grad = x.grad + grad_input if x.grad is not None else grad_input
+            accumulate_gradient(x, grad_input)
 
     # Store the backward function with respect to the softmax operation
     out._backward = _backward
@@ -256,7 +263,7 @@ def log_softmax(x: 'Tensor', axis: int = -1) -> 'Tensor':
             grad_input = out.grad - softmax * g_sum
             
             # Accumulate gradient
-            x.grad = x.grad + grad_input if x.grad is not None else grad_input
+            accumulate_gradient(x, grad_input)
 
     # Store the backward function
     out._backward = _backward

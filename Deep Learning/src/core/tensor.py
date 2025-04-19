@@ -371,7 +371,7 @@ class Tensor:
         # Propagate the gradient backward
         if self.grad is None:
             # Initialize the gradient with ones if not already computed
-            self.grad = np.ones_like(self.data)
+            self.grad = np.ones_like(self.data, dtype=self.data.dtype)
             
         # Build the topological order of the tensors
         visited = set()
