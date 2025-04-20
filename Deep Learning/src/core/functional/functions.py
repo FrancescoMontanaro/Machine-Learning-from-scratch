@@ -1,11 +1,13 @@
 import numpy as np
-from numpy.lib.stride_tricks import sliding_window_view
 from typing import Optional, Tuple, List, Union, Type, TYPE_CHECKING, cast
 
 from .utils import accumulate_gradient
 if TYPE_CHECKING: from ..tensor import Tensor
 from ..utils.context_manager import _NO_GRAD
 from ..utils.types_registry import get_tensor_class
+
+from .kernel.max_pool_2d import max_pool_2d_forward, max_pool_2d_gradient
+from .kernel.conv_2d import conv_2d_forward, conv_2d_gradient_w, conv_2d_gradient_x
 
 
 def sum(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Tensor':
@@ -1002,38 +1004,27 @@ def conv_2d(x: 'Tensor', kernel: 'Tensor', stride: Tuple[int, int] = (1,1)) -> '
     # Ensure the inputs are tensors
     assert isinstance(x, Tensor) and isinstance(kernel, Tensor), "Both inputs must be tensors"
     
-    # Extract the dimensions of the input tensor, the kernel and the stride
-    batch_size, height, width, num_channels = x.shape()
+    # Extract the input dimensions
+    batch_size, height, width, channels = x.shape()
     out_channels, kernel_in_channels, kernel_height, kernel_width = kernel.shape()
-    stride_height, stride_width = stride # Extract the stride along the height and width
+    stride_height, stride_width = stride
     
     # Check if the input channels match the kernel channels
-    assert kernel_in_channels == num_channels, "w in_channels != x channels"
+    assert kernel_in_channels == channels, "w in_channels != x channels"
     
     # Compute the output dimensions
-    output_height = (height - kernel_height) // stride_height + 1
-    output_width = (width - kernel_width) // stride_width + 1
+    out_height = (height - kernel_height) // stride_height + 1
+    out_width = (width - kernel_width) // stride_width + 1
     
     # Check if the kernel is too large or the stride is too large for the input size
-    if output_height < 1 or output_width < 1:
+    if out_height < 1 or out_width < 1:
         raise ValueError("Kernel or stride too large for input size")
+
+    # Create the output array
+    out_data = np.empty((batch_size, out_height, out_width, out_channels), dtype=x.data.dtype)
     
-    # Create the column matrix
-    col = np.array([
-        x.data[n, i*stride_height:i*stride_height+kernel_height, j*stride_width:j*stride_width+kernel_width, :].reshape(-1)
-        for n in range(batch_size)
-        for i in range(output_height)
-        for j in range(output_width)
-    ], dtype=x.data.dtype)
-    
-    # Reshape the kernel to (out_channels, kernel_height*kernel_width*num_channels)
-    kernel_reshaped = kernel.data.reshape(out_channels, -1)
-    
-    # Matrix multiplication between col and kernel_reshaped.T. The result is a matrix of shape (batch_size*output_height*output_width, out_channels)
-    out_col = col @ kernel_reshaped.T
-    
-    # Reshape the output matrix to (batch_size, output_height, output_width, out_channels)
-    out_data = out_col.reshape(batch_size, output_height, output_width, out_channels)
+    # Perform the 2D convolution
+    conv_2d_forward(x.data, kernel.data, stride_height, stride_width, out_data)
     
     # Create the output tensor
     out = Tensor(out_data, requires_grad=x.requires_grad or kernel.requires_grad)
@@ -1043,57 +1034,27 @@ def conv_2d(x: 'Tensor', kernel: 'Tensor', stride: Tuple[int, int] = (1,1)) -> '
     
     # Define the backward function
     def _backward():
-        # Check if the gradient needs to be computed
+        # Check if the output gradient is None, and return if so
         if out.grad is None:
             return
         
-        # Reshape the gradient to (batch_size*output_height*output_width, out_channels)
-        grad_out_col = out.grad.reshape(-1, out_channels)
-        
-        # Compute the gradient of the kernel if required
+        # Gradient for kernel
         if kernel.requires_grad:
-            # Compute the gradient of the kernel using the column matrix
-            grad_kernel_2d = col.T @ grad_out_col
+            # Check if kernel gradient is None, and initialize it if so
+            if kernel.grad is None:
+                kernel.grad = np.zeros_like(kernel.data)
+                
+            # Compute the gradient with respect to the kernel
+            conv_2d_gradient_w(x.data, out.grad, stride_height, stride_width, kernel.grad)
             
-            # Transpose the gradient of the kernel. Reshape to (kernel_height, kernel_width, num_channels, out_channels)
-            grad_kernel_2d = grad_kernel_2d.T
-            
-            # Final shape: (out_channels, kernel_in_channels, kernel_height, kernel_width)
-            grad_w_full = grad_kernel_2d.reshape(kernel.data.shape)
-            
-            # Update the gradient of the kernel
-            kernel.grad = grad_w_full if kernel.grad is None else kernel.grad + grad_w_full
-            
-        # Compute the gradient of the input tensor if required
+        # Gradient for input
         if x.requires_grad:
-            # Compute the gradient of the input tensor using the kernel and the gradient of the output tensor
-            d_col = grad_out_col @ kernel_reshaped
-            
-            # Initialize the gradient of the input tensor
-            dx_data = np.zeros_like(x.data)
-            
-            # Reshape d_col to (batch_size, output_height, output_width, kernel_height, kernel_width, num_channels)
-            d_col_reshaped = d_col.reshape(batch_size, output_height, output_width, -1)
-            
-            # Iterate over each element in the batch
-            for n in range(batch_size):
-                # Iterate over each element in the output tensor
-                for i_out in range(output_height):
-                    # Compute the starting index along the height
-                    i0 = i_out * stride_height
-                    # Iterate over each element in the output tensor
-                    for j_out in range(output_width):
-                        # Compute the starting index along the width
-                        j0 = j_out * stride_width
-                        
-                        # Extract the gradient for the current element
-                        patch_grad = d_col_reshaped[n, i_out, j_out].reshape(kernel_height, kernel_width, num_channels)
-                        
-                        # Accumulate the gradient in the input tensor
-                        dx_data[n, i0:i0+kernel_height, j0:j0+kernel_width, :] += patch_grad
-            
-            # Update the gradient of the input tensor
-            accumulate_gradient(x, dx_data)
+            # Check if input gradient is None, and initialize it if so
+            if x.grad is None:
+                x.grad = np.zeros_like(x.data)
+                
+            # Compute the gradient with respect to the input
+            conv_2d_gradient_x(out.grad, kernel.data, stride_height, stride_width, x.grad)
     
     # Store the backward function with respect to the convolution operation
     out._backward = _backward
@@ -1128,71 +1089,46 @@ def max_pool_2d(x: 'Tensor', kernel_size: Tuple[int,int] = (2,2), stride: Tuple[
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input x must be a Tensor."
     
-    # Extract the dimensions of the input tensor, the kernel size and the stride
-    batch_size, height, width, num_channels = x.shape()
+    # Extract the input dimensions
+    batch_size, height, width, channels = x.shape()
     kernel_height, kernel_width = kernel_size
     stride_height, stride_width = stride
     
     # Compute the output dimensions
-    output_height = (height - kernel_height) // stride_height + 1
-    output_width = (width - kernel_width) // stride_width + 1
+    out_height = (height - kernel_height) // stride_height + 1
+    out_width = (width - kernel_width) // stride_width + 1
     
     # Check if the kernel or stride is too large for the input size
-    if output_height < 1 or output_width < 1:
+    if out_height < 1 or out_width < 1:
         raise ValueError("Kernel size or stride too large for input size.")
-    
-    # Apply the sliding window view to the input tensor to extract the pooling windows
-    windows = sliding_window_view(
-        x = x.data, 
-        window_shape = (kernel_height, kernel_width), 
-        axis = (1, 2)  # type: ignore
-    )
 
-    # Apply the stride to the sliding window view and transpose the dimensions
-    windows = windows[:, ::stride_height, ::stride_width, ...].transpose(0, 1, 2, 4, 5, 3)
-    
-    # Flatten the windows along the last two dimensions
-    flat_windows = windows.reshape(batch_size, output_height, output_width, num_channels, -1)
+    # Initialize the output array and the indices for max pooling
+    out_data = np.empty((batch_size, out_height, out_width, channels), dtype=x.data.dtype)
+    arg_i = np.zeros_like(out_data, dtype=np.int32)
+    arg_j = np.zeros_like(out_data, dtype=np.int32)
 
-    # Extract the index of the maximum value in each window
-    argmax_vals = np.argmax(flat_windows, axis=4)
-
-    # Compute the index of the maximum value in each window
-    max_ids = np.stack([argmax_vals // kernel_width, argmax_vals % kernel_width], axis=-1)
+    # Perform the max pooling operation
+    max_pool_2d_forward(x.data, kernel_height, kernel_width, stride_height, stride_width, out_data, arg_i, arg_j)
     
     # Compute the max pooling operation and store the output tensor
-    out = Tensor(np.max(windows, axis=(3, 4)), requires_grad=x.requires_grad)
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
     if _NO_GRAD: return out
     
     # Define the backward function
     def _backward():
-        # Check if the gradient needs to be computed
+        # Check if the output gradient is None, and return if so
         if out.grad is None:
             return
         
-        # Compute the gradient of the input tensor if required
-        if x.requires_grad:
-            # Initialize the gradient of the input tensor
-            if x.grad is None:
-                x.grad = np.zeros_like(x.data)
-                            
-            # Initialize the global indices for the gradient
-            n_idx, i_out_idx, j_out_idx, c_idx_idx = np.indices(
-                (batch_size, output_height, output_width, num_channels)
-            )
-
-            # Compute the global indices for the maximum values
-            x_idx = i_out_idx * stride_height + max_ids[..., 0]
-            y_idx = j_out_idx * stride_width + max_ids[..., 1]
-
-            # Accumulate the gradient in the input tensor
-            np.add.at(
-                x.grad,
-                (n_idx, x_idx, y_idx, c_idx_idx),
-                out.grad
-            )
+        # Check if the input tensor requires gradient
+        if x.grad is None:
+            # Initialize the gradient of x if it is None
+            x.grad = np.zeros_like(x.data)
+            
+        # Backprop the gradient through the max pooling operation
+        max_pool_2d_gradient(arg_i, arg_j, out.grad, stride_height, stride_width, x.grad)
     
     # Store the backward function with respect to the max pooling operation
     out._backward = _backward

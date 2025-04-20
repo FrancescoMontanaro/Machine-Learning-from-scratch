@@ -2,6 +2,7 @@ tqdm
 dill
 numpy
 regex
+numba
 matplotlib
 
 # Used only for downloading datasets
