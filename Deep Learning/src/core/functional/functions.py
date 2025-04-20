@@ -6,6 +6,9 @@ if TYPE_CHECKING: from ..tensor import Tensor
 from ..utils.context_manager import _NO_GRAD
 from ..utils.types_registry import get_tensor_class
 
+# Importing the kernel functions
+from .kernel.pad import pad_forward, pad_gradient
+from .kernel.repeat import repeat_forward, repeat_gradient
 from .kernel.max_pool_2d import max_pool_2d_forward, max_pool_2d_gradient
 from .kernel.conv_2d import conv_2d_forward, conv_2d_gradient_w, conv_2d_gradient_x
 
@@ -888,8 +891,20 @@ def repeat(x: 'Tensor', repeats: int, axis: Optional[int] = None) -> 'Tensor':
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
     
+    # If the axis is None, flatten the tensor and repeat
+    if axis is None:
+        # Flatten the tensor
+        out_data = np.empty(x.data.size * repeats, dtype=x.data.dtype)
+        
+        # Repeat the flattened tensor
+        repeat_forward(x.data.ravel(), repeats, out_data)
+    # If the axis is specified, repeat along that axis
+    else:
+        # Repeat the tensor along the specified axis
+        out_data = np.repeat(x.data, repeats, axis=axis)
+    
     # Compute the output tensor by repeating the input tensor
-    out = Tensor(np.repeat(x.data, repeats, axis=axis), requires_grad=x.requires_grad)
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
     if _NO_GRAD: return out
@@ -898,26 +913,27 @@ def repeat(x: 'Tensor', repeats: int, axis: Optional[int] = None) -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # If axis is None, np.repeat flattens x, so the gradient must be reshaped back to the original shape
+            # Check if axis is None
             if axis is None:
-                # out.grad has shape (x.data.size, * repeats,). Reshape to (x.data.size, repeats) then sum along the repeated axis.
-                grad_unrepeated = out.grad.reshape(x.data.size, repeats).sum(axis=1)
-                
-                # Finally, reshape back to the original shape of x.data
-                grad_unrepeated = grad_unrepeated.reshape(x.data.shape)
+                # Check if the gradient is None
+                if x.grad is None:
+                    # Initialize the gradient to zeros
+                    x.grad = np.zeros_like(x.data)
+                    
+                # Repeat the gradient along the specified axis
+                repeat_gradient(out.grad.ravel(), repeats, x.grad.ravel())
+            
+            # If axis is specified, repeat the gradient along that axis
             else:
-                # Insert the repeats dimension into the shape along the specified axis:
-                new_shape = (
-                    x.data.shape[:axis] +
-                    (x.data.shape[axis], repeats) +
-                    x.data.shape[axis+1:]
+                # Reduce the gradient along the specified axis
+                grad_unrepeated = np.add.reduce(
+                    out.grad.reshape(
+                        *(x.data.shape[:axis]), x.data.shape[axis], repeats, *x.data.shape[axis+1:]
+                    ), axis=axis+1
                 )
                 
-                # Sum along the repeated axis to get the gradient for each element
-                grad_unrepeated = out.grad.reshape(new_shape).sum(axis=axis+1)
-            
-            # Accumulate the unrepeated gradient in x.grad
-            accumulate_gradient(x, grad_unrepeated)
+                # Accumulate the gradient
+                accumulate_gradient(x, grad_unrepeated)
 
     # Store the backward function with respect to the repeat operation
     out._backward = _backward
@@ -951,8 +967,18 @@ def pad(x: 'Tensor', pad_width: Tuple[Tuple[int, int], ...]) -> 'Tensor':
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
     
+    # Extract the padding widths for each dimension and the input tensor shape
+    (_, _), (pt, pb), (pl, pr), (_, _) = pad_width
+    batch_size, height, width, channels = x.shape()
+    
+    # Create the output tensor with the new shape
+    out_data = np.empty((batch_size, height + pt + pb, width + pl + pr, channels), dtype=x.data.dtype)
+    
+    # Perform the padding operation
+    pad_forward(x.data, pt, pb, pl, pr, out_data)
+    
     # Compute the padded tensor
-    out = Tensor(np.pad(x.data, pad_width, mode="constant"), requires_grad=x.requires_grad)
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
     if _NO_GRAD: return out
@@ -961,14 +987,13 @@ def pad(x: 'Tensor', pad_width: Tuple[Tuple[int, int], ...]) -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # For each axis, create a slice from pad_width[axis][0] to pad_width[axis][0] + original_dim.
-            slices = tuple(slice(pw[0], pw[0] + s) for s, pw in zip(x.data.shape, pad_width))
-            
-            # Extract the portion of out.grad corresponding to the original tensor's shape.
-            grad_unpadded = out.grad[slices]
-            
-            # Update the gradient of the input tensor
-            accumulate_gradient(x, grad_unpadded)
+            # Check if the gradient is None
+            if x.grad is None:
+                # Initialize the gradient to zeros
+                x.grad = np.zeros_like(x.data)
+                
+            # Compute the gradient with respect to the input tensor
+            pad_gradient(out.grad, pt, pb, pl, pr, x.grad)
     
     # Store the backward function with respect to the pad operation
     out._backward = _backward
