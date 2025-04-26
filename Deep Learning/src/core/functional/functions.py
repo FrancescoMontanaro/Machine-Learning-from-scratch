@@ -20,7 +20,6 @@ from .kernel.gather import gather_forward, gather_gradient
 from .kernel.repeat import repeat_forward, repeat_gradient
 from .kernel.sum import sum_flat_forward, sum_flat_gradient
 from .kernel.max import max_flat_forward, max_flat_gradient
-from .kernel.var import var_flat_forward, var_flat_gradient
 from .kernel.max_pool_2d import max_pool_2d_forward, max_pool_2d_gradient
 from .kernel.masked_fill import masked_fill_forward, masked_fill_gradient
 from .kernel.conv_2d import conv_2d_forward, conv_2d_gradient_w, conv_2d_gradient_x

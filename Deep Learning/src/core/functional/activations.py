@@ -6,6 +6,13 @@ if TYPE_CHECKING: from ..tensor import Tensor
 from ..utils.context_manager import _NO_GRAD
 from ..utils.types_registry import get_tensor_class
 
+# Importing the kernel functions
+from .kernel.relu import relu_forward, relu_gradient
+from .kernel.tanh import tanh_forward, tanh_gradient
+from .kernel.softmax import softmax_forward, softmax_gradient
+from .kernel.sigmoid import sigmoid_forward, sigmoid_gradient
+from .kernel.log_softmax import log_softmax_forward, log_softmax_gradient
+
 
 def sigmoid(x: 'Tensor') -> 'Tensor':
     """
@@ -27,22 +34,17 @@ def sigmoid(x: 'Tensor') -> 'Tensor':
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
     
-    # Prepare an empty array for the output
+    # Extract the number of elements in the input tensor
+    n = x.data.size
+    
+    # Create an empty array to store the output data
     out_data = np.empty_like(x.data)
     
-    # Create a boolean mask for non-negative values
-    mask = x.data >= 0
+    # Compute the sigmoid function
+    sigmoid_forward(x.data.ravel(), out_data.ravel(), n)
     
-    # For x >= 0: compute 1 / (1 + exp(-x))
-    out_data[mask] = 1 / (1 + np.exp(-x.data[mask]))
-    
-    # For x < 0: compute exp(x) / (1 + exp(x))
-    # Only compute exp for the negative part to avoid overflow
-    exp_x = np.exp(x.data[~mask])
-    out_data[~mask] = exp_x / (1 + exp_x)
-    
-    # Compute the sigmoid of the tensor
-    out = Tensor(data=out_data, requires_grad=x.requires_grad)
+    # Create a new tensor with the output data
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
     if _NO_GRAD: return out
@@ -51,11 +53,13 @@ def sigmoid(x: 'Tensor') -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Compute the derivative of the sigmoid function
-            grad = out.data * (1 - out.data) * out.grad
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
             
-            # Update the gradient of the input tensor
-            accumulate_gradient(x, grad)
+            # Compute the gradient of the sigmoid function
+            sigmoid_gradient(out_data.ravel(), out.grad.ravel(), x.grad.ravel(), n)
             
     # Store the backward function with respect to the sigmoid operation
     out._backward = _backward
@@ -86,9 +90,18 @@ def relu(x: 'Tensor') -> 'Tensor':
     
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
+
+    # Extract the number of elements in the input tensor
+    n = x.data.size
     
-    # Compute the ReLU of the tensor
-    out = Tensor(np.maximum(0, x.data), requires_grad=x.requires_grad)
+    # Create an empty array to store the output data
+    out_data = np.empty_like(x.data)
+    
+    # Compute the ReLU function
+    relu_forward(x.data.ravel(), out_data.ravel(), n)
+    
+    # Create a new tensor with the output data
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
     if _NO_GRAD: return out
@@ -97,11 +110,13 @@ def relu(x: 'Tensor') -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Compute the gradient
-            grad = out.grad * (x.data > 0)
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
             
-            # Accumulate the gradient
-            accumulate_gradient(x, grad)
+            # Compute the gradient of the ReLU function
+            relu_gradient(x.data.ravel(), out.grad.ravel(), x.grad.ravel(), n)
             
     # Store the backward function with respect to the ReLU operation
     out._backward = _backward
@@ -133,8 +148,17 @@ def tanh(x: 'Tensor') -> 'Tensor':
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
     
-    # Compute the hyperbolic tangent of the tensor
-    out = Tensor(np.tanh(x.data), requires_grad=x.requires_grad)
+    # Extract the number of elements in the input tensor
+    n = x.data.size
+    
+    # Create an empty array to store the output data
+    out_data = np.empty_like(x.data)
+    
+    # Compute the tanh function
+    tanh_forward(x.data.ravel(), out_data.ravel(), n)
+    
+    # Create a new tensor with the output data
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
     if _NO_GRAD: return out
@@ -143,11 +167,12 @@ def tanh(x: 'Tensor') -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Compute the derivative of the tanh function
-            grad = out.grad * (1 - np.tanh(x.data) ** 2)
-            
-            # Accumulate the gradient
-            accumulate_gradient(x, grad)
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
+                
+            tanh_gradient(out_data.ravel(), out.grad.ravel(), x.grad.ravel(), n)
             
     # Store the backward function with respect to the hyperbolic tangent operation
     out._backward = _backward
@@ -179,15 +204,30 @@ def softmax(x: 'Tensor', axis: int = -1) -> 'Tensor':
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
     
-    # Shift the input tensor to avoid numerical instability
-    x_shifted = x - x.max(axis=axis, keepdims=True)
+    # Extract number of elements in the input tensor
+    ndim = x.data.ndim
     
-    # Compute exponentials and sum them along the specified axis
-    exp_x = x_shifted.exp()
-    sum_exp = exp_x.sum(axis=axis, keepdims=True)
+    # Compute the axis for softmax
+    ax = axis % ndim
     
-    # Crea un nuovo Tensor con i dati di s
-    out = exp_x / sum_exp
+    # Compute the number of classes and the number of samples
+    k = x.data.shape[-1]
+    n = x.data.size // k
+    
+    # If the axis is not the last one, compute softmax along the specified axis
+    if ax != ndim - 1:
+        # Compute the maximum value along the specified axis
+        out_data = np.exp(x.data) / np.sum(np.exp(x.data), axis=ax, keepdims=True)
+    # If the axis is the last one, compute softmax using the kernel function
+    else:
+        # Create an empty array to store the output data
+        out_data = np.empty_like(x.data)
+        
+        # Compute the softmax function
+        softmax_forward(x.data.ravel(), out_data.ravel(), n, k)
+        
+    # Create a new tensor with the output data
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
     if _NO_GRAD: return out
@@ -196,14 +236,13 @@ def softmax(x: 'Tensor', axis: int = -1) -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Weighted sum of the gradients along the specified axis
-            g_sum = np.sum(out.grad * out.data, axis=axis, keepdims=True)
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
             
-            # Compute the gradient of the loss with respect to the current tensor
-            grad_input = out.data * (out.grad - g_sum)
-            
-            # Add the gradient to the current tensor
-            accumulate_gradient(x, grad_input)
+            # Compute the gradient of the softmax function
+            softmax_gradient(out_data.ravel(), out.grad.ravel(), x.grad.ravel(), n, k)
 
     # Store the backward function with respect to the softmax operation
     out._backward = _backward
@@ -236,15 +275,40 @@ def log_softmax(x: 'Tensor', axis: int = -1) -> 'Tensor':
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
     
-    # Shift the input tensor to avoid numerical instability
-    x_shifted = x - x.max(axis=axis, keepdims=True)
+    # Extract the number of elements in the input tensor
+    ndim = x.data.ndim
     
-    # Compute exponentials and sum them along the specified axis
-    exp_x = x_shifted.exp()
-    sum_exp = exp_x.sum(axis=axis, keepdims=True)
+    # Compute the axis for log softmax
+    ax = axis % ndim
     
-    # Compute the log softmax
-    out = x_shifted - sum_exp.log()
+    # Extract the number of classes and the number of samples
+    k = x.data.shape[-1]
+    n = x.data.size // k
+    
+    # If the axis is not the last one, compute log softmax along the specified axis
+    if ax != ndim - 1:
+        # Compute the maximum value along the specified axis
+        m = np.max(x.data, axis=axis, keepdims=True)
+        
+        # Subtract the maximum value from the input data
+        y = x.data - m
+        
+        # Compute the log sum of exponentials
+        logsum = np.log(np.sum(np.exp(y), axis=axis, keepdims=True))
+        
+        # Compute the log softmax
+        out_data = y - logsum
+    
+    # If the axis is the last one, compute log softmax using the kernel function
+    else:
+        # Create an empty array to store the output data
+        out_data = np.empty_like(x.data)
+        
+        # Compute the log softmax function
+        log_softmax_forward(x.data.ravel(), out_data.ravel(), n, k)
+        
+    # Create a new tensor with the output data
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
     if _NO_GRAD: return out
@@ -253,17 +317,13 @@ def log_softmax(x: 'Tensor', axis: int = -1) -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Compute softmax (exp(log_softmax))
-            softmax = np.exp(out.data)
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
             
-            # Sum of gradients along the softmax axis
-            g_sum = np.sum(out.grad, axis=axis, keepdims=True)
-            
-            # Compute gradient
-            grad_input = out.grad - softmax * g_sum
-            
-            # Accumulate gradient
-            accumulate_gradient(x, grad_input)
+            # Compute the gradient of the log softmax function
+            log_softmax_gradient(out_data.ravel(), out.grad.ravel(), x.grad.ravel(), n, k)
 
     # Store the backward function
     out._backward = _backward
