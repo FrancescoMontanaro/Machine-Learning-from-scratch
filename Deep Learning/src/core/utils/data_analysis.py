@@ -151,22 +151,23 @@ def unbroadcast(arr: np.ndarray, shape: tuple) -> np.ndarray:
     Returns:
     - np.ndarray: Unbroadcasted array
     """
-            
-    # Compare the number of dimensions of the array and the target shape
-    extra_dims = arr.ndim - len(shape)
     
-    # If the array has more dimensions than the target shape, sum along the extra dimensions
-    if extra_dims > 0:
-        # Sum along the extra dimensions
-        axes_to_sum = tuple(range(extra_dims))
-        arr = arr.sum(axis=axes_to_sum, keepdims=False)
-    
-    # For each axis, if the target shape is 1 but arr.shape has a larger dimension,
-    # sum along that axis (keeping dims to preserve the number of dimensions).
-    for i, (a_dim, target_dim) in enumerate(zip(arr.shape, shape)):
-        # If the target dimension is 1 but the array dimension is larger, sum along that axis
-        if target_dim == 1 and a_dim != 1:
-            arr = arr.sum(axis=i, keepdims=True)
-    
-    # Return the unbroadcasted array
+    # Padding the shape with leading 1s to match the number of dimensions of arr
+    ndim_diff = arr.ndim - len(shape)
+    shape_full = (1,) * ndim_diff + shape
+
+    # Identify axes to sum where shape_full has 1 but arr.shape > 1
+    axes_to_sum = tuple(i for i, (a_dim, t_dim) in enumerate(zip(arr.shape, shape_full)) if t_dim == 1)
+
+    # If arr has more dimensions than shape_full, sum over the extra dimensions
+    if axes_to_sum:
+        # Sum over the identified axes
+        arr = arr.sum(axis=axes_to_sum, keepdims=True)
+
+    # Now arr has shape where dims match shape_full; reshape to target_shape
+    # Squeeze the leading dummy dimensions
+    if ndim_diff:
+        arr = arr.reshape(shape_full)
+        arr = arr.squeeze(axis=tuple(range(ndim_diff)))
+
     return arr

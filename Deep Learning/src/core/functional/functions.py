@@ -353,6 +353,7 @@ def var(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
     
     Raises:
     - AssertionError: If the input is not a tensor.
+    - TypeError: If the axis is not an integer or a tuple of integers.
     """
     
     # Get the tensor class
@@ -361,76 +362,43 @@ def var(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
     
-    # If axis is None, compute the variance of the flattened tensor
+    # Compute the mean with keepdims=True to allow proper broadcasting.
+    m = mean(x, axis=axis, keepdims=True)
+    
+    # Compute the squared difference between the tensor and the mean.
+    diff = x - m
+    
+    # Compute the squared difference and take the mean along the specified axis.
+    square_diff = diff * diff
+    
+    # Compute the variance by taking the mean of the squared difference.
+    var = mean(square_diff, axis=axis, keepdims=keepdims)
+    
+    # Determine the number of elements over which the variance is computed.
     if axis is None:
-        # Create a buffer to store the variance
-        buf = np.zeros((1,), dtype=x.data.dtype)
+        # If axis is None, the variance is computed over all elements.
+        num_elements = x.data.size
         
-        # Compute the variance of the flattened tensor
-        var_flat_forward(x.data.ravel(), buf, ddof)
+    # If axis is an integer, the variance is computed over the elements in that axis.
+    elif isinstance(axis, int):
+        # If axis is an integer, the variance is computed over the elements in that axis.
+        num_elements = x.data.shape[axis]
         
-        # If keepdims is True, create an output tensor with the same shape as the input tensor
-        if keepdims:
-            # Create an output tensor with the same shape as the input tensor
-            out_data = np.full([1]*x.data.ndim, buf[0], dtype=x.data.dtype)
-            
-        # If keepdims is False, create an output tensor with the shape of the variance
-        else:
-            # Create an output tensor with the shape of the variance
-            out_data = buf[0]
-    
-    # If axis is not None, compute the variance along the specified axis
+    # If axis is a tuple, the variance is computed over the elements in the specified axes.
+    elif isinstance(axis, tuple):
+        # If axis is a tuple, the variance is computed over the elements in the specified axes.
+        num_elements = int(np.prod([x.data.shape[ax] for ax in axis]))
     else:
-        # If axis is not None, compute the variance along the specified axis
-        out_data = np.var(x.data, axis=axis, keepdims=keepdims, ddof=ddof)
-        
-    # Create the output tensor with the computed variance
-    out = Tensor(out_data, requires_grad=x.requires_grad)
+        # If axis is not an integer or a tuple, raise a TypeError.
+        raise ValueError("axis must be an integer, a tuple of integers, or None")
     
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD:
-        return out
+    # If num_elements > ddof, apply the bessel correction to the variance.
+    if ddof != 0 and num_elements > ddof:
+        # Convert the population variance to the sample variance.
+        var = var * (num_elements / (num_elements - 1))
     
-    # Define the backward function
-    def _backward():
-        # Check if the gradient needs to be computed
-        if x.requires_grad and out.grad is not None:
-            # If the gradient is None, create a zero gradient tensor
-            if x.grad is None:
-                # Create a zero gradient tensor with the same shape as the input tensor
-                x.grad = np.zeros_like(x.data)
-                
-            # If axis is None, compute the gradient for the flattened tensor
-            if axis is None:
-                # Compute the gradient of the variance operation
-                var_flat_gradient(np.array([out.grad]).ravel(), x.data.ravel(), x.grad.ravel(), ddof)
-                
-            # If axis is not None, compute the gradient along the specified axis
-            else:
-                # Initialize the gradient tensor
-                grad = out.grad
-                
-                # If keepdims is False, expand the gradient for each axis in the tuple
-                if not keepdims:
-                    grad = np.expand_dims(grad, axis=axis)
-                    
-                # Broadcast the gradient to the shape of the input tensor
-                factor = 1.0 / (x.data.shape[axis] - ddof) if isinstance(axis,int) and ddof and x.data.shape[axis]>ddof else 1.0 / x.data.size
-                
-                # Compute the number of elements along the specified axis/axes
-                grad_x = (x.data - np.mean(x.data, axis=axis, keepdims=True)) * 2 * factor * grad
-                
-                # Accumulate the gradient in the input tensor
-                accumulate_gradient(x, grad_x)
-                
-    # Store the backward function with respect to the variance operation
-    out._backward = _backward
-    
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the variance tensor
+    return var
 
 
 def exp(x: 'Tensor') -> 'Tensor':
