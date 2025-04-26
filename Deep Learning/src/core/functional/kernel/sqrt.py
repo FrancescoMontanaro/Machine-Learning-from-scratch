@@ -1,9 +1,10 @@
 import math
+import numpy as np
 from numba import njit, prange
 
 
 @njit(parallel=True, fastmath=True)
-def sqrt_gradient(og_flat, x_data_flat, x_grad_flat) -> None:
+def sqrt_gradient(og_flat: np.ndarray, x_data_flat: np.ndarray, x_grad_flat: np.ndarray) -> None:
     """
     Computes the gradient of the square root operation with respect to the input tensor.
     

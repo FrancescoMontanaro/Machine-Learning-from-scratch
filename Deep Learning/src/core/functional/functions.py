@@ -16,7 +16,6 @@ from .kernel.unsqueeze import unsqueeze_gradient
 from .kernel.pad import pad_forward, pad_gradient
 from .kernel.clip import clip_forward, clip_gradient
 from .kernel.concat import concat_forward, concat_gradient
-from .kernel.gather import gather_forward, gather_gradient
 from .kernel.repeat import repeat_forward, repeat_gradient
 from .kernel.sum import sum_flat_forward, sum_flat_gradient
 from .kernel.max import max_flat_forward, max_flat_gradient
@@ -130,7 +129,7 @@ def max(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
     assert isinstance(x, Tensor), "Input must be a tensor"
     
     # Initialize the index variable
-    idx = None
+    idx = np.zeros((1,), dtype=np.int64)
     
     # If axis is None, compute the maximum value of the flattened tensor
     if axis is None:
@@ -652,69 +651,6 @@ def clip(x: 'Tensor', min_value: float, max_value: float) -> 'Tensor':
             clip_gradient(x.data.ravel(), out.grad.ravel(), x.grad.ravel(), min_value, max_value)
             
     # Store the backward function with respect to the clipping operation
-    out._backward = _backward
-    
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
-
-
-def gather(x: 'Tensor', indices: 'Tensor', axis: int = 0) -> 'Tensor':
-    """
-    Gathers values along an axis specified by indices.
-    
-    Parameters:
-    - x (Tensor): Input tensor
-    - indices (Tensor): Indices to gather along the axis
-    - axis (int): Axis along which to gather the values
-    
-    Returns:
-    - Tensor: Gathered tensor
-    
-    Raises:
-    - AssertionError: If the input is not a tensor
-    """
-    
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    
-    # Flatten the indices to a 1D array
-    lin_idx = np.take_along_axis(indices.data.astype(np.int64), np.zeros_like(indices.data, dtype=np.int64), axis=axis).ravel()
-    
-    # Create an output tensor with the same shape as the indices
-    out_data = np.empty_like(indices.data, dtype=x.data.dtype).ravel()
-    
-    # Gather the values from the input tensor using the indices
-    gather_forward(x.data.ravel(), lin_idx, None, out_data)
-    
-    # Reshape the output data to match the shape of the indices
-    out_data = out_data.reshape(indices.data.shape)
-    
-    # Create the output tensor with the gathered values
-    out = Tensor(out_data, requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD:
-        return out
-    
-    # Define the backward function
-    def _backward() -> None:
-        # Check if the gradient needs to be computed
-        if x.requires_grad and out.grad is not None:
-            # If the gradient is None, create a zero gradient tensor
-            if x.grad is None:
-                # Create a zero gradient tensor with the same shape as the input tensor
-                x.grad = np.zeros_like(x.data)
-                
-            # Compute the gradient of the gather operation
-            gather_gradient(lin_idx, out.grad.ravel(), x.grad.ravel())
-            
-    # Store the backward function with respect to the gather operation
     out._backward = _backward
     
     # Store the previous tensors in the computation graph

@@ -680,22 +680,6 @@ class Tensor:
         return clip(self, min_val, max_val)
     
     
-    def gather(self, axis: int, indices: 'Tensor') -> 'Tensor':
-        """
-        Method to gather the elements from the tensor along the specified axis
-        
-        Parameters:
-        - axis (int): Axis along which to gather the elements
-        - indices (Tensor): Indices to gather
-        
-        Returns:
-        - Tensor: Tensor containing the gathered elements
-        """
-        
-        # Compute and return the gathered elements
-        return gather(self, indices, axis)
-    
-    
     def squeeze(self, axis: int) -> 'Tensor':
         """
         Method to squeeze the tensor along the specified axis

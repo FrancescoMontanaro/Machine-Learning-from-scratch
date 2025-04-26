@@ -1,7 +1,8 @@
+import numpy as np
 from numba import njit
 
 @njit(parallel=True, fastmath=True)
-def max_flat_forward(x_flat, out_scalar, idx_ptr) -> None:
+def max_flat_forward(x_flat: np.ndarray, out_scalar: np.ndarray, idx_ptr: np.ndarray) -> None:
     """
     Computes the maximum value in a flattened tensor and its index.
     
@@ -30,7 +31,7 @@ def max_flat_forward(x_flat, out_scalar, idx_ptr) -> None:
 
 
 @njit(parallel=True, fastmath=True)
-def max_flat_gradient(idx_ptr, out_grad_scalar, x_grad_flat) -> None:
+def max_flat_gradient(idx_ptr: np.ndarray, out_grad_scalar: np.ndarray, x_grad_flat: np.ndarray) -> None:
     """
     Computes the gradient of the max operation with respect to the input tensor.
     

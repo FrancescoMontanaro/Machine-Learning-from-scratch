@@ -1,9 +1,10 @@
 import math
+import numpy as np
 from numba import njit, prange
 
 
 @njit(parallel=True, fastmath=True)
-def sigmoid_forward(x_flat, out_flat, n) -> None:
+def sigmoid_forward(x_flat: np.ndarray, out_flat: np.ndarray, n: int) -> None:
     """
     Computes the sigmoid activation function.
     
@@ -33,7 +34,7 @@ def sigmoid_forward(x_flat, out_flat, n) -> None:
 
 
 @njit(parallel=True, fastmath=True)
-def sigmoid_gradient(out_flat, grad_out_flat, grad_x_flat, n) -> None:
+def sigmoid_gradient(out_flat: np.ndarray, grad_out_flat: np.ndarray, grad_x_flat: np.ndarray, n: int) -> None:
     """
     Computes the gradient of the sigmoid activation function.
     

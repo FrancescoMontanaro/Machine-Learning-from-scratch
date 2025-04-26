@@ -1,8 +1,9 @@
+import numpy as np
 from numba import njit, prange
 
 
 @njit(parallel=True, fastmath=True)
-def max_pool_2d_forward(x, kernel_height, kernel_width, stride_height, stride_width, out, argmax_i, argmax_j) -> None:
+def max_pool_2d_forward(x: np.ndarray, kernel_height: int, kernel_width: int, stride_height: int, stride_width: int, out: np.ndarray, argmax_i: np.ndarray, argmax_j: np.ndarray) -> None:
     """
     2D Max Pooling forward pass.
     
@@ -64,7 +65,7 @@ def max_pool_2d_forward(x, kernel_height, kernel_width, stride_height, stride_wi
                     
                     
 @njit(parallel=True, fastmath=True)
-def max_pool_2d_gradient(arg_i, arg_j, grad_out, stride_height, stride_width, grad_x):
+def max_pool_2d_gradient(arg_i: np.ndarray, arg_j: np.ndarray, grad_out: np.ndarray, stride_height: int, stride_width: int, grad_x: np.ndarray) -> None:
     """
     2D Max Pooling gradient
     

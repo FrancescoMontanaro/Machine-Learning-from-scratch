@@ -1,8 +1,9 @@
+import numpy as np
 from numba import njit, prange
 
 
 @njit(parallel=True, fastmath=True)
-def conv_2d_forward(x, w, stride_h, stride_w, out) -> None:
+def conv_2d_forward(x: np.ndarray, w: np.ndarray, stride_h: int, stride_w: int, out: np.ndarray) -> None:
     """
     2D Convolution forward pass.
     
@@ -50,7 +51,7 @@ def conv_2d_forward(x, w, stride_h, stride_w, out) -> None:
 
 
 @njit(parallel=True, fastmath=True)
-def conv_2d_gradient_w(x, grad_out, stride_h, stride_w, grad_w) -> None:
+def conv_2d_gradient_w(x: np.ndarray, grad_out: np.ndarray, stride_h: int, stride_w: int, grad_w: np.ndarray) -> None:
     """
     2D Convolution gradient for weights.
     

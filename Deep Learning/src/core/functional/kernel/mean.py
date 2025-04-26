@@ -1,8 +1,9 @@
+import numpy as np
 from numba import njit, prange
 
 
 @njit(parallel=True, fastmath=True)
-def mean_flat_backward(out_grad_scalar, x_grad_flat, inv_count) -> None:
+def mean_flat_backward(out_grad_scalar: np.ndarray, x_grad_flat: np.ndarray, inv_count: float) -> None:
     """
     Computes the gradient of the mean operation with respect to the input tensor.
     

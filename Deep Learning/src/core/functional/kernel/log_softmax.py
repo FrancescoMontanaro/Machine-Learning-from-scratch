@@ -1,9 +1,10 @@
 import math
+import numpy as np
 from numba import njit, prange
 
 
 @njit(parallel=True, fastmath=True)
-def log_softmax_forward(data_flat, out_flat, M, K) -> None:
+def log_softmax_forward(data_flat: np.ndarray, out_flat: np.ndarray, M: int, K: int) -> None:
     """
     Computes the log softmax of the input data.
     
@@ -47,7 +48,7 @@ def log_softmax_forward(data_flat, out_flat, M, K) -> None:
 
 
 @njit(parallel=True, fastmath=True)
-def log_softmax_gradient(out_flat, grad_out_flat, grad_x_flat, M, K) -> None:
+def log_softmax_gradient(out_flat: np.ndarray, grad_out_flat: np.ndarray, grad_x_flat: np.ndarray, M: int, K: int) -> None:
     """
     Computes the gradient of the log softmax function.
     

@@ -1,8 +1,9 @@
+import numpy as np
 from numba import njit, prange
 
 
 @njit(parallel=True, fastmath=True)
-def clip_forward(x_flat, minv, maxv, out_flat) -> None:
+def clip_forward(x_flat: np.ndarray, minv: float, maxv: float, out_flat: np.ndarray) -> None:
     """
     Clips the values in a flattened tensor to a specified range.
     
@@ -23,7 +24,7 @@ def clip_forward(x_flat, minv, maxv, out_flat) -> None:
 
 
 @njit(parallel=True, fastmath=True)
-def clip_gradient(x_flat, out_grad_flat, x_grad_flat, minv, maxv) -> None:
+def clip_gradient(x_flat: np.ndarray, out_grad_flat: np.ndarray, x_grad_flat: np.ndarray, minv: float, maxv: float) -> None:
     """
     Computes the gradient of the clipping operation with respect to the input tensor.
     

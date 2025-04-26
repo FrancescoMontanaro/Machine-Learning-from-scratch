@@ -1,8 +1,9 @@
+import numpy as np
 from numba import njit, prange
 
 
 @njit(parallel=True, fastmath=True)
-def pad_forward(x, pad_top, pad_bottom, pad_left, pad_right, out) -> None:
+def pad_forward(x: np.ndarray, pad_top: int, pad_bottom: int, pad_left: int, pad_right: int, out: np.ndarray) -> None:
     """
     2D Padding forward pass.
     
@@ -41,7 +42,7 @@ def pad_forward(x, pad_top, pad_bottom, pad_left, pad_right, out) -> None:
 
 
 @njit(parallel=True, fastmath=True)
-def pad_gradient(out_grad, pad_top, pad_bottom, pad_left, pad_right, x_grad) -> None:
+def pad_gradient(out_grad: np.ndarray, pad_top: int, pad_bottom: int, pad_left: int, pad_right: int, x_grad: np.ndarray) -> None:
     """
     2D Padding gradient
     

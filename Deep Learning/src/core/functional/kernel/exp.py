@@ -1,8 +1,9 @@
+import numpy as np
 from numba import njit, prange
 
 
 @njit(parallel=True, fastmath=True)
-def exp_gradient(out_data_flat, out_grad_flat, x_grad_flat) -> None:
+def exp_gradient(out_data_flat: np.ndarray, out_grad_flat: np.ndarray, x_grad_flat: np.ndarray) -> None:
     """
     Computes the gradient of the exponential operation with respect to the input tensor.
     

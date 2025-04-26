@@ -1,8 +1,9 @@
+import numpy as np
 from numba import njit, prange
 
 
 @njit(parallel=True, fastmath=True)
-def relu_forward(x_flat, out_flat, n) -> None:
+def relu_forward(x_flat: np.ndarray, out_flat: np.ndarray, n: int) -> None:
     """
     Computes the ReLU activation function.
     
@@ -20,8 +21,9 @@ def relu_forward(x_flat, out_flat, n) -> None:
         # Apply the ReLU function: max(0, x)
         out_flat[i] = v if v > 0.0 else 0.0
 
+
 @njit(parallel=True, fastmath=True)
-def relu_gradient(x_flat, grad_out_flat, grad_x_flat, n) -> None:
+def relu_gradient(x_flat: np.ndarray, grad_out_flat: np.ndarray, grad_x_flat: np.ndarray, n: int) -> None:
     """
     Computes the gradient of the ReLU activation function.
     

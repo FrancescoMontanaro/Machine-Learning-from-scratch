@@ -1,8 +1,9 @@
+import numpy as np
 from numba import njit, prange
 
 
 @njit(parallel=True, fastmath=True)
-def repeat_forward(x_flat, repeats, out_flat) -> None:
+def repeat_forward(x_flat: np.ndarray, repeats: int, out_flat: np.ndarray) -> None:
     """
     Repeat the elements of a 1D array.
     
@@ -30,7 +31,7 @@ def repeat_forward(x_flat, repeats, out_flat) -> None:
 
 
 @njit(parallel=True, fastmath=True)
-def repeat_gradient(out_grad_flat, repeats, x_grad_flat) -> None:
+def repeat_gradient(out_grad_flat: np.ndarray, repeats: int, x_grad_flat: np.ndarray) -> None:
     """
     Compute the gradient of the repeat operation.
     

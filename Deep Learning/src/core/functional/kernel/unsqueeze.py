@@ -1,7 +1,9 @@
+import numpy as np
 from numba import njit, prange
 
+
 @njit(parallel=True, fastmath=True)
-def unsqueeze_gradient(out_grad_flat, x_grad_flat) -> None:
+def unsqueeze_gradient(out_grad_flat: np.ndarray, x_grad_flat: np.ndarray) -> None:
     """
     Computes the gradient of the unsqueeze operation.
     
