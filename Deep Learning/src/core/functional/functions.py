@@ -11,8 +11,11 @@ from .kernel.exp import exp_gradient
 from .kernel.log import log_gradient
 from .kernel.sqrt import sqrt_gradient
 from .kernel.mean import mean_flat_backward
+from .kernel.squeeze import squeeze_gradient
+from .kernel.unsqueeze import unsqueeze_gradient
 from .kernel.pad import pad_forward, pad_gradient
 from .kernel.clip import clip_forward, clip_gradient
+from .kernel.concat import concat_forward, concat_gradient
 from .kernel.gather import gather_forward, gather_gradient
 from .kernel.repeat import repeat_forward, repeat_gradient
 from .kernel.sum import sum_flat_forward, sum_flat_gradient
@@ -783,7 +786,10 @@ def squeeze(x: 'Tensor', axis: Optional[int] = None) -> 'Tensor':
     assert isinstance(x, Tensor), "Input must be a tensor"
     
     # Squeeze the tensor along the specified axis
-    out = Tensor(np.squeeze(x.data, axis=axis), requires_grad=x.requires_grad)
+    out_data = np.squeeze(x.data, axis=axis)
+    
+    # Squeeze the tensor along the specified axis
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
     if _NO_GRAD: return out
@@ -792,19 +798,24 @@ def squeeze(x: 'Tensor', axis: Optional[int] = None) -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Unsqueeze the gradient along the same axis to match the original shape
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
+                
+                
+            # If axis is None, find the axes to squeeze
             if axis is None:
-                # For None case, we need to restore all squeezed dims
-                grad_squeezed = out.grad
-                original_shape = x.data.shape
-                for dim in sorted([i for i, size in enumerate(original_shape) if size == 1], reverse=True):
-                    grad_squeezed = np.expand_dims(grad_squeezed, axis=dim)
+                # Find the axes to squeeze
+                axes = [i for i,s in enumerate(x.data.shape) if s == 1]
+                
+            # If axis is not None, check if it is a singleton dimension
             else:
-                # For specific axis case
-                grad_squeezed = np.expand_dims(out.grad, axis=axis)
-            
-            # Update the gradient of the input tensor
-            accumulate_gradient(x, grad_squeezed)
+                # Check if the specified axis is a singleton dimension
+                axes = [axis]
+                
+            # Perform the squeeze operation on the gradient
+            squeeze_gradient(out.grad.ravel(), x.grad.ravel(), x.data.shape, tuple(axes), out_data.shape)
             
     # Store the backward function with respect to the squeeze operation
     out._backward = _backward
@@ -847,11 +858,13 @@ def unsqueeze(x: 'Tensor', axis: int) -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Squeeze the gradient along the same axis to match the original shape.
-            grad_unsqueezed = np.squeeze(out.grad, axis=axis)
-            
-            # Update the gradient of the input tensor
-            accumulate_gradient(x, grad_unsqueezed)
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
+                
+            # Compute the gradient of the unsqueeze operation
+            unsqueeze_gradient(out.grad.ravel(), x.grad.ravel())
             
     # Store the backward function with respect to the unsqueeze operation
     out._backward = _backward
@@ -884,10 +897,38 @@ def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
     # Check if the input is a tensor
     assert all(isinstance(t, Tensor) for t in tensors), "All inputs must be tensors"
     
-    # Compute the output tensor by concatenating the input tensors
     # The output tensor requires grad if any of the inputs require grad.
     requires_grad = any(t.requires_grad for t in tensors)
-    out = Tensor(np.concatenate([t.data for t in tensors], axis=axis), requires_grad=requires_grad)
+    
+    # Flatten the tensors and compute their sizes
+    parts = [t.data.ravel() for t in tensors]
+    sizes = [p.size for p in parts]
+    offsets = np.array(np.cumsum([0] + sizes), dtype=np.int64)
+    total = offsets[-1]
+    parts_flat = np.empty(total, dtype=tensors[0].data.dtype)
+    
+    # Interleave the flattened tensors into a single array
+    for i,p in enumerate(parts):
+        # Fill the flattened array with the data from each tensor
+        parts_flat[offsets[i]:offsets[i+1]] = p
+        
+    # Create an output array to hold the concatenated result
+    out_flat = np.empty_like(parts_flat)
+    
+    # Concatenate the flattened tensors along the specified axis
+    concat_forward(parts_flat, offsets, out_flat)
+    
+    # Extract the shape of the first tensor to determine the output shape
+    out_shape = list(tensors[0].data.shape)
+    
+    # Update the shape of the output tensor along the specified axis
+    out_shape[axis] = int(np.sum([t.data.shape[axis] for t in tensors]))
+    
+    # Reshape the output data to match the concatenated shape
+    out_data = out_flat.reshape(out_shape)
+
+    # Compute the concatenated tensor    
+    out = Tensor(out_data, requires_grad=requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
     if _NO_GRAD: return out
@@ -898,26 +939,20 @@ def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
         if out.grad is None:
             return
         
-        # Determine the sizes along the concatenation axis for each tensor
-        sizes = [t.data.shape[axis] for t in tensors]
+        # Flatten the gradient of the output tensor
+        flat_grad = out.grad.ravel()
         
-        # Compute cumulative indices (start and end indices for each slice)
-        indices = np.cumsum([0] + sizes)
-        
-        # For each tensor, extract the corresponding slice of the gradient
-        for t, start, end in zip(tensors, indices[:-1], indices[1:]):
-            # If the tensor requires grad, accumulate the gradient
+        # Iterate over the tensors and their offsets
+        for i, t in enumerate(tensors):
+            # If the tensor requires gradient computation, backpropagate the gradient
             if t.requires_grad:
-                # Create a slicing tuple that selects all elements in each axis,
-                # except for the concatenation axis where we slice from start to end.
-                slicer = [slice(None)] * out.grad.ndim
-                slicer[axis] = slice(start, end)
-                
-                # Extract the gradient for the current tensor
-                grad_piece = out.grad[tuple(slicer)]
-                
-                # Accumulate the gradient in the corresponding tensor
-                accumulate_gradient(t, grad_piece)
+                # If the tensor has no gradient, create a zero gradient tensor
+                if t.grad is None:
+                    # Create a zero gradient tensor with the same shape as the input tensor
+                    t.grad = np.zeros_like(t.data)
+                    
+                # Compute the gradient of the concatenation operation
+                concat_gradient(offsets, flat_grad, t.grad.ravel(), i)
 
     # Store the backward function with respect to the concatenation operation
     out._backward = _backward
