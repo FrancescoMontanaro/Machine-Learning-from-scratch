@@ -7,8 +7,15 @@ from ..utils.context_manager import _NO_GRAD
 from ..utils.types_registry import get_tensor_class
 
 # Importing the kernel functions
+from .kernel.exp import exp_gradient
+from .kernel.log import log_gradient
+from .kernel.sqrt import sqrt_gradient
+from .kernel.mean import mean_flat_backward
 from .kernel.pad import pad_forward, pad_gradient
 from .kernel.repeat import repeat_forward, repeat_gradient
+from .kernel.sum import sum_flat_forward, sum_flat_gradient
+from .kernel.max import max_flat_forward, max_flat_gradient
+from .kernel.var import var_flat_forward, var_flat_gradient
 from .kernel.max_pool_2d import max_pool_2d_forward, max_pool_2d_gradient
 from .kernel.conv_2d import conv_2d_forward, conv_2d_gradient_w, conv_2d_gradient_x
 
@@ -35,8 +42,27 @@ def sum(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Ten
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
     
+    # forward
+    if axis is None:
+        # Create a buffer to store the sum
+        buf = np.zeros((1,), dtype=x.data.dtype)
+        
+        # Compute the sum of the flattened tensor
+        sum_flat_forward(x.data.ravel(), buf)
+        
+        # If keepdims is True, create an output tensor with the same shape as the input tensor
+        if keepdims:
+            # Create an output tensor with the same shape as the input tensor
+            out_data = np.full([1]*x.data.ndim, buf[0], dtype=x.data.dtype)
+        else:
+            # Create an output tensor with the shape of the sum
+            out_data = buf[0]
+    else:
+        # If axis is not None, compute the sum along the specified axis
+        out_data = x.data.sum(axis=axis, keepdims=keepdims)
+    
     # Compute the sum of the tensor along the specified axis
-    out = Tensor(x.data.sum(axis=axis, keepdims=keepdims), requires_grad=x.requires_grad)
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
     if _NO_GRAD: return out
@@ -45,21 +71,26 @@ def sum(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Ten
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
+                
             # If axis is None, broadcast the gradient to the shape of the input tensor
             if axis is None:
                 # Broadcast the gradient to the shape of the input tensor
-                out.grad = np.broadcast_to(out.grad, x.data.shape)
+                sum_flat_gradient(np.array([out.grad]).ravel(), x.grad.ravel())
             else:
-                # If axis is not None, expand the gradient along the specified axis if necessary
-                if not keepdims:
-                    # Expand the gradient along the specified axis
-                    out.grad = np.expand_dims(out.grad, axis=axis)
-                    
-                # Broadcast the gradient to the shape of the input tensor
-                out.grad = np.broadcast_to(out.grad, x.data.shape)
+                # If axis is not None, compute the gradient along the specified axis
+                grad = out.grad
                 
-            # Update the gradient of the input tensor
-            accumulate_gradient(x, out.grad)
+                # If axis is a tuple, compute the gradient for each axis in the tuple
+                if not keepdims:
+                    # If keepdims is False, expand the gradient along the specified axis
+                    grad = np.expand_dims(grad, axis=axis)
+                    
+                # Accumulate the gradient in the input tensor
+                accumulate_gradient(x, np.broadcast_to(grad, x.data.shape))
             
     # Store the backward function with respect to the sum operation
     out._backward = _backward
@@ -93,8 +124,33 @@ def max(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
     
+    # Initialize the index variable
+    idx = None
+    
+    # If axis is None, compute the maximum value of the flattened tensor
+    if axis is None:
+        # Create a buffer to store the maximum value and its index
+        buf = np.zeros((1,), dtype=x.data.dtype)
+        idx = np.zeros((1,), dtype=np.int64)
+        
+        # Compute the maximum value of the flattened tensor
+        max_flat_forward(x.data.ravel(), buf, idx)
+        
+        # If keepdims is True, create an output tensor with the same shape as the input tensor
+        if keepdims:
+            # Create an output tensor with the same shape as the input tensor
+            out_data = np.full([1]*x.data.ndim, buf[0], dtype=x.data.dtype)
+        # If keepdims is False, create an output tensor with the shape of the maximum value
+        else:
+            # Create an output tensor with the shape of the maximum value
+            out_data = buf[0]
+    # If axis is not None, compute the maximum value along the specified axis
+    else:
+        # If axis is not None, compute the maximum value along the specified axis
+        out_data = np.max(x.data, axis=axis, keepdims=keepdims)
+    
     # Compute the maximum value of the tensor along the specified axis
-    out = Tensor(np.max(x.data, axis=axis, keepdims=keepdims), requires_grad=x.requires_grad)
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
     if _NO_GRAD: return out
@@ -103,46 +159,37 @@ def max(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Create a mask to identify the maximum elements
-            expanded_shape = None
-            if axis is not None and not keepdims:
-                # Determine the axes as a list.
-                axes_list = [axis] if isinstance(axis, int) else list(axis)
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
                 
-                # Create the expanded shape from x.data.shape: set each reduction axis to 1.
-                expanded_shape = list(x.data.shape)
-                for ax in axes_list:
-                    expanded_shape[ax] = 1
+            # If axis is None, compute the gradient for the flattened tensor
+            if axis is None:
+                # Compute the index of the maximum value
+                max_flat_gradient(idx, np.array([out.grad]).ravel(), x.grad.ravel())
                 
-                # Reshape out.data and then broadcast to x.data.shape.
-                broadcasted_max = np.broadcast_to(np.reshape(out.data, tuple(expanded_shape)), x.data.shape)
+            # If axis is not None, compute the gradient along the specified axis
             else:
-                # Otherwise, out.data can be directly broadcast.
-                broadcasted_max = np.broadcast_to(out.data, x.data.shape)
+                # Initialize the gradient tensor
+                expanded = out.grad
                 
-            # Create a mask where x.data equals the broadcasted maximum.
-            mask = (x.data == broadcasted_max).astype(x.data.dtype)
-            
-            # Count how many times the maximum appears along the reduced axes.
-            count = np.sum(mask, axis=axis, keepdims=True) if axis is not None else np.sum(mask)
-            
-            # Distribute the gradient to the maximum elements
-            if keepdims or axis is None:
-                # If keepdims is True or axis is None, the gradient directly can be broadcasted directly
-                grad_x = mask * (np.broadcast_to(out.grad, x.data.shape) / count)
-            else:
-                # If keepdims is False, it must be expanded along the reduction axes to match the original shape
-                if expanded_shape is not None:
-                    out_grad_expanded = np.reshape(out.grad, tuple(expanded_shape))
-                else:
-                    # expanded_shape should not be None if keepdims is False
-                    raise ValueError("expanded_shape cannot be None")
+                # If axis is a tuple, expand the gradient for each axis in the tuple
+                if not keepdims:
+                    # If keepdims is False, expand the gradient along the specified axis
+                    expanded = np.expand_dims(expanded, axis=axis)
+                    
+                # Create a mask to identify the maximum values
+                mask = (x.data == expanded)
+
+                # Count the number of maximum values along the specified axis
+                count = np.sum(mask, axis=axis, keepdims=True)
                 
-                # Compute the gradient for each element
-                grad_x = mask * (np.broadcast_to(out_grad_expanded, x.data.shape) / count)
-            
-            # Update the gradient of the input tensor
-            accumulate_gradient(x, grad_x)
+                # Avoid division by zero; set count to 1 where it is zero
+                grad_x = mask * (expanded / count)
+                
+                # Accumulate the gradient in the input tensor
+                accumulate_gradient(x, grad_x)
 
     # Store the backward function with respect to the maximum operation
     out._backward = _backward
@@ -184,11 +231,13 @@ def sqrt(x: 'Tensor') -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Avoid division by zero; assume x.data is non-negative.
-            grad_self = out.grad / (2 * np.sqrt(x.data))
-            
-            # Update the gradient of the input tensor
-            accumulate_gradient(x, grad_self)
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
+                
+            # Compute the gradient of the square root operation
+            sqrt_gradient(out.grad.ravel(), x.data.ravel(), x.grad.ravel())
 
     # Store the backward function with respect to the square root operation
     out._backward = _backward
@@ -213,6 +262,7 @@ def mean(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdi
     
     Raises:
     - AssertionError: If the input is not a tensor
+    - TypeError: If the axis is not an integer or a tuple of integers
     """
     
     # Get the tensor class
@@ -231,40 +281,46 @@ def mean(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdi
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Determine the number of elements over which the mean is computed.
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
+                
+            # If axis is None, compute the gradient for the flattened tensor
             if axis is None:
-                # If axis is None, the mean is computed over all elements.
-                count = x.data.size
-            elif isinstance(axis, int):
-                # If axis is an integer, the mean is computed over the elements in that axis.
-                count = x.data.shape[axis]
+                # Create a buffer to store the gradient
+                buf = np.zeros((1,), dtype=x.data.dtype)
+                
+                # Initialize the buffer with the gradient of the output tensor
+                buf[0] = out.grad
+                inv = 1.0 / x.data.size
+                
+                # Compute the gradient of the mean operation
+                mean_flat_backward(buf, x.grad.ravel(), inv)
+                
+            # If axis is not None, compute the gradient along the specified axis
             else:
-                # If axis is a tuple, the mean is computed over the elements in the specified axes.
-                count = 1
-                for a in axis:
-                    count *= x.data.shape[a]
-                    
-            # Scale the gradient by the reciprocal of the number of elements over which the mean is computed.
-            grad_self = out.grad * (1.0 / count)
-            
-            # If axis is not None and keepdims is False, expand dimensions for proper broadcasting.
-            if axis is not None and not keepdims:
-                # If axis is an integer, expand the gradient along that axis.
+                # Initialize the gradient tensor
+                grad = out.grad
+                
+                # If keepdims is False, expand the gradient for each axis in the tuple
+                if not keepdims:
+                    # Expand the gradient along the specified axis
+                    grad = np.expand_dims(grad, axis=axis)
+
+                # Compute the number of elements along the specified axis/axes
                 if isinstance(axis, int):
-                    # Expand the gradient along the specified axis.
-                    grad_self = np.expand_dims(grad_self, axis=axis)
-                # If axis is a tuple, expand the gradient along each axis in the tuple.
+                    # If axis is an integer, compute the number of elements along that axis
+                    num_elements_along_axis = x.data.shape[axis]
+                elif isinstance(axis, tuple):
+                    # If axis is a tuple, compute the number of elements along each axis
+                    num_elements_along_axis = np.prod([x.data.shape[ax] for ax in axis])
                 else:
-                    # Sort the axes in ascending order to avoid conflicts.
-                    for a in sorted(axis):
-                        # Expand the gradient along the specified axis.
-                        grad_self = np.expand_dims(grad_self, axis=a)
-            
-            # Broadcast the gradient to the original shape of self.data.
-            grad_self = np.broadcast_to(grad_self, x.data.shape)
-            
-            # Update the gradient of the input tensor.
-            accumulate_gradient(x, grad_self)
+                    # If axis is not an integer or a tuple, raise a TypeError
+                    raise TypeError("axis must be an int or a tuple of ints")
+
+                # Accumulate the gradient in the input tensor
+                accumulate_gradient(x, grad / num_elements_along_axis)
 
     # Store the backward function with respect to the mean operation
     out._backward = _backward
@@ -299,44 +355,76 @@ def var(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
     
-    # Compute the mean with keepdims=True to allow proper broadcasting.
-    m = mean(x, axis=axis, keepdims=True)
-    
-    # Compute the squared difference between the tensor and the mean.
-    diff = x - m
-    
-    # Compute the squared difference and take the mean along the specified axis.
-    square_diff = diff * diff
-    
-    # Compute the variance by taking the mean of the squared difference.
-    var = mean(square_diff, axis=axis, keepdims=keepdims)
-    
-    # Determine the number of elements over which the variance is computed.
+    # If axis is None, compute the variance of the flattened tensor
     if axis is None:
-        # If axis is None, the variance is computed over all elements.
-        num_elements = x.data.size
+        # Create a buffer to store the variance
+        buf = np.zeros((1,), dtype=x.data.dtype)
         
-    # If axis is an integer, the variance is computed over the elements in that axis.
-    elif isinstance(axis, int):
-        # If axis is an integer, the variance is computed over the elements in that axis.
-        num_elements = x.data.shape[axis]
+        # Compute the variance of the flattened tensor
+        var_flat_forward(x.data.ravel(), buf, ddof)
         
-    # If axis is a tuple, the variance is computed over the elements in the specified axes.
-    elif isinstance(axis, tuple):
-        # If axis is a tuple, the variance is computed over the elements in the specified axes.
-        num_elements = 1
-        for ax in axis:
-            num_elements *= x.data.shape[ax]
+        # If keepdims is True, create an output tensor with the same shape as the input tensor
+        if keepdims:
+            # Create an output tensor with the same shape as the input tensor
+            out_data = np.full([1]*x.data.ndim, buf[0], dtype=x.data.dtype)
+            
+        # If keepdims is False, create an output tensor with the shape of the variance
+        else:
+            # Create an output tensor with the shape of the variance
+            out_data = buf[0]
+    
+    # If axis is not None, compute the variance along the specified axis
     else:
-        raise ValueError("axis must be an integer, a tuple of integers, or None")
+        # If axis is not None, compute the variance along the specified axis
+        out_data = np.var(x.data, axis=axis, keepdims=keepdims, ddof=ddof)
+        
+    # Create the output tensor with the computed variance
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
-    # If num_elements > ddof, apply the bessel correction to the variance.
-    if ddof != 0 and num_elements > ddof:
-        # Convert the population variance to the sample variance.
-        var = var * (num_elements / (num_elements - 1))
+    # If gradient computation is disabled, return the output tensor without a backward function
+    if _NO_GRAD:
+        return out
     
-    # Return the variance tensor
-    return var
+    # Define the backward function
+    def _backward():
+        # Check if the gradient needs to be computed
+        if x.requires_grad and out.grad is not None:
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
+                
+            # If axis is None, compute the gradient for the flattened tensor
+            if axis is None:
+                # Compute the gradient of the variance operation
+                var_flat_gradient(np.array([out.grad]).ravel(), x.data.ravel(), x.grad.ravel(), ddof)
+                
+            # If axis is not None, compute the gradient along the specified axis
+            else:
+                # Initialize the gradient tensor
+                grad = out.grad
+                
+                # If keepdims is False, expand the gradient for each axis in the tuple
+                if not keepdims:
+                    grad = np.expand_dims(grad, axis=axis)
+                    
+                # Broadcast the gradient to the shape of the input tensor
+                factor = 1.0 / (x.data.shape[axis] - ddof) if isinstance(axis,int) and ddof and x.data.shape[axis]>ddof else 1.0 / x.data.size
+                
+                # Compute the number of elements along the specified axis/axes
+                grad_x = (x.data - np.mean(x.data, axis=axis, keepdims=True)) * 2 * factor * grad
+                
+                # Accumulate the gradient in the input tensor
+                accumulate_gradient(x, grad_x)
+                
+    # Store the backward function with respect to the variance operation
+    out._backward = _backward
+    
+    # Store the previous tensors in the computation graph
+    out._prev = {x} if x.requires_grad else set()
+    
+    # Return the output tensor
+    return out
 
 
 def exp(x: 'Tensor') -> 'Tensor':
@@ -368,12 +456,14 @@ def exp(x: 'Tensor') -> 'Tensor':
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad:
-            # Comute the gradient of the loss with respect to the current tensor
-            grad = out.data * out.grad
-            
-            # Compute the gradient of the loss with respect to the current tensor
-            accumulate_gradient(x, grad)
+        if x.requires_grad and out.grad is not None:
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
+                
+            # Compute the gradient of the exponential operation
+            exp_gradient(out.data.ravel(), out.grad.ravel(), x.grad.ravel())
             
     # Store the backward function with respect to the exponential operation
     out._backward = _backward
@@ -412,11 +502,13 @@ def log(x: 'Tensor') -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Compute the gradient of the loss with respect to the current tensor
-            gard = out.grad / x.data
-            
-            # Update the gradient of the input tensor
-            accumulate_gradient(x, gard)
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
+                
+            # Compute the gradient of the logarithm operation
+            log_gradient(x.data.ravel(), out.grad.ravel(), x.grad.ravel())
     
     # Store the backward function with respect to the natural logarithm operation
     out._backward = _backward
@@ -462,11 +554,14 @@ def transpose(x: 'Tensor', axes: Tuple[int]) -> 'Tensor':
         
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # Transpose the gradient
-            transposed_grad = out.grad.transpose(inv_axes)
+            # Invert the axes to match the original tensor
+            inv_axes = np.argsort(axes)
             
-            # Update the gradient of the current tensor
-            accumulate_gradient(x, transposed_grad)
+            # Transpose the gradient to match the original tensor
+            grad_x = out.grad.transpose(inv_axes)
+            
+            # Accumulate the gradient in the input tensor
+            accumulate_gradient(x, grad_x)
                 
     # Store the backward function with respect to the transpose operation
     out._backward = _backward
