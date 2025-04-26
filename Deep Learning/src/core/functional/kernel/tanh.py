@@ -2,7 +2,7 @@ import math
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def tanh_forward(x_flat, out_flat, n) -> None:
     """
     Computes the hyperbolic tangent activation function.
@@ -19,7 +19,7 @@ def tanh_forward(x_flat, out_flat, n) -> None:
         out_flat[i] = math.tanh(x_flat[i])
         
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def tanh_gradient(out_flat, grad_out_flat, grad_x_flat, n) -> None:
     """
     Computes the gradient of the hyperbolic tangent activation function.

@@ -1,6 +1,6 @@
 from numba import njit, prange
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def sum_flat_forward(x_flat, out_scalar) -> None:
     """
     Computes the sum of all elements in a flattened tensor.
@@ -21,7 +21,7 @@ def sum_flat_forward(x_flat, out_scalar) -> None:
     # Store the result in the output scalar
     out_scalar[0] = tmp
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def sum_flat_gradient(out_grad_scalar, x_grad_flat) -> None:
     """
     Computes the gradient of the sum operation with respect to the input tensor.

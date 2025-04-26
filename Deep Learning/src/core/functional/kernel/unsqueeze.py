@@ -1,6 +1,6 @@
 from numba import njit, prange
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def unsqueeze_gradient(out_grad_flat, x_grad_flat) -> None:
     """
     Computes the gradient of the unsqueeze operation.

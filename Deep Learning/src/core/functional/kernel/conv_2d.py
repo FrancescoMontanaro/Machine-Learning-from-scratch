@@ -1,7 +1,7 @@
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def conv_2d_forward(x, w, stride_h, stride_w, out) -> None:
     """
     2D Convolution forward pass.
@@ -49,7 +49,7 @@ def conv_2d_forward(x, w, stride_h, stride_w, out) -> None:
                     out[b, i, j, c] = acc
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def conv_2d_gradient_w(x, grad_out, stride_h, stride_w, grad_w) -> None:
     """
     2D Convolution gradient for weights.
@@ -97,7 +97,7 @@ def conv_2d_gradient_w(x, grad_out, stride_h, stride_w, grad_w) -> None:
                     grad_w[oc, ic, di, dj] = acc
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def conv_2d_gradient_x(grad_out, w, stride_h, stride_w, grad_x) -> None:
     """
     2D Convolution gradient for input.

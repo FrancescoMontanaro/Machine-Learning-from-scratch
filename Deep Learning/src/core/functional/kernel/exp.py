@@ -1,7 +1,7 @@
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def exp_gradient(out_data_flat, out_grad_flat, x_grad_flat) -> None:
     """
     Computes the gradient of the exponential operation with respect to the input tensor.

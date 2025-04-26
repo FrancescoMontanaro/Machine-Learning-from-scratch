@@ -1,6 +1,6 @@
 from numba import njit
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def max_flat_forward(x_flat, out_scalar, idx_ptr) -> None:
     """
     Computes the maximum value in a flattened tensor and its index.
@@ -29,7 +29,7 @@ def max_flat_forward(x_flat, out_scalar, idx_ptr) -> None:
     idx_ptr[0] = best_i
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def max_flat_gradient(idx_ptr, out_grad_scalar, x_grad_flat) -> None:
     """
     Computes the gradient of the max operation with respect to the input tensor.

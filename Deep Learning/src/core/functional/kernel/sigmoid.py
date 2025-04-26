@@ -2,7 +2,7 @@ import math
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def sigmoid_forward(x_flat, out_flat, n) -> None:
     """
     Computes the sigmoid activation function.
@@ -32,7 +32,7 @@ def sigmoid_forward(x_flat, out_flat, n) -> None:
             out_flat[i] = ev / (1.0 + ev)
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def sigmoid_gradient(out_flat, grad_out_flat, grad_x_flat, n) -> None:
     """
     Computes the gradient of the sigmoid activation function.

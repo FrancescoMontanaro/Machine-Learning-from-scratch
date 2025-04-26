@@ -573,31 +573,25 @@ def masked_fill(x: 'Tensor', mask: Union[np.ndarray, 'Tensor'], value: float) ->
     # Ensure the mask is in numpy format
     mask = mask.data if not isinstance(mask, np.ndarray) else mask
     
-    # Create an output tensor with the same shape as the input tensor
-    out_data = np.empty_like(x.data)
+    # Fill the tensor with the value where the mask is False
+    out_data = np.where(mask, value, x.data)
     
-    # Fill the masked elements with the specified value
-    masked_fill_forward(x.data.ravel(), mask.ravel(), value, out_data.ravel())
-    
-    # Create the output tensor with the filled values
+    # Create a new tensor with the filled data
     out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: 
-        return out
+    if _NO_GRAD: return out
     
     # Define the backward function
     def _backward() -> None:
-        # Check if the gradient needs to be computed
-        if x.requires_grad and out.grad is not None:
-            # If the gradient is None, create a zero gradient tensor
-            if x.grad is None: 
-                # Create a zero gradient tensor with the same shape as the input tensor
-                x.grad = np.zeros_like(x.data)
-                
-            # Compute the gradient of the masked fill operation
-            masked_fill_gradient(mask.ravel(), out.grad.ravel(), x.grad.ravel())
+        # If the gradient needs to be computed, backpropagate the gradient
+        if x.requires_grad:
+            # Compute the gradient of the loss with respect to the current tensor
+            grad_mask = np.where(mask, 0, out.grad if out.grad is not None else 0)
             
+            # Update the gradient of the current tensor
+            accumulate_gradient(x, grad_mask)
+    
     # Store the backward function with respect to the masked fill operation
     out._backward = _backward
     
@@ -753,10 +747,7 @@ def squeeze(x: 'Tensor', axis: Optional[int] = None) -> 'Tensor':
     assert isinstance(x, Tensor), "Input must be a tensor"
     
     # Squeeze the tensor along the specified axis
-    out_data = np.squeeze(x.data, axis=axis)
-    
-    # Squeeze the tensor along the specified axis
-    out = Tensor(out_data, requires_grad=x.requires_grad)
+    out = Tensor(np.squeeze(x.data, axis=axis), requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
     if _NO_GRAD: return out
@@ -765,24 +756,19 @@ def squeeze(x: 'Tensor', axis: Optional[int] = None) -> 'Tensor':
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
         if x.requires_grad and out.grad is not None:
-            # If the gradient is None, create a zero gradient tensor
-            if x.grad is None:
-                # Create a zero gradient tensor with the same shape as the input tensor
-                x.grad = np.zeros_like(x.data)
-                
-                
-            # If axis is None, find the axes to squeeze
+            # Unsqueeze the gradient along the same axis to match the original shape
             if axis is None:
-                # Find the axes to squeeze
-                axes = [i for i,s in enumerate(x.data.shape) if s == 1]
-                
-            # If axis is not None, check if it is a singleton dimension
+                # For None case, we need to restore all squeezed dims
+                grad_squeezed = out.grad
+                original_shape = x.data.shape
+                for dim in sorted([i for i, size in enumerate(original_shape) if size == 1], reverse=True):
+                    grad_squeezed = np.expand_dims(grad_squeezed, axis=dim)
             else:
-                # Check if the specified axis is a singleton dimension
-                axes = [axis]
-                
-            # Perform the squeeze operation on the gradient
-            squeeze_gradient(out.grad.ravel(), x.grad.ravel(), x.data.shape, tuple(axes), out_data.shape)
+                # For specific axis case
+                grad_squeezed = np.expand_dims(out.grad, axis=axis)
+            
+            # Update the gradient of the input tensor
+            accumulate_gradient(x, grad_squeezed)
             
     # Store the backward function with respect to the squeeze operation
     out._backward = _backward

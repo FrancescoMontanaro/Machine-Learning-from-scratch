@@ -1,7 +1,7 @@
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def pad_forward(x, pad_top, pad_bottom, pad_left, pad_right, out) -> None:
     """
     2D Padding forward pass.
@@ -40,7 +40,7 @@ def pad_forward(x, pad_top, pad_bottom, pad_left, pad_right, out) -> None:
                         out[n, i, j, c] = 0.0
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def pad_gradient(out_grad, pad_top, pad_bottom, pad_left, pad_right, x_grad) -> None:
     """
     2D Padding gradient

@@ -1,7 +1,7 @@
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def concat_forward(parts_flat, offsets, out_flat) -> None:
     """
     Concatenate multiple tensor segments into a single tensor.
@@ -24,7 +24,7 @@ def concat_forward(parts_flat, offsets, out_flat) -> None:
             out_flat[i] = parts_flat[i]
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def concat_gradient(offsets, out_grad_flat, x_grad_flat, part_index) -> None:
     """
     Computes the gradient of the concatenation operation.

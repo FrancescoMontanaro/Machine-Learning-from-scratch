@@ -1,7 +1,7 @@
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def gather_forward(x_flat, idx_flat, stride, out_flat) -> None:
     """
     Gathers elements from a flattened tensor based on indices.
@@ -22,7 +22,7 @@ def gather_forward(x_flat, idx_flat, stride, out_flat) -> None:
         out_flat[i] = x_flat[idx_flat[i]]
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def gather_gradient(idx_flat, out_grad_flat, x_grad_flat) -> None:
     """
     Computes the gradient of the gather operation with respect to the input tensor.

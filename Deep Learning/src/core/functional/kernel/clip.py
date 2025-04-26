@@ -1,7 +1,7 @@
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def clip_forward(x_flat, minv, maxv, out_flat) -> None:
     """
     Clips the values in a flattened tensor to a specified range.
@@ -22,7 +22,7 @@ def clip_forward(x_flat, minv, maxv, out_flat) -> None:
         out_flat[i] = v if (v >= minv and v <= maxv) else (minv if v < minv else maxv)
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def clip_gradient(x_flat, out_grad_flat, x_grad_flat, minv, maxv) -> None:
     """
     Computes the gradient of the clipping operation with respect to the input tensor.

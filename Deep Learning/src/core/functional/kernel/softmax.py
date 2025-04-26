@@ -2,7 +2,7 @@ import math
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def softmax_forward(data_flat, out_flat, M, K) -> None:
     """
     Computes the softmax of the input data.
@@ -49,7 +49,7 @@ def softmax_forward(data_flat, out_flat, M, K) -> None:
             out_flat[base + j] *= inv_s
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def softmax_gradient(out_flat, grad_out_flat, grad_x_flat, M, K) -> None:
     """
     Computes the gradient of the softmax function.

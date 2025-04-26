@@ -1,7 +1,7 @@
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def masked_fill_forward(x_flat, mask_flat, value, out_flat) -> None:
     """
     Applies a masked fill operation on a flattened tensor.
@@ -19,7 +19,7 @@ def masked_fill_forward(x_flat, mask_flat, value, out_flat) -> None:
         out_flat[i] = x_flat[i] if mask_flat[i] else value
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def masked_fill_gradient(mask_flat, out_grad_flat, x_grad_flat) -> None:
     """
     Computes the gradient of the masked fill operation with respect to the input tensor.

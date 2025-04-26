@@ -1,7 +1,7 @@
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def mean_flat_backward(out_grad_scalar, x_grad_flat, inv_count) -> None:
     """
     Computes the gradient of the mean operation with respect to the input tensor.

@@ -2,7 +2,7 @@ import numpy as np
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def squeeze_gradient(out_grad_flat, x_grad_flat, shape, axes, new_shape) -> None:
     """
     Computes the gradient of the squeeze operation.

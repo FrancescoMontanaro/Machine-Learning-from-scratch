@@ -1,7 +1,7 @@
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def log_gradient(x_data_flat, out_grad_flat, x_grad_flat) -> None:
     """
     Computes the gradient of the logarithm operation with respect to the input tensor.
