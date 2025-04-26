@@ -12,11 +12,14 @@ from .kernel.log import log_gradient
 from .kernel.sqrt import sqrt_gradient
 from .kernel.mean import mean_flat_backward
 from .kernel.pad import pad_forward, pad_gradient
+from .kernel.clip import clip_forward, clip_gradient
+from .kernel.gather import gather_forward, gather_gradient
 from .kernel.repeat import repeat_forward, repeat_gradient
 from .kernel.sum import sum_flat_forward, sum_flat_gradient
 from .kernel.max import max_flat_forward, max_flat_gradient
 from .kernel.var import var_flat_forward, var_flat_gradient
 from .kernel.max_pool_2d import max_pool_2d_forward, max_pool_2d_gradient
+from .kernel.masked_fill import masked_fill_forward, masked_fill_gradient
 from .kernel.conv_2d import conv_2d_forward, conv_2d_gradient_w, conv_2d_gradient_x
 
 
@@ -600,25 +603,31 @@ def masked_fill(x: 'Tensor', mask: Union[np.ndarray, 'Tensor'], value: float) ->
     # Ensure the mask is in numpy format
     mask = mask.data if not isinstance(mask, np.ndarray) else mask
     
-    # Fill the tensor with the value where the mask is False
-    out_data = np.where(mask, value, x.data)
+    # Create an output tensor with the same shape as the input tensor
+    out_data = np.empty_like(x.data)
     
-    # Create a new tensor with the filled data
+    # Fill the masked elements with the specified value
+    masked_fill_forward(x.data.ravel(), mask.ravel(), value, out_data.ravel())
+    
+    # Create the output tensor with the filled values
     out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+    if _NO_GRAD: 
+        return out
     
     # Define the backward function
     def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad:
-            # Compute the gradient of the loss with respect to the current tensor
-            grad_mask = np.where(mask, 0, out.grad if out.grad is not None else 0)
+        # Check if the gradient needs to be computed
+        if x.requires_grad and out.grad is not None:
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None: 
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
+                
+            # Compute the gradient of the masked fill operation
+            masked_fill_gradient(mask.ravel(), out.grad.ravel(), x.grad.ravel())
             
-            # Update the gradient of the current tensor
-            accumulate_gradient(x, grad_mask)
-    
     # Store the backward function with respect to the masked fill operation
     out._backward = _backward
     
@@ -653,32 +662,38 @@ def clip(x: 'Tensor', min_value: float, max_value: float) -> 'Tensor':
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
     
-    # Compute forward pass using np.clip.
-    out = Tensor(np.clip(x.data, min_value, max_value), requires_grad=x.requires_grad)
+    # Create an output tensor with the same shape as the input tensor
+    out_data = np.empty_like(x.data)
+    
+    # Clip the values of the tensor to the specified range
+    clip_forward(x.data.ravel(), min_value, max_value, out_data.ravel())
+    
+    # Create the output tensor with the clipped values
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
-
-    # Define the backward function.
+    if _NO_GRAD:
+        return out
+    
+    # Define the backward function
     def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient.
+        # Check if the gradient needs to be computed
         if x.requires_grad and out.grad is not None:
-            # Create a mask: 1 where self.data is within [min_value, max_value], 0 otherwise.
-            mask = ((x.data >= min_value) & (x.data <= max_value)).astype(x.data.dtype)
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
+                
+            # Compute the gradient of the clipping operation
+            clip_gradient(x.data.ravel(), out.grad.ravel(), x.grad.ravel(), min_value, max_value)
             
-            # Propagate the upstream gradient only where the mask is 1.
-            grad_self = mask * out.grad
-            
-            # Update the gradient of the input tensor.
-            accumulate_gradient(x, grad_self)
-
-    # Store the backward function with respect to the clip operation.
+    # Store the backward function with respect to the clipping operation
     out._backward = _backward
     
-    # Store the previous tensors in the computation graph.
+    # Store the previous tensors in the computation graph
     out._prev = {x} if x.requires_grad else set()
     
-    # Return the output tensor.
+    # Return the output tensor
     return out
 
 
@@ -704,39 +719,36 @@ def gather(x: 'Tensor', indices: 'Tensor', axis: int = 0) -> 'Tensor':
     # Check if the input is a tensor
     assert isinstance(x, Tensor), "Input must be a tensor"
     
-    # Compute the gathered tensor
-    out = Tensor(np.take_along_axis(x.data, indices.data.astype(int), axis=axis), requires_grad=x.requires_grad)
+    # Flatten the indices to a 1D array
+    lin_idx = np.take_along_axis(indices.data.astype(np.int64), np.zeros_like(indices.data, dtype=np.int64), axis=axis).ravel()
+    
+    # Create an output tensor with the same shape as the indices
+    out_data = np.empty_like(indices.data, dtype=x.data.dtype).ravel()
+    
+    # Gather the values from the input tensor using the indices
+    gather_forward(x.data.ravel(), lin_idx, None, out_data)
+    
+    # Reshape the output data to match the shape of the indices
+    out_data = out_data.reshape(indices.data.shape)
+    
+    # Create the output tensor with the gathered values
+    out = Tensor(out_data, requires_grad=x.requires_grad)
     
     # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+    if _NO_GRAD:
+        return out
     
     # Define the backward function
     def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
+        # Check if the gradient needs to be computed
         if x.requires_grad and out.grad is not None:
-            # Create an array of zeros with the same shape as self.data.
-            grad_self = np.zeros_like(x.data)
-            
-            # Scatter the gradient from out.grad back to grad_self at the positions specified by indices.
-            idx = []
-            for i in range(x.data.ndim):
-                # If the current dimension is the axis, use the indices to gather the gradient.
-                if i == axis:
-                    # Append the indices to the idx list.
-                    idx.append(indices.data.astype(int))
-                else:
-                    # For other dimensions, create an array of indices.
-                    shape = [1] * x.data.ndim
-                    shape[i] = x.data.shape[i]
-                    
-                    # Append the array of indices to the idx list.
-                    idx.append(np.arange(x.data.shape[i]).reshape(shape))
-                    
-            # Use np.add.at to scatter the gradients.
-            np.add.at(grad_self, tuple(idx), out.grad)
-            
-            # Update the gradient of the input tensor
-            accumulate_gradient(x, grad_self)
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data)
+                
+            # Compute the gradient of the gather operation
+            gather_gradient(lin_idx, out.grad.ravel(), x.grad.ravel())
             
     # Store the backward function with respect to the gather operation
     out._backward = _backward
