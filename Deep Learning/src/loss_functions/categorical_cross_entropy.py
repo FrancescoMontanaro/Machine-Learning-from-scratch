@@ -58,36 +58,6 @@ class CategoricalCrossEntropy(LossFn):
         elif self.reduction == "mean":
             # Return the mean loss
             loss = loss.mean()
-            
-        if _NO_GRAD: return loss # If gradient computation is disabled, return the loss tensor without a backward function
-        
-        # Override backward pass when from_logits=True
-        # This is to avoid numerical instability when computing the gradient
-        if self.from_logits and y_pred.requires_grad:
-            # Define the backward function
-            def _backward() -> None:
-                # Compute softmax
-                softmax = np.exp(y_pred_log.data)
-                
-                # Computhe the gradient
-                grad = softmax - y_true.data
-                
-                # Apply reduction if needed
-                if self.reduction == "sum":
-                    # Sum reduction
-                    grad = grad
-                elif self.reduction == "mean":
-                    # Mean reduction
-                    grad = grad / y_true.shape()[0]
-                
-                # Accumulate gradient
-                accumulate_gradient(y_pred, grad)
-            
-            # Store the backward function
-            loss._backward = _backward
-            
-            # Store the previous tensors in the computation graph
-            loss._prev = {y_pred} if y_pred.requires_grad else set()
         
         # Return the loss
         return loss
