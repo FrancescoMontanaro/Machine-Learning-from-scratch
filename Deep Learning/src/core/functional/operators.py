@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Union, Type, Tuple, TYPE_CHECKING, cast
 
-from .utils import accumulate_gradient
+from .base import accumulate_gradient
 if TYPE_CHECKING: from ..tensor import Tensor
 from ..utils.context_manager import _NO_GRAD
 from ..utils.data_analysis import unbroadcast

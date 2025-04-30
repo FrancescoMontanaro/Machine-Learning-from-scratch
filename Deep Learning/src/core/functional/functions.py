@@ -1,10 +1,8 @@
 import numpy as np
-from typing import Optional, Tuple, List, Union, Type, TYPE_CHECKING, cast
+from typing import Optional, Tuple, List, Union, TYPE_CHECKING
 
-from .utils import accumulate_gradient
 if TYPE_CHECKING: from ..tensor import Tensor
-from ..utils.context_manager import _NO_GRAD
-from ..utils.types_registry import get_tensor_class
+from .base import tensor_op, accumulate_gradient
 
 # Importing the kernel functions
 from .kernel.exp import exp_gradient
@@ -35,75 +33,59 @@ def sum(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Ten
     
     Returns:
     - Tensor: Sum of the tensor along the specified axis
-    
-    Raises:
-    - AssertionError: If the input is not a tensor
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    
-    # forward
-    if axis is None:
-        # Create a buffer to store the sum
-        buf = np.zeros((1,), dtype=x.data.dtype)
-        
-        # Compute the sum of the flattened tensor
-        sum_flat_forward(x.data.ravel(), buf)
-        
-        # If keepdims is True, create an output tensor with the same shape as the input tensor
-        if keepdims:
-            # Create an output tensor with the same shape as the input tensor
-            out_data = np.full([1]*x.data.ndim, buf[0], dtype=x.data.dtype)
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # If axis is None, compute the sum of the flattened tensor
+        if axis is None:
+            # Create a buffer to store the sum
+            buf = np.zeros((1,), dtype=data.dtype)
+            
+            # Compute the sum of the flattened tensor
+            sum_flat_forward(data.ravel(), buf)
+            
+            # If keepdims is True, create an output tensor with the same shape as the input tensor
+            if keepdims:
+                # Create an output tensor with the same shape as the input tensor
+                out_data = np.full([1]*data.ndim, buf[0], dtype=data.dtype)
+            else:
+                # Create an output tensor with the shape of the sum
+                out_data = buf[0]
         else:
-            # Create an output tensor with the shape of the sum
-            out_data = buf[0]
-    else:
-        # If axis is not None, compute the sum along the specified axis
-        out_data = x.data.sum(axis=axis, keepdims=keepdims)
-    
-    # Compute the sum of the tensor along the specified axis
-    out = Tensor(out_data, requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+            # If axis is not None, compute the sum along the specified axis
+            out_data = data.sum(axis=axis, keepdims=keepdims)
+            
+        # Return the computed sum
+        return out_data
 
     # Define the backward function
-    def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:
-            # If the gradient is None, create a zero gradient tensor
-            if x.grad is None:
-                # Create a zero gradient tensor with the same shape as the input tensor
-                x.grad = np.zeros_like(x.data)
-                
-            # If axis is None, broadcast the gradient to the shape of the input tensor
-            if axis is None:
-                # Broadcast the gradient to the shape of the input tensor
-                sum_flat_gradient(np.array([out.grad]).ravel(), x.grad.ravel())
-            else:
-                # If axis is not None, compute the gradient along the specified axis
-                grad = out.grad
-                
-                # If axis is a tuple, compute the gradient for each axis in the tuple
-                if not keepdims:
-                    # If keepdims is False, expand the gradient along the specified axis
-                    grad = np.expand_dims(grad, axis=axis)
-                    
-                # Accumulate the gradient in the input tensor
-                accumulate_gradient(x, np.broadcast_to(grad, x.data.shape))
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the gradient needs to be computed
+        if not t.requires_grad: 
+            return
+        
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # If axis is None, broadcast the gradient to the shape of the input tensor
+        if axis is None:
+            # Broadcast the gradient to the shape of the input tensor
+            sum_flat_gradient(np.array([out_grad]).ravel(), t.grad.ravel())
+        else:
+            # If axis is not None, compute the gradient along the specified axis
+            grad = out_grad
             
-    # Store the backward function with respect to the sum operation
-    out._backward = _backward
-    
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+            # If axis is a tuple, compute the gradient for each axis in the tuple
+            if not keepdims:
+                # If keepdims is False, expand the gradient along the specified axis
+                grad = np.expand_dims(grad, axis=axis)
+                
+            # Accumulate the gradient in the input tensor
+            accumulate_gradient(x, np.broadcast_to(grad, x.data.shape))
+
+    # Return the tensor operation withe the specified forward and backward functions         
+    return tensor_op(x, forward, backward)
 
 
 def max(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':
@@ -117,92 +99,79 @@ def max(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
     
     Returns:
     - Tensor: Maximum value of the tensor along the specified axis
-    
-    Raises:
-    - AssertionError: If the input is not a tensor
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
+    # Create the idx array to store the indices of the maximum values
+    idx: np.ndarray
     
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    
-    # Initialize the index variable
-    idx = np.zeros((1,), dtype=np.int64)
-    
-    # If axis is None, compute the maximum value of the flattened tensor
-    if axis is None:
-        # Create a buffer to store the maximum value and its index
-        buf = np.zeros((1,), dtype=x.data.dtype)
-        idx = np.zeros((1,), dtype=np.int64)
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # Set the nonlocal variable idx to store the indices of the maximum values
+        nonlocal idx
         
-        # Compute the maximum value of the flattened tensor
-        max_flat_forward(x.data.ravel(), buf, idx)
-        
-        # If keepdims is True, create an output tensor with the same shape as the input tensor
-        if keepdims:
-            # Create an output tensor with the same shape as the input tensor
-            out_data = np.full([1]*x.data.ndim, buf[0], dtype=x.data.dtype)
-        # If keepdims is False, create an output tensor with the shape of the maximum value
-        else:
-            # Create an output tensor with the shape of the maximum value
-            out_data = buf[0]
-    # If axis is not None, compute the maximum value along the specified axis
-    else:
+        # If axis is None, compute the maximum value of the flattened tensor
+        if axis is None:
+            # Create a buffer to store the maximum value and its index
+            buf = np.zeros((1,), dtype=data.dtype)
+            idx = np.zeros((1,), dtype=np.int64)
+            
+            # Compute the maximum value of the flattened tensor
+            max_flat_forward(data.ravel(), buf, idx)
+            
+            # If keepdims is True, create an output tensor with the same shape as the input tensor
+            if keepdims:
+                # Create an output tensor with the same shape as the input tensor
+                out_data = np.full([1]*data.ndim, buf[0], dtype=data.dtype)
+            # If keepdims is False, create an output tensor with the shape of the maximum value
+            else:
+                # Create an output tensor with the shape of the maximum value
+                out_data = buf[0]
         # If axis is not None, compute the maximum value along the specified axis
-        out_data = np.max(x.data, axis=axis, keepdims=keepdims)
-    
-    # Compute the maximum value of the tensor along the specified axis
-    out = Tensor(out_data, requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+        else:
+            # If axis is not None, compute the maximum value along the specified axis
+            out_data = np.max(data, axis=axis, keepdims=keepdims)
+            
+        # Return the computed maximum value and its index
+        return out_data
             
     # Define the backward function
-    def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:
-            # If the gradient is None, create a zero gradient tensor
-            if x.grad is None:
-                # Create a zero gradient tensor with the same shape as the input tensor
-                x.grad = np.zeros_like(x.data)
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the tensor requires gradient computation
+        if not t.requires_grad:
+            return
+           
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # If axis is None, compute the gradient for the flattened tensor
+        if axis is None:
+            # Compute the index of the maximum value
+            max_flat_gradient(idx, np.array([out_grad]).ravel(), t.grad.ravel())
+            
+        # If axis is not None, compute the gradient along the specified axis
+        else:
+            # Initialize the gradient tensor
+            expanded = out_grad
+            
+            # If axis is a tuple, expand the gradient for each axis in the tuple
+            if not keepdims:
+                # If keepdims is False, expand the gradient along the specified axis
+                expanded = np.expand_dims(expanded, axis=axis)
                 
-            # If axis is None, compute the gradient for the flattened tensor
-            if axis is None:
-                # Compute the index of the maximum value
-                max_flat_gradient(idx, np.array([out.grad]).ravel(), x.grad.ravel())
-                
-            # If axis is not None, compute the gradient along the specified axis
-            else:
-                # Initialize the gradient tensor
-                expanded = out.grad
-                
-                # If axis is a tuple, expand the gradient for each axis in the tuple
-                if not keepdims:
-                    # If keepdims is False, expand the gradient along the specified axis
-                    expanded = np.expand_dims(expanded, axis=axis)
-                    
-                # Create a mask to identify the maximum values
-                mask = (x.data == expanded)
+            # Create a mask to identify the maximum values
+            mask = (t.data == expanded)
 
-                # Count the number of maximum values along the specified axis
-                count = np.sum(mask, axis=axis, keepdims=True)
-                
-                # Avoid division by zero; set count to 1 where it is zero
-                grad_x = mask * (expanded / count)
-                
-                # Accumulate the gradient in the input tensor
-                accumulate_gradient(x, grad_x)
+            # Count the number of maximum values along the specified axis
+            count = np.sum(mask, axis=axis, keepdims=True)
+            
+            # Avoid division by zero; set count to 1 where it is zero
+            grad_x = mask * (expanded / count)
+            
+            # Accumulate the gradient in the input tensor
+            accumulate_gradient(t, grad_x)
 
-    # Store the backward function with respect to the maximum operation
-    out._backward = _backward
-    
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)
 
 
 def sqrt(x: 'Tensor') -> 'Tensor':
@@ -214,43 +183,27 @@ def sqrt(x: 'Tensor') -> 'Tensor':
     
     Returns:
     - Tensor: Square root of the input tensor.
-    
-    Raises:
-    - AssertionError: If the input is not a tensor.
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-
-    # Compute the square root of the tensor
-    out = Tensor(np.sqrt(x.data), requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # Compute the square root of the tensor
+        return np.sqrt(data)
     
     # Define the backward function
-    def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:
-            # If the gradient is None, create a zero gradient tensor
-            if x.grad is None:
-                # Create a zero gradient tensor with the same shape as the input tensor
-                x.grad = np.zeros_like(x.data)
-                
-            # Compute the gradient of the square root operation
-            sqrt_gradient(out.grad.ravel(), x.data.ravel(), x.grad.ravel())
-
-    # Store the backward function with respect to the square root operation
-    out._backward = _backward
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the gradient needs to be computed
+        if not t.requires_grad: 
+            return
+        
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # Compute the gradient of the square root operation
+        sqrt_gradient(out_grad.ravel(), t.data.ravel(), t.grad.ravel())
     
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)
 
 
 def mean(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':
@@ -263,77 +216,61 @@ def mean(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdi
     
     Returns:
     - Tensor: Mean of the tensor along the specified axis
-    
-    Raises:
-    - AssertionError: If the input is not a tensor
-    - TypeError: If the axis is not an integer or a tuple of integers
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # Compute the mean of the tensor along the specified axis
+        return np.mean(data, axis=axis, keepdims=keepdims)
     
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    
-    # Compute the mean of the tensor along the specified axis
-    out = Tensor(np.mean(x.data, axis=axis, keepdims=keepdims), requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
-
     # Define the backward function
-    def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:
-            # If the gradient is None, create a zero gradient tensor
-            if x.grad is None:
-                # Create a zero gradient tensor with the same shape as the input tensor
-                x.grad = np.zeros_like(x.data)
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the gradient needs to be computed
+        if not t.requires_grad: 
+            return
+        
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # If axis is None, compute the gradient for the flattened tensor
+        if axis is None:
+            # Create a buffer to store the gradient
+            buf = np.zeros((1,), dtype=t.data.dtype)
+            
+            # Initialize the buffer with the gradient of the output tensor
+            buf[0] = out_grad
+            inv = 1.0 / t.data.size
+            
+            # Compute the gradient of the mean operation
+            mean_flat_backward(buf, t.grad.ravel(), inv)
+            
+        # If axis is not None, compute the gradient along the specified axis
+        else:
+            # Initialize the gradient tensor
+            grad = out_grad
+            
+            # If keepdims is False, expand the gradient for each axis in the tuple
+            if not keepdims:
+                # Expand the gradient along the specified axis
+                grad = np.expand_dims(grad, axis=axis)
+
+            # Compute the number of elements along the specified axis/axes
+            if isinstance(axis, int):
+                # If axis is an integer, compute the number of elements along that axis
+                num_elements_along_axis = t.data.shape[axis]
                 
-            # If axis is None, compute the gradient for the flattened tensor
-            if axis is None:
-                # Create a buffer to store the gradient
-                buf = np.zeros((1,), dtype=x.data.dtype)
-                
-                # Initialize the buffer with the gradient of the output tensor
-                buf[0] = out.grad
-                inv = 1.0 / x.data.size
-                
-                # Compute the gradient of the mean operation
-                mean_flat_backward(buf, x.grad.ravel(), inv)
-                
-            # If axis is not None, compute the gradient along the specified axis
+            elif isinstance(axis, tuple):
+                # If axis is a tuple, compute the number of elements along each axis
+                num_elements_along_axis = np.prod([t.data.shape[ax] for ax in axis])
             else:
-                # Initialize the gradient tensor
-                grad = out.grad
-                
-                # If keepdims is False, expand the gradient for each axis in the tuple
-                if not keepdims:
-                    # Expand the gradient along the specified axis
-                    grad = np.expand_dims(grad, axis=axis)
+                # If axis is not an integer or a tuple, raise a TypeError
+                raise TypeError("axis must be an int or a tuple of ints")
 
-                # Compute the number of elements along the specified axis/axes
-                if isinstance(axis, int):
-                    # If axis is an integer, compute the number of elements along that axis
-                    num_elements_along_axis = x.data.shape[axis]
-                elif isinstance(axis, tuple):
-                    # If axis is a tuple, compute the number of elements along each axis
-                    num_elements_along_axis = np.prod([x.data.shape[ax] for ax in axis])
-                else:
-                    # If axis is not an integer or a tuple, raise a TypeError
-                    raise TypeError("axis must be an int or a tuple of ints")
+            # Accumulate the gradient in the input tensor
+            accumulate_gradient(t, grad / num_elements_along_axis)
 
-                # Accumulate the gradient in the input tensor
-                accumulate_gradient(x, grad / num_elements_along_axis)
-
-    # Store the backward function with respect to the mean operation
-    out._backward = _backward
-    
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)
 
 
 def var(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False, ddof: int = 1) -> 'Tensor':
@@ -348,17 +285,7 @@ def var(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
 
     Returns:
     - Tensor: Variance of the tensor.
-    
-    Raises:
-    - AssertionError: If the input is not a tensor.
-    - TypeError: If the axis is not an integer or a tuple of integers.
     """
-    
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
     
     # Compute the mean with keepdims=True to allow proper broadcasting.
     m = mean(x, axis=axis, keepdims=True)
@@ -408,43 +335,27 @@ def exp(x: 'Tensor') -> 'Tensor':
     
     Returns:
     - Tensor: Exponential of the tensor
-    
-    Raises:
-    - AssertionError: If the input is not a tensor
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    
-    # Compute the exponential of the tensor
-    out = Tensor(np.exp(x.data), requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # Compute the exponential of the tensor
+        return np.exp(data)
     
     # Define the backward function
-    def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:
-            # If the gradient is None, create a zero gradient tensor
-            if x.grad is None:
-                # Create a zero gradient tensor with the same shape as the input tensor
-                x.grad = np.zeros_like(x.data)
-                
-            # Compute the gradient of the exponential operation
-            exp_gradient(out.data.ravel(), out.grad.ravel(), x.grad.ravel())
-            
-    # Store the backward function with respect to the exponential operation
-    out._backward = _backward
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the gradient needs to be computed
+        if not t.requires_grad: 
+            return
+        
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # Compute the gradient of the exponential operation
+        exp_gradient(out_grad.ravel(), t.data.ravel(), t.grad.ravel())
     
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)
 
 
 def log(x: 'Tensor') -> 'Tensor':
@@ -453,43 +364,27 @@ def log(x: 'Tensor') -> 'Tensor':
     
     Returns:
     - Tensor: Natural logarithm of the tensor
-    
-    Raises:
-    - AssertionError: If the input is not a tensor
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    
-    # Forward pass: compute the natural logarithm
-    out = Tensor(np.log(x.data), requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # Compute the natural logarithm of the tensor
+        return np.log(data)
     
     # Define the backward function
-    def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:
-            # If the gradient is None, create a zero gradient tensor
-            if x.grad is None:
-                # Create a zero gradient tensor with the same shape as the input tensor
-                x.grad = np.zeros_like(x.data)
-                
-            # Compute the gradient of the logarithm operation
-            log_gradient(x.data.ravel(), out.grad.ravel(), x.grad.ravel())
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the gradient needs to be computed
+        if not t.requires_grad: 
+            return
+
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # Compute the gradient of the logarithm operation
+        log_gradient(t.data.ravel(), out_grad.ravel(), t.grad.ravel())
     
-    # Store the backward function with respect to the natural logarithm operation
-    out._backward = _backward
-    
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)
 
 
 def transpose(x: 'Tensor', axes: Tuple[int]) -> 'Tensor':
@@ -502,47 +397,33 @@ def transpose(x: 'Tensor', axes: Tuple[int]) -> 'Tensor':
     
     Returns:
     - Tensor: Transpose of the tensor
-    
-    Raises:
-    - AssertionError: If the input is not a tensor
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    
-    # Compute the transpose of the tensor
-    out = Tensor(x.data.transpose(axes), requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # Compute the transpose of the tensor
+        return data.transpose(axes)
     
     # Define the backward function
-    def _backward() -> None:
-        # Invert the axes
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the gradient needs to be computed
+        if not t.requires_grad: 
+            return
+        
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # Invert the axes to match the original tensor
         inv_axes = np.argsort(axes)
         
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:
-            # Invert the axes to match the original tensor
-            inv_axes = np.argsort(axes)
-            
-            # Transpose the gradient to match the original tensor
-            grad_x = out.grad.transpose(inv_axes)
-            
-            # Accumulate the gradient in the input tensor
-            accumulate_gradient(x, grad_x)
-                
-    # Store the backward function with respect to the transpose operation
-    out._backward = _backward
+        # Transpose the gradient to match the original tensor
+        grad_x = out_grad.transpose(inv_axes)
+        
+        # Accumulate the gradient in the input tensor
+        accumulate_gradient(t, grad_x)
     
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)
 
 
 def masked_fill(x: 'Tensor', mask: Union[np.ndarray, 'Tensor'], value: float) -> 'Tensor':
@@ -556,73 +437,61 @@ def masked_fill(x: 'Tensor', mask: Union[np.ndarray, 'Tensor'], value: float) ->
     
     Returns:
     - Tensor: Tensor with the masked elements filled with the specified value
-    
-    Raises:
-    - AssertionError: If the input is not a tensor
-    - AssertionError: If the mask is not a numpy array or a tensor
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
+    # Define the mask_flat variable to store the flattened mask
+    mask_flat: np.ndarray
     
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    assert isinstance(mask, (np.ndarray, Tensor)), "Mask must be a numpy array or a tensor"
-    
-    # Extract the mask data
-    mask_arr = mask if isinstance(mask, np.ndarray) else mask.data
-    
-    # Flatten the mask and input tensor data
-    mask_flat = mask_arr.ravel()
-    flat_data = x.data.ravel()
-    
-    # Prepare the output tensor and flatten it
-    out_data = np.empty_like(x.data)
-    out_flat = out_data.ravel()
-    
-    if isinstance(value, float) and not np.isfinite(value):
-        # The value is negative infinity
-        if value < 0:
-            # Perform the masked fill operation with negative infinity
-            masked_fill_forward_neg_inf(flat_data, mask_flat, out_flat)
-            
-        # The value is positive infinity
-        else:
-            # Perform the masked fill operation with positive infinity
-            masked_fill_forward_inf(flat_data, mask_flat, out_flat)
-    else:
-        # Cast the value to the appropriate type    
-        fill_val = x.data.dtype.type(value)
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # Set the nonlocal variable mask_flat to store the flattened mask
+        nonlocal mask_flat
         
-        # Perform the masked fill operation
-        masked_fill_forward(flat_data, mask_flat, fill_val, out_flat)
+        # Extract the mask data
+        mask_arr = mask if isinstance(mask, np.ndarray) else mask.data
+        
+        # Flatten the mask and input tensor data
+        mask_flat = mask_arr.ravel()
+        flat_data = data.ravel()
+        
+        # Prepare the output tensor and flatten it
+        out_data = np.empty_like(data)
+        out_flat = out_data.ravel()
+        
+        if isinstance(value, float) and not np.isfinite(value):
+            # The value is negative infinity
+            if value < 0:
+                # Perform the masked fill operation with negative infinity
+                masked_fill_forward_neg_inf(flat_data, mask_flat, out_flat)
+                
+            # The value is positive infinity
+            else:
+                # Perform the masked fill operation with positive infinity
+                masked_fill_forward_inf(flat_data, mask_flat, out_flat)
+        else:
+            # Cast the value to the appropriate type    
+            fill_val = data.dtype.type(value)
+            
+            # Perform the masked fill operation
+            masked_fill_forward(flat_data, mask_flat, fill_val, out_flat)
     
-    # Create a new tensor with the filled data
-    out = Tensor(out_data, requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+        # Return the output data
+        return out_data
     
     # Define the backward function
-    def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:
-            # If the gradient is None, create a zero gradient tensor
-            if x.grad is None:
-                # Create a zero gradient tensor with the same shape as the input tensor
-                x.grad = np.zeros_like(x.data, dtype=x.data.dtype)
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the gradient needs to be computed
+        if not t.requires_grad: 
+            return
 
-            # Backpropagate the gradient through the masked fill operation
-            masked_fill_gradient(mask_flat, out.grad.ravel(), x.grad.ravel())
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # Backpropagate the gradient through the masked fill operation
+        masked_fill_gradient(mask_flat, out_grad.ravel(), t.grad.ravel())
     
-    # Store the backward function with respect to the masked fill operation
-    out._backward = _backward
-    
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)
 
 
 def clip(x: 'Tensor', min_value: float, max_value: float) -> 'Tensor':
@@ -638,50 +507,33 @@ def clip(x: 'Tensor', min_value: float, max_value: float) -> 'Tensor':
 
     Returns:
     - Tensor: A new Tensor with values clipped to the range [min_value, max_value]
-    
-    Raises:
-    - AssertionError: If the input is not a tensor
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # Create an output tensor with the same shape as the input tensor
+        out_data = np.empty_like(data)
     
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    
-    # Create an output tensor with the same shape as the input tensor
-    out_data = np.empty_like(x.data)
-    
-    # Clip the values of the tensor to the specified range
-    clip_forward(x.data.ravel(), min_value, max_value, out_data.ravel())
-    
-    # Create the output tensor with the clipped values
-    out = Tensor(out_data, requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD:
-        return out
+        # Clip the values of the tensor to the specified range
+        clip_forward(data.ravel(), min_value, max_value, out_data.ravel())
+        
+        # Return the clipped tensor
+        return out_data
     
     # Define the backward function
-    def _backward() -> None:
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
         # Check if the gradient needs to be computed
-        if x.requires_grad and out.grad is not None:
-            # If the gradient is None, create a zero gradient tensor
-            if x.grad is None:
-                # Create a zero gradient tensor with the same shape as the input tensor
-                x.grad = np.zeros_like(x.data)
-                
-            # Compute the gradient of the clipping operation
-            clip_gradient(x.data.ravel(), out.grad.ravel(), x.grad.ravel(), min_value, max_value)
+        if not t.requires_grad: 
+            return
+        
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # Compute the gradient of the clipping operation
+        clip_gradient(x.data.ravel(), out_grad.ravel(), t.grad.ravel(), min_value, max_value)
             
-    # Store the backward function with respect to the clipping operation
-    out._backward = _backward
-    
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)
 
 
 def squeeze(x: 'Tensor', axis: Optional[int] = None) -> 'Tensor':
@@ -694,50 +546,38 @@ def squeeze(x: 'Tensor', axis: Optional[int] = None) -> 'Tensor':
     
     Returns:
     - Tensor: Squeezed tensor
-    
-    Raises:
-    - AssertionError: If the input is not a tensor
-    - ValueError: If the specified axis is not a singleton dimension
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    
-    # Squeeze the tensor along the specified axis
-    out = Tensor(np.squeeze(x.data, axis=axis), requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # Squeeze the tensor along the specified axis
+        return np.squeeze(data, axis=axis)
     
     # Define the backward function
-    def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:
-            # Unsqueeze the gradient along the same axis to match the original shape
-            if axis is None:
-                # For None case, we need to restore all squeezed dims
-                grad_squeezed = out.grad
-                original_shape = x.data.shape
-                for dim in sorted([i for i, size in enumerate(original_shape) if size == 1], reverse=True):
-                    grad_squeezed = np.expand_dims(grad_squeezed, axis=dim)
-            else:
-                # For specific axis case
-                grad_squeezed = np.expand_dims(out.grad, axis=axis)
-            
-            # Update the gradient of the input tensor
-            accumulate_gradient(x, grad_squeezed)
-            
-    # Store the backward function with respect to the squeeze operation
-    out._backward = _backward
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the gradient needs to be computed
+        if not t.requires_grad: 
+            return
+        
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # Unsqueeze the gradient along the same axis to match the original shape
+        if axis is None:
+            # For None case, we need to restore all squeezed dims
+            grad_squeezed = out_grad
+            original_shape = t.data.shape
+            for dim in sorted([i for i, size in enumerate(original_shape) if size == 1], reverse=True):
+                grad_squeezed = np.expand_dims(grad_squeezed, axis=dim)
+        else:
+            # For specific axis case
+            grad_squeezed = np.expand_dims(out_grad, axis=axis)
+        
+        # Update the gradient of the input tensor
+        accumulate_gradient(t, grad_squeezed)
     
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)
 
 
 def unsqueeze(x: 'Tensor', axis: int) -> 'Tensor':
@@ -750,43 +590,27 @@ def unsqueeze(x: 'Tensor', axis: int) -> 'Tensor':
     
     Returns:
     - Tensor: Unsqueezed tensor
-    
-    Raises:
-    - AssertionError: If the input is not a tensor
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    
-    # Unsqueeze the tensor along the specified axis
-    out = Tensor(np.expand_dims(x.data, axis=axis), requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # Unsqueeze the tensor along the specified axis
+        return np.expand_dims(data, axis=axis)
     
     # Define the backward function
-    def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:
-            # If the gradient is None, create a zero gradient tensor
-            if x.grad is None:
-                # Create a zero gradient tensor with the same shape as the input tensor
-                x.grad = np.zeros_like(x.data)
-                
-            # Compute the gradient of the unsqueeze operation
-            unsqueeze_gradient(out.grad.ravel(), x.grad.ravel())
-            
-    # Store the backward function with respect to the unsqueeze operation
-    out._backward = _backward
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the gradient needs to be computed
+        if not t.requires_grad: 
+            return
+        
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # Compute the gradient of the unsqueeze operation
+        unsqueeze_gradient(out_grad.ravel(), t.grad.ravel())
     
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)
 
 
 def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
@@ -799,82 +623,66 @@ def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
     
     Returns:
     - Tensor: Concatenated tensor
-    
-    Raises:
-    - AssertionError: If the the inputs are not tensors
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
+    # Define the offset array to store the offsets of each tensor
+    offsets: np.ndarray
     
-    # Check if the input is a tensor
-    assert all(isinstance(t, Tensor) for t in tensors), "All inputs must be tensors"
-    
-    # The output tensor requires grad if any of the inputs require grad.
-    requires_grad = any(t.requires_grad for t in tensors)
-    
-    # Flatten the tensors and compute their sizes
-    parts = [t.data.ravel() for t in tensors]
-    sizes = [p.size for p in parts]
-    offsets = np.array(np.cumsum([0] + sizes), dtype=np.int64)
-    total = offsets[-1]
-    parts_flat = np.empty(total, dtype=tensors[0].data.dtype)
-    
-    # Interleave the flattened tensors into a single array
-    for i,p in enumerate(parts):
-        # Fill the flattened array with the data from each tensor
-        parts_flat[offsets[i]:offsets[i+1]] = p
+    # Define the forward function
+    def forward(data: list[np.ndarray]) -> np.ndarray:
+        # Set the nonlocal variable offsets to store the offsets of each tensor
+        nonlocal offsets
         
-    # Create an output array to hold the concatenated result
-    out_flat = np.empty_like(parts_flat)
-    
-    # Concatenate the flattened tensors along the specified axis
-    concat_forward(parts_flat, offsets, out_flat)
-    
-    # Extract the shape of the first tensor to determine the output shape
-    out_shape = list(tensors[0].data.shape)
-    
-    # Update the shape of the output tensor along the specified axis
-    out_shape[axis] = int(np.sum([t.data.shape[axis] for t in tensors]))
-    
-    # Reshape the output data to match the concatenated shape
-    out_data = out_flat.reshape(out_shape)
+        # Flatten the tensors and compute their sizes
+        parts = [d.ravel() for d in data]
+        sizes = [p.size for p in parts]
+        offsets = np.array(np.cumsum([0] + sizes), dtype=np.int64)
 
-    # Compute the concatenated tensor    
-    out = Tensor(out_data, requires_grad=requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+        # Create a flattened array to hold the concatenated tensors
+        parts_flat = np.empty(offsets[-1], dtype=data[0].dtype)
+        
+        # Interleave the flattened tensors into a single array
+        for i, p in enumerate(parts):
+            # Fill the flattened array with the data from each tensor
+            parts_flat[offsets[i]:offsets[i+1]] = p
+            
+        # Create an output array to hold the concatenated result
+        out_flat = np.empty_like(parts_flat)
+        
+        # Concatenate the flattened tensors along the specified axis
+        concat_forward(parts_flat, offsets, out_flat)
+        
+        # Extract the shape of the first tensor to determine the output shape
+        out_shape = list(data[0].shape)
+        
+        # Update the shape of the output tensor along the specified axis
+        out_shape[axis] = int(np.sum([d.shape[axis] for d in data]))
+        
+        # Reshape the output data to match the concatenated shape
+        out_data = out_flat.reshape(out_shape)
+        
+        # Return the concatenated tensor
+        return out_data
     
     # Define the backward function
-    def _backward() -> None:
-        # If the output tensor has no gradient, return
-        if out.grad is None:
-            return
-        
-        # Flatten the gradient of the output tensor
-        flat_grad = out.grad.ravel()
+    def backward(tensors: list['Tensor'], out_grad: np.ndarray) -> None:
+        # Flatten the output gradient
+        flat_grad = out_grad.ravel()
         
         # Iterate over the tensors and their offsets
         for i, t in enumerate(tensors):
-            # If the tensor requires gradient computation, backpropagate the gradient
-            if t.requires_grad:
-                # If the tensor has no gradient, create a zero gradient tensor
-                if t.grad is None:
-                    # Create a zero gradient tensor with the same shape as the input tensor
-                    t.grad = np.zeros_like(t.data)
-                    
-                # Compute the gradient of the concatenation operation
-                concat_gradient(offsets, flat_grad, t.grad.ravel(), i)
+            # Check if the tensor requires gradient computation
+            if not t.requires_grad:
+                continue
+            
+            # Check if the gradient is initialized
+            assert t.grad is not None, f"Gradient of the {i}-th tensor must be initialized"
+                
+            # Compute the gradient of the concatenation operation
+            concat_gradient(offsets, flat_grad, t.grad.ravel(), i)
 
-    # Store the backward function with respect to the concatenation operation
-    out._backward = _backward
-    
-    # Store the previous tensors in the computation graph
-    out._prev = {t for t in tensors if t.requires_grad}
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(tensors, forward, backward)
 
 
 def reshape(x: 'Tensor', new_shape: Tuple[int, ...]) -> 'Tensor':
@@ -887,41 +695,30 @@ def reshape(x: 'Tensor', new_shape: Tuple[int, ...]) -> 'Tensor':
     
     Returns:
     - Tensor: A new Tensor with the specified shape.
-    
-    Raises:
-    - AssertionError: If the input is not a tensor.
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    
-    # Compute the reshaped tensor
-    out = Tensor(x.data.reshape(new_shape), requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # Reshape the tensor to the specified new shape
+        return data.reshape(new_shape)
     
     # Define the backward function
-    def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:
-            # Reshape the gradient from the output back to the shape of x.data
-            grad_back = out.grad.reshape(x.data.shape)
-            
-            # Accumulate the gradient in x.grad
-            accumulate_gradient(x, grad_back)
-            
-    # Store the backward function with respect to the reshape operation
-    out._backward = _backward
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the gradient needs to be computed
+        if not t.requires_grad: 
+            return
+        
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # Reshape the gradient to match the original tensor shape
+        grad_back = out_grad.reshape(t.data.shape)
+        
+        # Accumulate the gradient in the input tensor
+        accumulate_gradient(t, grad_back)
     
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)
 
 
 def repeat(x: 'Tensor', repeats: int, axis: Optional[int] = None) -> 'Tensor':
@@ -935,69 +732,54 @@ def repeat(x: 'Tensor', repeats: int, axis: Optional[int] = None) -> 'Tensor':
     
     Returns:
     - Tensor: A new tensor with repeated elements.
-    
-    Raises:
-    - AssertionError: If the input is not a tensor.
     """
     
-    # Get the Tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    
-    # If the axis is None, flatten the tensor and repeat
-    if axis is None:
-        # Flatten the tensor
-        out_data = np.empty(x.data.size * repeats, dtype=x.data.dtype)
-        
-        # Repeat the flattened tensor
-        repeat_forward(x.data.ravel(), repeats, out_data)
-    # If the axis is specified, repeat along that axis
-    else:
-        # Repeat the tensor along the specified axis
-        out_data = np.repeat(x.data, repeats, axis=axis)
-    
-    # Compute the output tensor by repeating the input tensor
-    out = Tensor(out_data, requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # If the axis is None, flatten the tensor and repeat
+        if axis is None:
+            # Flatten the tensor
+            out_data = np.empty(data.size * repeats, dtype=data.dtype)
+            
+            # Repeat the flattened tensor
+            repeat_forward(data.ravel(), repeats, out_data)
+            
+        # If the axis is specified, repeat along that axis
+        else:
+            # Repeat the tensor along the specified axis
+            out_data = np.repeat(data, repeats, axis=axis)
+            
+        # Return the repeated tensor
+        return out_data
     
     # Define the backward function
-    def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:
-            # Check if axis is None
-            if axis is None:
-                # Check if the gradient is None
-                if x.grad is None:
-                    # Initialize the gradient to zeros
-                    x.grad = np.zeros_like(x.data)
-                    
-                # Repeat the gradient along the specified axis
-                repeat_gradient(out.grad.ravel(), repeats, x.grad.ravel())
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the gradient needs to be computed
+        if not t.requires_grad: 
+            return
+        
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # If the axis is None, compute the gradient for the flattened tensor
+        if axis is None:
+            # Compute the gradient of the repeated tensor
+            repeat_gradient(out_grad.ravel(), repeats, t.grad.ravel())
             
-            # If axis is specified, repeat the gradient along that axis
-            else:
-                # Reduce the gradient along the specified axis
-                grad_unrepeated = np.add.reduce(
-                    out.grad.reshape(
-                        *(x.data.shape[:axis]), x.data.shape[axis], repeats, *x.data.shape[axis+1:]
-                    ), axis=axis+1
-                )
-                
-                # Accumulate the gradient
-                accumulate_gradient(x, grad_unrepeated)
-
-    # Store the backward function with respect to the repeat operation
-    out._backward = _backward
+        # If the axis is specified, compute the gradient along that axis
+        else:
+            # Reduce the gradient along the specified axis
+            grad_unrepeated = np.add.reduce(
+                out_grad.reshape(
+                    *(t.data.shape[:axis]), t.data.shape[axis], repeats, *t.data.shape[axis+1:]
+                ), axis=axis+1
+            )
+            
+            # Accumulate the gradient
+            accumulate_gradient(t, grad_unrepeated)
     
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)
 
 
 def pad(x: 'Tensor', pad_width: Tuple[Tuple[int, int], ...]) -> 'Tensor':
@@ -1011,56 +793,43 @@ def pad(x: 'Tensor', pad_width: Tuple[Tuple[int, int], ...]) -> 'Tensor':
 
     Returns:
     - Tensor: A new tensor with padded data.
-    
-    Raises:
-    - AssertionError: If the input is not a tensor.
     """
     
-    # Get the Tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input must be a tensor"
-    
-    # Extract the padding widths for each dimension and the input tensor shape
-    (_, _), (pt, pb), (pl, pr), (_, _) = pad_width
-    batch_size, height, width, channels = x.shape()
-    
-    # Create the output tensor with the new shape
-    out_data = np.empty((batch_size, height + pt + pb, width + pl + pr, channels), dtype=x.data.dtype)
-    
-    # Perform the padding operation
-    pad_forward(x.data, pt, pb, pl, pr, out_data)
-    
-    # Compute the padded tensor
-    out = Tensor(out_data, requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # Extract the padding widths for each dimension and the input tensor shape
+        (_, _), (pt, pb), (pl, pr), (_, _) = pad_width
+        batch_size, height, width, channels = data.shape
+        
+        # Create the output tensor with the new shape
+        out_data = np.empty((batch_size, height + pt + pb, width + pl + pr, channels), dtype=data.dtype)
+        
+        # Perform the padding operation
+        pad_forward(data, pt, pb, pl, pr, out_data)
+        
+        # Return the padded tensor
+        return out_data
     
     # Define the backward function
-    def _backward() -> None:
-        # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad and out.grad is not None:
-            # Check if the gradient is None
-            if x.grad is None:
-                # Initialize the gradient to zeros
-                x.grad = np.zeros_like(x.data)
-                
-            # Compute the gradient with respect to the input tensor
-            pad_gradient(out.grad, pt, pb, pl, pr, x.grad)
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the gradient needs to be computed
+        if not t.requires_grad: 
+            return
+        
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
+        # Extract the padding widths for each dimension
+        (_, _), (pt, pb), (pl, pr), (_, _) = pad_width
+        
+        # Compute the gradient of the padding operation
+        pad_gradient(out_grad, pt, pb, pl, pr, t.grad)
     
-    # Store the backward function with respect to the pad operation
-    out._backward = _backward
-    
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)
 
 
-def conv_2d(x: 'Tensor', kernel: 'Tensor', stride: Tuple[int, int] = (1,1)) -> 'Tensor':
+def conv_2d(x: 'Tensor', kernel: 'Tensor', stride: Tuple[int, int] = (1, 1)) -> 'Tensor':
     """
     Compute the 2D convolution of the input tensor with the kernel.
     
@@ -1073,80 +842,68 @@ def conv_2d(x: 'Tensor', kernel: 'Tensor', stride: Tuple[int, int] = (1,1)) -> '
     - Tensor: The result of the 2D convolution.
     
     Raises:
-    - AssertionError: If the inputs are not tensors.
     - AssertionError: If the input channels do not match the kernel channels.
     - ValueError: If the kernel or stride is too large for the input size.
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Ensure the inputs are tensors
-    assert isinstance(x, Tensor) and isinstance(kernel, Tensor), "Both inputs must be tensors"
-    
-    # Extract the input dimensions
-    batch_size, height, width, channels = x.shape()
-    out_channels, kernel_in_channels, kernel_height, kernel_width = kernel.shape()
+    # Extract the stride values
     stride_height, stride_width = stride
     
-    # Check if the input channels match the kernel channels
-    assert kernel_in_channels == channels, "w in_channels != x channels"
-    
-    # Compute the output dimensions
-    out_height = (height - kernel_height) // stride_height + 1
-    out_width = (width - kernel_width) // stride_width + 1
-    
-    # Check if the kernel is too large or the stride is too large for the input size
-    if out_height < 1 or out_width < 1:
-        raise ValueError("Kernel or stride too large for input size")
+    # Define the forward function
+    def forward(data: tuple[np.ndarray, np.ndarray]) -> np.ndarray:
+        # Unpack the input data
+        x_data, kernel_data = data
+        
+        # Extract the input dimensions
+        batch_size, height, width, channels = x_data.shape
+        out_channels, kernel_in_channels, kernel_height, kernel_width = kernel_data.shape
+        
+        # Check if the input channels match the kernel channels
+        assert kernel_in_channels == channels, "w in_channels != x channels"
+        
+        # Compute the output dimensions
+        out_height = (height - kernel_height) // stride_height + 1
+        out_width = (width - kernel_width) // stride_width + 1
+        
+        # Check if the kernel is too large or the stride is too large for the input size
+        if out_height < 1 or out_width < 1:
+            raise ValueError("Kernel or stride too large for input size")
 
-    # Create the output array
-    out_data = np.empty((batch_size, out_height, out_width, out_channels), dtype=x.data.dtype)
-    
-    # Perform the 2D convolution
-    conv_2d_forward(x.data, kernel.data, stride_height, stride_width, out_data)
-    
-    # Create the output tensor
-    out = Tensor(out_data, requires_grad=x.requires_grad or kernel.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+        # Create the output array
+        out_data = np.empty((batch_size, out_height, out_width, out_channels), dtype=x_data.dtype)
+        
+        # Perform the 2D convolution
+        conv_2d_forward(x_data, kernel_data, stride_height, stride_width, out_data)
+        
+        # Return the output data
+        return out_data
     
     # Define the backward function
-    def _backward():
-        # Check if the output gradient is None, and return if so
-        if out.grad is None:
-            return
-        
+    def backward(input_tuple: tuple['Tensor', 'Tensor'], out_grad: np.ndarray) -> None:
+        # Unpack the input data
+        t, k = input_tuple
+ 
         # Gradient for kernel
-        if kernel.requires_grad:
-            # Check if kernel gradient is None, and initialize it if so
-            if kernel.grad is None:
-                kernel.grad = np.zeros_like(kernel.data)
-                
+        if k.requires_grad:
+            # Check if the gradient is initialized
+            assert k.grad is not None, "Gradient must be initialized"
+            
             # Compute the gradient with respect to the kernel
-            conv_2d_gradient_w(x.data, out.grad, stride_height, stride_width, kernel.grad)
+            conv_2d_gradient_w(t.data, out_grad, stride_height, stride_width, k.grad)
             
         # Gradient for input
-        if x.requires_grad:
-            # Check if input gradient is None, and initialize it if so
-            if x.grad is None:
-                x.grad = np.zeros_like(x.data)
-                
+        if t.requires_grad:
+            # Check if the gradient is initialized
+            assert t.grad is not None, "Gradient must be initialized"
+            
             # Compute the gradient with respect to the input
-            conv_2d_gradient_x(out.grad, kernel.data, stride_height, stride_width, x.grad)
+            conv_2d_gradient_x(out_grad, k.data, stride_height, stride_width, t.grad)
     
-    # Store the backward function with respect to the convolution operation
-    out._backward = _backward
-    
-    # Store the previous tensors in the computation graph
-    out._prev = {t for t in (x, kernel) if t.requires_grad}
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op((x, kernel), forward, backward)
 
 
-def max_pool_2d(x: 'Tensor', kernel_size: Tuple[int,int] = (2,2), stride: Tuple[int,int] = (2,2)) -> 'Tensor':
+def max_pool_2d(x: 'Tensor', kernel_size: Tuple[int,int] = (2, 2), stride: Tuple[int,int] = (2, 2)) -> 'Tensor':
     """
     Apply a 2D Max Pooling over an input tensor of shape (N, H, W, C).
     
@@ -1159,62 +916,55 @@ def max_pool_2d(x: 'Tensor', kernel_size: Tuple[int,int] = (2,2), stride: Tuple[
     - Tensor: The output after applying Max Pool 2D, shape (N, outH, outW, C).
     
     Raises:
-    - AssertionError: If x is not a Tensor.
     - ValueError: If the window or stride is too large for the input size.
     """
     
-    # Get the tensor class
-    Tensor = cast(Type['Tensor'], get_tensor_class())
-    
-    # Check if the input is a tensor
-    assert isinstance(x, Tensor), "Input x must be a Tensor."
-    
-    # Extract the input dimensions
-    batch_size, height, width, channels = x.shape()
-    kernel_height, kernel_width = kernel_size
+    # Define the stride values and initialize the indices for max pooling
     stride_height, stride_width = stride
+    arg_i: np.ndarray
+    arg_j: np.ndarray
     
-    # Compute the output dimensions
-    out_height = (height - kernel_height) // stride_height + 1
-    out_width = (width - kernel_width) // stride_width + 1
-    
-    # Check if the kernel or stride is too large for the input size
-    if out_height < 1 or out_width < 1:
-        raise ValueError("Kernel size or stride too large for input size.")
+    # Define the forward function
+    def forward(data: np.ndarray) -> np.ndarray:
+        # Set the nonlocal variables for max pooling indices
+        nonlocal arg_i, arg_j
+        
+        # Extract the input dimensions
+        batch_size, height, width, channels = data.shape
+        kernel_height, kernel_width = kernel_size
+        
+        # Compute the output dimensions
+        out_height = (height - kernel_height) // stride_height + 1
+        out_width = (width - kernel_width) // stride_width + 1
+        
+        # Check if the kernel or stride is too large for the input size
+        if out_height < 1 or out_width < 1:
+            raise ValueError("Kernel size or stride too large for input size.")
 
-    # Initialize the output array and the indices for max pooling
-    out_data = np.empty((batch_size, out_height, out_width, channels), dtype=x.data.dtype)
-    arg_i = np.zeros_like(out_data, dtype=np.int32)
-    arg_j = np.zeros_like(out_data, dtype=np.int32)
+        # Create the output array
+        out_data = np.empty((batch_size, out_height, out_width, channels), dtype=data.dtype)
+        
+        # Initialize the indices for max pooling
+        arg_i = np.zeros_like(out_data, dtype=np.int32)
+        arg_j = np.zeros_like(out_data, dtype=np.int32)
 
-    # Perform the max pooling operation
-    max_pool_2d_forward(x.data, kernel_height, kernel_width, stride_height, stride_width, out_data, arg_i, arg_j)
-    
-    # Compute the max pooling operation and store the output tensor
-    out = Tensor(out_data, requires_grad=x.requires_grad)
-    
-    # If gradient computation is disabled, return the output tensor without a backward function
-    if _NO_GRAD: return out
+        # Perform the max pooling operation
+        max_pool_2d_forward(x.data, kernel_height, kernel_width, stride_height, stride_width, out_data, arg_i, arg_j)
+        
+        # Return the output data
+        return out_data
     
     # Define the backward function
-    def _backward():
-        # Check if the output gradient is None, and return if so
-        if out.grad is None:
+    def backward(t: 'Tensor', out_grad: np.ndarray) -> None:
+        # Check if the gradient needs to be computed
+        if not t.requires_grad: 
             return
         
-        # Check if the input tensor requires gradient
-        if x.grad is None:
-            # Initialize the gradient of x if it is None
-            x.grad = np.zeros_like(x.data)
-            
+        # Check if the gradient is initialized
+        assert t.grad is not None, "Gradient must be initialized"
+        
         # Backprop the gradient through the max pooling operation
-        max_pool_2d_gradient(arg_i, arg_j, out.grad, stride_height, stride_width, x.grad)
+        max_pool_2d_gradient(arg_i, arg_j, out_grad, stride_height, stride_width, t.grad)
     
-    # Store the backward function with respect to the max pooling operation
-    out._backward = _backward
-    
-    # Store the previous tensors in the computation graph
-    out._prev = {x} if x.requires_grad else set()
-    
-    # Return the output tensor
-    return out
+    # Return the tensor operation with the specified forward and backward functions
+    return tensor_op(x, forward, backward)

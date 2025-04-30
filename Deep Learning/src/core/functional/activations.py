@@ -1,7 +1,6 @@
 import numpy as np
 from typing import Type, TYPE_CHECKING, cast
 
-from .utils import accumulate_gradient
 if TYPE_CHECKING: from ..tensor import Tensor
 from ..utils.context_manager import _NO_GRAD
 from ..utils.types_registry import get_tensor_class

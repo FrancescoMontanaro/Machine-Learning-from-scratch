@@ -1,11 +1,8 @@
-import numpy as np
 from typing import Literal, Optional
 
 from .base import LossFn
 from ..core import Tensor
 from ..core.utils.constants import *
-from ..core.utils.context_manager import _NO_GRAD
-from ..core.functional.utils import accumulate_gradient
     
 class CategoricalCrossEntropy(LossFn):
         
