@@ -20,8 +20,8 @@ from .kernel.repeat import repeat_forward, repeat_gradient
 from .kernel.sum import sum_flat_forward, sum_flat_gradient
 from .kernel.max import max_flat_forward, max_flat_gradient
 from .kernel.max_pool_2d import max_pool_2d_forward, max_pool_2d_gradient
-from .kernel.masked_fill import masked_fill_forward, masked_fill_gradient
 from .kernel.conv_2d import conv_2d_forward, conv_2d_gradient_w, conv_2d_gradient_x
+from .kernel.masked_fill import masked_fill_forward, masked_fill_gradient, masked_fill_forward_neg_inf, masked_fill_forward_inf
 
 
 def sum(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Tensor':
@@ -569,11 +569,33 @@ def masked_fill(x: 'Tensor', mask: Union[np.ndarray, 'Tensor'], value: float) ->
     assert isinstance(x, Tensor), "Input must be a tensor"
     assert isinstance(mask, (np.ndarray, Tensor)), "Mask must be a numpy array or a tensor"
     
-    # Ensure the mask is in numpy format
-    mask = mask.data if not isinstance(mask, np.ndarray) else mask
+    # Extract the mask data
+    mask_arr = mask if isinstance(mask, np.ndarray) else mask.data
     
-    # Fill the tensor with the value where the mask is False
-    out_data = np.where(mask, value, x.data)
+    # Flatten the mask and input tensor data
+    mask_flat = mask_arr.ravel()
+    flat_data = x.data.ravel()
+    
+    # Prepare the output tensor and flatten it
+    out_data = np.empty_like(x.data)
+    out_flat = out_data.ravel()
+    
+    if isinstance(value, float) and not np.isfinite(value):
+        # The value is negative infinity
+        if value < 0:
+            # Perform the masked fill operation with negative infinity
+            masked_fill_forward_neg_inf(flat_data, mask_flat, out_flat)
+            
+        # The value is positive infinity
+        else:
+            # Perform the masked fill operation with positive infinity
+            masked_fill_forward_inf(flat_data, mask_flat, out_flat)
+    else:
+        # Cast the value to the appropriate type    
+        fill_val = x.data.dtype.type(value)
+        
+        # Perform the masked fill operation
+        masked_fill_forward(flat_data, mask_flat, fill_val, out_flat)
     
     # Create a new tensor with the filled data
     out = Tensor(out_data, requires_grad=x.requires_grad)
@@ -584,12 +606,14 @@ def masked_fill(x: 'Tensor', mask: Union[np.ndarray, 'Tensor'], value: float) ->
     # Define the backward function
     def _backward() -> None:
         # If the gradient needs to be computed, backpropagate the gradient
-        if x.requires_grad:
-            # Compute the gradient of the loss with respect to the current tensor
-            grad_mask = np.where(mask, 0, out.grad if out.grad is not None else 0)
-            
-            # Update the gradient of the current tensor
-            accumulate_gradient(x, grad_mask)
+        if x.requires_grad and out.grad is not None:
+            # If the gradient is None, create a zero gradient tensor
+            if x.grad is None:
+                # Create a zero gradient tensor with the same shape as the input tensor
+                x.grad = np.zeros_like(x.data, dtype=x.data.dtype)
+
+            # Backpropagate the gradient through the masked fill operation
+            masked_fill_gradient(mask_flat, out.grad.ravel(), x.grad.ravel())
     
     # Store the backward function with respect to the masked fill operation
     out._backward = _backward

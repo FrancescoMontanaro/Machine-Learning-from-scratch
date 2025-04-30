@@ -68,7 +68,7 @@ class SingleHeadAttention(Module):
         v = self.value(x) # (B, S, E) -> (B, S, H)
         
         # Compute the attention weights, apply the attention mask and normalize the weights using softmax
-        attention_weights = k @ q.transpose((0, 2, 1)) * self.head_size ** -0.5 # (B, S, H) @ (B, H, S) -> (B, S, S)
+        attention_weights: Tensor = k @ q.transpose((0, 2, 1)) * self.head_size ** -0.5 # (B, S, H) @ (B, H, S) -> (B, S, S)
         attention_weights = attention_weights.masked_fill(self.attention_mask.data[:S, :S] == 0, float('-inf')) # (B, S, S) -> (B, S, S)
         attention_weights = attention_weights.softmax(axis=-1) # (B, S, S) -> (B, S, S)
         

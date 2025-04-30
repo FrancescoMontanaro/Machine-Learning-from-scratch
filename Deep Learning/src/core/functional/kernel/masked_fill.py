@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from numba import njit, prange
 
@@ -14,10 +15,62 @@ def masked_fill_forward(x_flat: np.ndarray, mask_flat: np.ndarray, value: float,
     - out_flat (np.ndarray): Flattened output tensor.
     """
     
+    # Extract the size of the flattened tensors
+    n = x_flat.size
+    m = mask_flat.size
+    
     # Iterate over the flattened tensor
-    for i in prange(x_flat.size):
-        # If the mask is True, keep the original value; otherwise, fill with the specified value
-        out_flat[i] = x_flat[i] if mask_flat[i] else value
+    for i in prange(n):
+        # If mask is True, fill with the specified value; otherwise, keep the original value
+        out_flat[i] = value if mask_flat[i % m] else x_flat[i]
+        
+        
+@njit(parallel=True, fastmath=True)
+def masked_fill_forward_inf(x_flat, mask_flat, out_flat) -> None:
+    """
+    Applies a masked fill operation on a flattened tensor, filling with negative infinity.
+    
+    Parameters:
+    - x_flat (np.ndarray): Flattened input tensor.
+    - mask_flat (np.ndarray): Flattened boolean mask tensor.
+    - out_flat (np.ndarray): Flattened output tensor.
+    """   
+    
+    # Define the value to fill in the masked positions
+    neg_inf = math.inf
+    
+    # Extract the size of the flattened tensors
+    n = x_flat.size
+    m = mask_flat.size
+    
+    # Iterate over the flattened tensor
+    for i in prange(n):
+        # If mask is True, fill with negative infinity; otherwise, keep the original value
+        out_flat[i] = neg_inf if mask_flat[i % m] else x_flat[i]
+        
+        
+@njit(parallel=True, fastmath=True)
+def masked_fill_forward_neg_inf(x_flat, mask_flat, out_flat) -> None:
+    """
+    Applies a masked fill operation on a flattened tensor, filling with negative infinity.
+    
+    Parameters:
+    - x_flat (np.ndarray): Flattened input tensor.
+    - mask_flat (np.ndarray): Flattened boolean mask tensor.
+    - out_flat (np.ndarray): Flattened output tensor.
+    """   
+    
+    # Define the value to fill in the masked positions
+    neg_inf = -math.inf
+    
+    # Extract the size of the flattened tensors
+    n = x_flat.size
+    m = mask_flat.size
+    
+    # Iterate over the flattened tensor
+    for i in prange(n):
+        # If mask is True, fill with negative infinity; otherwise, keep the original value
+        out_flat[i] = neg_inf if mask_flat[i % m] else x_flat[i]
 
 
 @njit(parallel=True, fastmath=True)
@@ -31,9 +84,13 @@ def masked_fill_gradient(mask_flat: np.ndarray, out_grad_flat: np.ndarray, x_gra
     - x_grad_flat (np.ndarray): Gradient of the flattened input tensor.
     """
     
+    # Extract the size of the flattened tensors
+    m = mask_flat.size
+    n = out_grad_flat.size
+    
     # Iterate over the flattened tensor
-    for i in prange(mask_flat.size):
-        # If the mask is True, propagate the gradient; otherwise, add the output gradient
-        if not mask_flat[i]:
-            # Add the output gradient to the input gradient
+    for i in prange(n):
+        # If mask is True, propagate the gradient; otherwise, set to zero
+        if mask_flat[i % m]:
+            # Propagate the gradient
             x_grad_flat[i] += out_grad_flat[i]
