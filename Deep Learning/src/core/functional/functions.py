@@ -2,7 +2,7 @@ import numpy as np
 from typing import Optional, Tuple, List, Union, TYPE_CHECKING
 
 if TYPE_CHECKING: from ..tensor import Tensor
-from .base import tensor_op, accumulate_gradient
+from .base import tensor_op, tensor_list_op, tensor_tuple_op, accumulate_gradient
 
 # Importing the kernel functions
 from .kernel.exp import exp_gradient
@@ -682,7 +682,7 @@ def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
             concat_gradient(offsets, flat_grad, t.grad.ravel(), i)
 
     # Return the tensor operation with the specified forward and backward functions
-    return tensor_op(tensors, forward, backward)
+    return tensor_list_op(tensors, forward, backward)
 
 
 def reshape(x: 'Tensor', new_shape: Tuple[int, ...]) -> 'Tensor':
@@ -900,7 +900,7 @@ def conv_2d(x: 'Tensor', kernel: 'Tensor', stride: Tuple[int, int] = (1, 1)) -> 
             conv_2d_gradient_x(out_grad, k.data, stride_height, stride_width, t.grad)
     
     # Return the tensor operation with the specified forward and backward functions
-    return tensor_op((x, kernel), forward, backward)
+    return tensor_tuple_op((x, kernel), forward, backward)
 
 
 def max_pool_2d(x: 'Tensor', kernel_size: Tuple[int,int] = (2, 2), stride: Tuple[int,int] = (2, 2)) -> 'Tensor':
