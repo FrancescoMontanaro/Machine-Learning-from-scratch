@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Callable, Union, Type, List, Tuple, TYPE_CHECKING, cast
+from typing import Callable, Type, List, Tuple, TYPE_CHECKING, cast
 
 if TYPE_CHECKING: from ..tensor import Tensor
 from ..utils.context_manager import _NO_GRAD
@@ -19,7 +19,7 @@ def accumulate_gradient(x: 'Tensor', grad: np.ndarray) -> None:
     x.grad = x.grad + grad if x.grad is not None else grad
 
 
-def tensor_op(input: 'Tensor', forward_fn: Callable[..., np.ndarray], backward_fn: Callable[..., None]) -> 'Tensor':
+def tensor_unary_op(input: 'Tensor', forward_fn: Callable[..., np.ndarray], backward_fn: Callable[..., None]) -> 'Tensor':
     """
     Function to create a tensor operation with automatic differentiation.
     
@@ -42,11 +42,8 @@ def tensor_op(input: 'Tensor', forward_fn: Callable[..., np.ndarray], backward_f
     if not isinstance(input, TensorCls):
         raise TypeError("Input must be an instance of Tensor.")
     
-    # Extract the raw array
-    data = input.data
-    
     # Call the forward function
-    out_data = forward_fn(data)
+    out_data = forward_fn()
     
     # Create output tensor
     out = TensorCls(out_data, requires_grad=input.requires_grad)
@@ -66,7 +63,7 @@ def tensor_op(input: 'Tensor', forward_fn: Callable[..., np.ndarray], backward_f
             input.grad = np.zeros_like(input.data, dtype=input.data.dtype)
             
         # Call the backward function with the output gradient
-        backward_fn(input, out.grad)
+        backward_fn(out.grad)
         
     # Register the input tensor that requires gradients in the computation graph
     prev = {input} if input.requires_grad else set()
@@ -81,7 +78,7 @@ def tensor_op(input: 'Tensor', forward_fn: Callable[..., np.ndarray], backward_f
     return out
 
 
-def tensor_tuple_op(input: Tuple['Tensor', ...], forward_fn: Callable[..., np.ndarray], backward_fn: Callable[..., None]) -> 'Tensor':
+def tensor_binary_op(input: Tuple['Tensor', ...], forward_fn: Callable[..., np.ndarray], backward_fn: Callable[..., None]) -> 'Tensor':
     """
     Function to create a tensor operation with automatic differentiation.
     
@@ -104,11 +101,8 @@ def tensor_tuple_op(input: Tuple['Tensor', ...], forward_fn: Callable[..., np.nd
     if not all(isinstance(t, TensorCls) for t in input):
         raise TypeError("All inputs must be instances of Tensor.")
     
-    # Extract the raw arrays
-    data = tuple(t.data for t in input)
-    
     # Call the forward function
-    out_data = forward_fn(data)
+    out_data = forward_fn()
     
     # Check if any input tensor requires gradients
     requires_grad = any(t.requires_grad for t in input)
@@ -133,7 +127,7 @@ def tensor_tuple_op(input: Tuple['Tensor', ...], forward_fn: Callable[..., np.nd
                 t.grad = np.zeros_like(t.data, dtype=t.data.dtype)
                 
         # Call the backward function with the output gradient
-        backward_fn(input, out.grad)
+        backward_fn(out.grad)
         
     # Register the input tensors that require gradients in the computation graph
     prev = {t for t in input if t.requires_grad}
@@ -148,7 +142,7 @@ def tensor_tuple_op(input: Tuple['Tensor', ...], forward_fn: Callable[..., np.nd
     return out
 
 
-def tensor_list_op(input: Union['Tensor', List['Tensor'], Tuple['Tensor', ...]], forward_fn: Callable[..., np.ndarray], backward_fn: Callable[..., None]) -> 'Tensor':
+def tensor_nary_op(input: List['Tensor'], forward_fn: Callable[..., np.ndarray], backward_fn: Callable[..., None]) -> 'Tensor':
     """
     Function to create a tensor operation with automatic differentiation.
     
@@ -171,11 +165,8 @@ def tensor_list_op(input: Union['Tensor', List['Tensor'], Tuple['Tensor', ...]],
     if not all(isinstance(t, TensorCls) for t in input):
         raise TypeError("All inputs must be instances of Tensor.")
     
-    # Extract the raw arrays
-    data = [t.data for t in input]
-    
     # Call the forward function
-    out_data = forward_fn(data)
+    out_data = forward_fn()
     
     # Check if any input tensor requires gradients
     requires_grad = any(t.requires_grad for t in input)
@@ -200,7 +191,7 @@ def tensor_list_op(input: Union['Tensor', List['Tensor'], Tuple['Tensor', ...]],
                 t.grad = np.zeros_like(t.data, dtype=t.data.dtype)
                 
         # Call the backward function with the output gradient
-        backward_fn(input, out.grad)
+        backward_fn(out.grad)
         
     # Register the input tensors that require gradients in the computation graph
     prev = {t for t in input if t.requires_grad}

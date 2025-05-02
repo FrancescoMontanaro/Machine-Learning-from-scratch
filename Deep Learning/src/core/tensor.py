@@ -406,6 +406,18 @@ class Tensor:
             self.clear_graph()
       
     
+    def copy(self) -> 'Tensor':
+        """
+        Method to create a copy of the tensor
+        
+        Returns:
+        - Tensor: Copy of the tensor
+        """
+        
+        # Create and return a copy of the tensor
+        return Tensor(data=self.data.copy(), requires_grad=self.requires_grad, is_parameter=self.is_parameter)  
+    
+    
     def detach(self) -> 'Tensor':
         """
         Method to detach the tensor from the computation graph
