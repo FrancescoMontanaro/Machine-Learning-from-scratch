@@ -75,7 +75,7 @@ def tensor_unary_op(input: 'Tensor', forward_fn: Callable[..., np.ndarray], back
     return out
 
 
-def tensor_binary_op(input: Tuple['Tensor', ...], forward_fn: Callable[..., np.ndarray], backward_fn: Callable[..., None]) -> 'Tensor':
+def tensor_binary_op(input: Tuple['Tensor', 'Tensor'], forward_fn: Callable[..., np.ndarray], backward_fn: Callable[..., None]) -> 'Tensor':
     """
     Function to create a tensor operation with automatic differentiation.
     

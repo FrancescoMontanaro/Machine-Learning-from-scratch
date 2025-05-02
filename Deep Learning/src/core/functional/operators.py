@@ -5,6 +5,13 @@ if TYPE_CHECKING: from ..tensor import Tensor
 from ..utils.data_analysis import unbroadcast
 from .base import tensor_unary_op, tensor_binary_op, accumulate_gradient
 
+# Import the necessary kernel functions
+from .kernel.add import add_forward, add_gradient
+from .kernel.sub import sub_forward, sub_gradient
+from .kernel.mul import mul_forward, mul_gradient
+from .kernel.div import div_forward, div_gradient
+from .kernel.pow import pow_forward, pow_gradient
+
 
 def add(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     """
@@ -18,40 +25,24 @@ def add(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     - Tensor: Sum of the two tensors
     """
     
-    # Define the output data
-    out_data: np.ndarray
-    
     # Define the forward function
     def forward() -> np.ndarray:
-        # Set the nonlocal variable out_data to store the output data
-        nonlocal out_data
-        
         # Compute the sum of the two tensors
-        out_data = a.data + b.data
-        
-        # Return the output data
-        return out_data
+        return add_forward(a.data, b.data)
     
     # Define the backward function
     def backward(out_grad: np.ndarray) -> None:
+        # Compute the gradients for the inputs
+        grad_a, grad_b = add_gradient(out_grad, a.data.shape, b.data.shape)
+
         # Check if the tensors require gradient computation
         if a.requires_grad:
-            # If the shapes are different, unbroadcast the gradient
-            grad_a = out_grad
-            if a.data.shape != out_data.shape:
-                grad_a = unbroadcast(grad_a, a.data.shape)
-                
             # Accumulate the gradient of the current tensor
             accumulate_gradient(a, grad_a)
-            
+
         # Check if the other tensor requires gradient computation
         if b.requires_grad:
-            # If the shapes are different, unbroadcast the gradient
-            grad_b = out_grad
-            if b.data.shape != out_data.shape:
-                grad_b = unbroadcast(grad_b, b.data.shape)
-                
-            # Update the gradient of the other tensor
+            # Accumulate the gradient of the other tensor
             accumulate_gradient(b, grad_b)
     
     # Return the tensor operation with the specified forward and backward functions
@@ -70,40 +61,24 @@ def sub(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     - Tensor: Difference of the two tensors
     """
     
-    # Define the output data
-    out_data: np.ndarray
-    
     # Define the forward function
     def forward() -> np.ndarray:
-        # Set the nonlocal variable out_data to store the output data
-        nonlocal out_data
-        
-        # Compute the difference of the two tensors
-        out_data = a.data - b.data
-        
-        # Return the output data
-        return out_data
+        # Perform the subtraction operation
+        return sub_forward(a.data, b.data)
     
     # Define the backward function
     def backward(out_grad: np.ndarray) -> None:
+        # Compute the gradients for the inputs
+        grad_a, grad_b = sub_gradient(out_grad, a.data.shape, b.data.shape)
+        
         # Check if the tensors require gradient computation
         if a.requires_grad:
-            # If the shapes are different, unbroadcast the gradient
-            grad_a = out_grad
-            if a.data.shape != out_data.shape:
-                grad_a = unbroadcast(grad_a, a.data.shape)
-                
             # Accumulate the gradient of the current tensor
             accumulate_gradient(a, grad_a)
             
         # Check if the other tensor requires gradient computation
         if b.requires_grad:
-            # If the shapes are different, unbroadcast the gradient
-            grad_b = -out_grad
-            if b.data.shape != out_data.shape:
-                grad_b = unbroadcast(grad_b, b.data.shape)
-                
-            # Update the gradient of the other tensor
+            # Accumulate the gradient of the other tensor
             accumulate_gradient(b, grad_b)
     
     # Return the tensor operation with the specified forward and backward functions
@@ -122,42 +97,24 @@ def mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     - Tensor: Product of the two tensors
     """
     
-    # Define the output data
-    out_data: np.ndarray
-    
     # Define the forward function
     def forward() -> np.ndarray:
-        # Set the nonlocal variable out_data to store the output data
-        nonlocal out_data
-        
         # Compute the product of the two tensors
-        out_data = a.data * b.data
-        
-        # Return the output data
-        return out_data
+        return mul_forward(a.data, b.data)
     
     # Define the backward function
     def backward(out_grad: np.ndarray) -> None:
+        # Compute the gradients for the inputs
+        grad_a, grad_b = mul_gradient(out_grad, a.data, b.data)
+        
         # Check if the tensors require gradient computation
         if a.requires_grad:
-            # If the shapes are different, unbroadcast the gradient
-            grad_a = b.data * out_grad
-            if a.data.shape != out_data.shape:
-                # Unbroadcast the gradient
-                grad_a = unbroadcast(grad_a, a.data.shape)
-                
             # Accumulate the gradient of the current tensor
             accumulate_gradient(a, grad_a)
             
         # Check if the other tensor requires gradient computation
         if b.requires_grad:
-            # If the shapes are different, unbroadcast the gradient
-            grad_b = a.data * out_grad
-            if b.data.shape != out_data.shape:
-                # Unbroadcast the gradient
-                grad_b = unbroadcast(grad_b, b.data.shape)
-                
-            # Update the gradient of the other tensor
+            # Accumulate the gradient of the other tensor
             accumulate_gradient(b, grad_b)
             
     # Return the tensor operation with the specified forward and backward functions
@@ -176,42 +133,24 @@ def div(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     - Tensor: Quotient of the two tensors
     """
     
-    # Define the output data
-    out_data: np.ndarray
-    
     # Define the forward function
     def forward() -> np.ndarray:
-        # Set the nonlocal variable out_data to store the output data
-        nonlocal out_data
-        
-        # Compute the quotient of the two tensors
-        out_data = a.data / b.data
-        
-        # Return the output data
-        return out_data
+        # Compute the division of the two tensors
+        return div_forward(a.data, b.data)
     
     # Define the backward function
     def backward(out_grad: np.ndarray) -> None:
+        # Compute the gradients for the inputs
+        grad_a, grad_b = div_gradient(out_grad, a.data, b.data)
+        
         # Check if the tensors require gradient computation
         if a.requires_grad:
-            # If the shapes are different, unbroadcast the gradient
-            grad_a = out_grad / b.data
-            if a.data.shape != out_data.shape:
-                # Unbroadcast the gradient
-                grad_a = unbroadcast(grad_a, a.data.shape)
-                
             # Accumulate the gradient of the current tensor
             accumulate_gradient(a, grad_a)
             
         # Check if the other tensor requires gradient computation
         if b.requires_grad:
-            # If the shapes are different, unbroadcast the gradient
-            grad_b = -a.data * out_grad / (b.data ** 2)
-            if b.data.shape != out_data.shape:
-                # Unbroadcast the gradient
-                grad_b = unbroadcast(grad_b, b.data.shape)
-                
-            # Update the gradient of the other tensor
+            # Accumulate the gradient of the other tensor
             accumulate_gradient(b, grad_b)
             
     # Return the tensor operation with the specified forward and backward functions
@@ -293,7 +232,7 @@ def pow(x: 'Tensor', power: Union[int, float]) -> 'Tensor':
     # Define the forward function
     def forward() -> np.ndarray:
         # Compute the power of the tensor
-        return x.data ** power
+        return pow_forward(x.data, power)
     
     # Define the backward function
     def backward(out_grad: np.ndarray) -> None:
@@ -301,11 +240,8 @@ def pow(x: 'Tensor', power: Union[int, float]) -> 'Tensor':
         if not x.requires_grad:
             return
         
-        # Check if the gradient is initialized
-        assert x.grad is not None, "Gradient must be initialized"
-        
         # Compute the gradient of the power function
-        grad = power * (x.data ** (power - 1)) * out_grad
+        grad = pow_gradient(out_grad, x.data, power)
         
         # Accumulate the gradient into self.grad.
         accumulate_gradient(x, grad)

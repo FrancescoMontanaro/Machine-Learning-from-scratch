@@ -9,7 +9,6 @@ from .kernel.exp import exp_gradient
 from .kernel.log import log_gradient
 from .kernel.sqrt import sqrt_gradient
 from .kernel.mean import mean_flat_backward
-from .kernel.squeeze import squeeze_gradient
 from .kernel.unsqueeze import unsqueeze_gradient
 from .kernel.pad import pad_forward, pad_gradient
 from .kernel.clip import clip_forward, clip_gradient
