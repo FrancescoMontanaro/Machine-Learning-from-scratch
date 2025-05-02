@@ -65,14 +65,11 @@ def tensor_unary_op(input: 'Tensor', forward_fn: Callable[..., np.ndarray], back
         # Call the backward function with the output gradient
         backward_fn(out.grad)
         
-    # Register the input tensor that requires gradients in the computation graph
-    prev = {input} if input.requires_grad else set()
-        
     # Set the backward function to the output tensor
     out._backward = _backward
     
     # Set the previous tensors that require gradients
-    out._prev = prev
+    out._prev = {input} if input.requires_grad else set()
     
     # Return the output tensor
     return out
@@ -129,14 +126,11 @@ def tensor_binary_op(input: Tuple['Tensor', ...], forward_fn: Callable[..., np.n
         # Call the backward function with the output gradient
         backward_fn(out.grad)
         
-    # Register the input tensors that require gradients in the computation graph
-    prev = {t for t in input if t.requires_grad}
-        
     # Set the backward function to the output tensor
     out._backward = _backward
     
     # Set the previous tensors that require gradients
-    out._prev = prev
+    out._prev = {t for t in input if t.requires_grad}
     
     # Return the output tensor
     return out
@@ -193,14 +187,11 @@ def tensor_nary_op(input: List['Tensor'], forward_fn: Callable[..., np.ndarray],
         # Call the backward function with the output gradient
         backward_fn(out.grad)
         
-    # Register the input tensors that require gradients in the computation graph
-    prev = {t for t in input if t.requires_grad}
-        
     # Set the backward function to the output tensor
     out._backward = _backward
     
     # Set the previous tensors that require gradients
-    out._prev = prev
+    out._prev = {t for t in input if t.requires_grad}
     
     # Return the output tensor
     return out
