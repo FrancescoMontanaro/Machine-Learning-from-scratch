@@ -75,14 +75,15 @@ def tensor_unary_op(input: 'Tensor', forward_fn: Callable[..., np.ndarray], back
     return out
 
 
-def tensor_binary_op(input: Tuple['Tensor', 'Tensor'], forward_fn: Callable[..., np.ndarray], backward_fn: Callable[..., None]) -> 'Tensor':
+def tensor_binary_op(input: Tuple['Tensor', 'Tensor'], forward_fn: Callable[..., np.ndarray], backward_fn_a: Callable[..., None], backward_fn_b: Callable[..., None]) -> 'Tensor':
     """
     Function to create a tensor operation with automatic differentiation.
     
     Parameters:
     - input (Tuple[Tensor]): Input tensor(s) for the operation.
     - forward_fn (Callable[..., np.ndarray]): Forward function that computes the output.
-    - backward_fn (Callable[..., None]): Backward function that computes the gradients.
+    - backward_fn_a (Callable[..., None]): Backward function for the first input tensor.
+    - backward_fn_b (Callable[..., None]): Backward function for the second input tensor.
     
     Returns:
     - Tensor: Output tensor with the computed gradients.
@@ -94,15 +95,18 @@ def tensor_binary_op(input: Tuple['Tensor', 'Tensor'], forward_fn: Callable[...,
     # Get the tensor class
     TensorCls = cast(Type['Tensor'], get_tensor_class())
     
+    # Unpack the input tensors
+    a, b = input
+    
     # Check if the inputs are tensors
-    if not all(isinstance(t, TensorCls) for t in input):
+    if not isinstance(a, TensorCls) or not isinstance(b, TensorCls):
         raise TypeError("All inputs must be instances of Tensor.")
     
     # Call the forward function
-    out_data = forward_fn()
+    out_data = forward_fn(a.data, b.data)
     
     # Check if any input tensor requires gradients
-    requires_grad = any(t.requires_grad for t in input)
+    requires_grad = a.requires_grad or b.requires_grad
     
     # Create output tensor
     out = TensorCls(out_data, requires_grad=requires_grad)
@@ -116,15 +120,23 @@ def tensor_binary_op(input: Tuple['Tensor', 'Tensor'], forward_fn: Callable[...,
         if out.grad is None:
             return
         
-        # Iterate over the input tensors
-        for t in input:
-            # If the tensor requires gradients, set its gradient to zero
-            if t.requires_grad and t.grad is None:
-                # Initialize the gradient to zero
-                t.grad = np.zeros_like(t.data, dtype=t.data.dtype)
+        # Check if the first tensor requires gradients
+        if a.requires_grad:
+            # If the gradient is None, initialize it to zero
+            if a.grad is None:
+                a.grad = np.zeros_like(a.data, dtype=a.data.dtype)
                 
-        # Call the backward function with the output gradient
-        backward_fn(out.grad)
+            # Backward pass for the first tensor
+            backward_fn_a(out_grad=out.grad, out_buffer=a.grad)
+            
+        # Check if the second tensor requires gradients
+        if b.requires_grad:
+            # If the gradient is None, initialize it to zero
+            if b.grad is None:
+                b.grad = np.zeros_like(b.data, dtype=b.data.dtype)
+                
+            # Backward pass for the second tensor
+            backward_fn_b(out_grad=out.grad, out_buffer=b.grad)
         
     # Set the backward function to the output tensor
     out._backward = _backward

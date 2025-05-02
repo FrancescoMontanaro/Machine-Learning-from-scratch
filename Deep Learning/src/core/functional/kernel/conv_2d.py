@@ -3,24 +3,40 @@ from numba import njit, prange
 
 
 @njit(parallel=True, fastmath=True)
-def conv_2d_forward(x: np.ndarray, w: np.ndarray, stride_h: int, stride_w: int, out: np.ndarray) -> None:
+def conv_2d_forward(x_data: np.ndarray, kernel_data: np.ndarray, stride: tuple[int, int]) -> np.ndarray:
     """
     2D Convolution forward pass.
     
     Parameters:
-    - x (np.ndarray): Input tensor of shape (batch_size, height, width, channels)
-    - w (np.ndarray): Weight tensor of shape (output_channels, channels, kernel_height, kernel_width)
-    - stride_h (int): Stride height
-    - stride_w (int): Stride width
+    - x_data (np.ndarray): Input tensor of shape (batch_size, height, width, channels)
+    - kernel_data (np.ndarray): Weight tensor of shape (output_channels, channels, kernel_height, kernel_width)
+    - stride (tuple[int, int]): Stride for height and width
+    
+    Returns:
+    - np.ndarray: Output tensor of shape (batch_size, output_height, output_width, output_channels)
+    
+    Raises:
+    - AssertionError: If the kernel or stride is too large for the input size.
+    - AssertionError: If the number of input channels in the kernel does not match the number of channels in the input tensor.
     """
+        
+    # Unpack the stride
+    stride_h, stride_w = stride
     
     # Extract dimensions of the tensors
-    batch_size, height, width, channels = x.shape
-    output_channels, _, kernel_height, kernel_width = w.shape
+    batch_size, height, width, channels = x_data.shape
+    output_channels, kernel_in_channels, kernel_height, kernel_width = kernel_data.shape
     
     # Compute output dimensions
     out_height = (height - kernel_height) // stride_h + 1
     out_width = (width - kernel_width) // stride_w + 1
+    
+    # Check if the dimensions are valid
+    assert kernel_in_channels == channels, "w in_channels != x channels"
+    assert out_height > 1 and out_width > 1, "Kernel or stride too large for input size"
+    
+    # Create the output tensor
+    out = np.empty((batch_size, out_height, out_width, output_channels), dtype=x_data.dtype)
     
     # Iterate over the batch size
     for b in prange(batch_size):
@@ -44,29 +60,34 @@ def conv_2d_forward(x: np.ndarray, w: np.ndarray, stride_h: int, stride_w: int, 
                         for di in range(kernel_height):
                             for dj in range(kernel_width):
                                 # Cmpute the convolution operation
-                                acc += x[b, i0+di, j0+dj, ic] * w[c, ic, di, dj]
+                                acc += x_data[b, i0+di, j0+dj, ic] * kernel_data[c, ic, di, dj]
               
                     # Store the result in the output tensor
                     out[b, i, j, c] = acc
+                    
+    # Return the output tensor
+    return out
 
 
 @njit(parallel=True, fastmath=True)
-def conv_2d_gradient_w(x: np.ndarray, grad_out: np.ndarray, stride_h: int, stride_w: int, grad_w: np.ndarray) -> None:
+def conv_2d_backward_w(out_grad: np.ndarray, out_buffer: np.ndarray, x_data: np.ndarray,  stride: tuple[int, int]) -> None:
     """
-    2D Convolution gradient for weights.
+    2D Convolution backward pass for weights.
     
     Parameters:
-    - x (np.ndarray): Input tensor of shape (batch_size, height, width, channels)
-    - grad_out (np.ndarray): Gradient of the output tensor of shape (batch_size, output_height, output_width, output_channels)
-    - stride_h (int): Stride height
-    - stride_w (int): Stride width
-    - grad_w (np.ndarray): Gradient of the weight tensor of shape (output_channels, channels, kernel_height, kernel_width)
+    - x_data (np.ndarray): Input tensor of shape (batch_size, height, width, channels)
+    - out_buffer (np.ndarray): Gradient of the weight tensor of shape (output_channels, channels, kernel_height, kernel_width)
+    - out_grad (np.ndarray): Gradient of the output tensor of shape (batch_size, output_height, output_width, output_channels)
+    - stride (tuple[int, int]): Stride for height and width
     """
     
+    # Unpack the stride
+    stride_h, stride_w = stride
+    
     # Extract dimensions of the tensors
-    batch_size, _, _, channels = x.shape
-    output_channels, _, kernel_height, kernel_width = grad_w.shape
-    _, out_height, out_width, _ = grad_out.shape
+    batch_size, _, _, channels = x_data.shape
+    output_channels, _, kernel_height, kernel_width = out_buffer.shape
+    _, out_height, out_width, _ = out_grad.shape
 
     # Iterate over the output channels
     for oc in prange(output_channels):
@@ -92,28 +113,30 @@ def conv_2d_gradient_w(x: np.ndarray, grad_out: np.ndarray, stride_h: int, strid
                                 j0 = j * stride_w
                                 
                                 # Compute the gradient of the weights
-                                acc += x[n, i0+di, j0+dj, ic] * grad_out[n, i, j, oc]
+                                acc += x_data[n, i0+di, j0+dj, ic] * out_grad[n, i, j, oc]
                                 
                     # Store the result in the gradient of the weights tensor
-                    grad_w[oc, ic, di, dj] = acc
+                    out_buffer[oc, ic, di, dj] = acc
 
 
 @njit(parallel=True, fastmath=True)
-def conv_2d_gradient_x(grad_out, w, stride_h, stride_w, grad_x) -> None:
+def conv_2d_backward_x(out_grad: np.ndarray, out_buffer: np.ndarray, kernel_data: np.ndarray, stride: tuple[int, int]) -> None:
     """
-    2D Convolution gradient for input.
+    2D Convolution backward pass for input.
     
     Parameters:
-    - grad_out (np.ndarray): Gradient of the output tensor of shape (batch_size, output_height, output_width, output_channels)
-    - w (np.ndarray): Weight tensor of shape (output_channels, channels, kernel_height, kernel_width)
-    - stride_h (int): Stride height
-    - stride_w (int): Stride width
-    - grad_x (np.ndarray): Gradient of the input tensor of shape (batch_size, height, width, channels)
+    - out_grad (np.ndarray): Gradient of the output tensor of shape (batch_size, output_height, output_width, output_channels)
+    - out_buffer (np.ndarray): Gradient of the input tensor of shape (batch_size, height, width, channels)
+    - kernel_data (np.ndarray): Weight tensor of shape (output_channels, channels, kernel_height, kernel_width)
+    - stride (tuple[int, int]): Stride for height and width
     """
     
+    # Unpack the stride
+    stride_h, stride_w = stride
+    
     # Extract dimensions of the tensors
-    batch_size, output_height, output_width, channels = grad_out.shape
-    _, output_channels, kernel_height, kernel_width = w.shape
+    batch_size, output_height, output_width, channels = out_grad.shape
+    _, output_channels, kernel_height, kernel_width = kernel_data.shape
     
     # Iterate over the batch size
     for b in prange(batch_size):
@@ -130,7 +153,7 @@ def conv_2d_gradient_x(grad_out, w, stride_h, stride_w, grad_x) -> None:
                 # Iterate over the output channels
                 for oc in range(channels):
                     # Compute the gradient of the output
-                    go = grad_out[b, i, j, oc]
+                    go = out_grad[b, i, j, oc]
                     
                     # Iterate over the kernel dimensions and channels
                     for ic in range(output_channels):
@@ -139,4 +162,4 @@ def conv_2d_gradient_x(grad_out, w, stride_h, stride_w, grad_x) -> None:
                             # Iterate over the kernel width
                             for dj in range(kernel_width):
                                 # Compute the gradient of the input
-                                grad_x[b, i0+di, j0+dj, ic] += w[oc, ic, di, dj] * go
+                                out_buffer[b, i0+di, j0+dj, ic] += kernel_data[oc, ic, di, dj] * go

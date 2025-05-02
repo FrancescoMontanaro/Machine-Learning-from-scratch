@@ -46,23 +46,15 @@ def add_forward(a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
 
 
 @njit(fastmath=True)
-def add_gradient(out_grad: np.ndarray, a_shape: tuple, b_shape: tuple) -> tuple:
+def add_backward(out_grad: np.ndarray, out_buffer: np.ndarray, target_shape: tuple) -> None:
     """
     Computes the gradients for the inputs of the elementwise addition operation.
     
     Parameters:
     - out_grad (np.ndarray): Gradient of the output
-    - a_shape (tuple): Shape of the first input array
-    - b_shape (tuple): Shape of the second input array
-    - out (np.ndarray): Output array to store the result
-    
-    Returns:
-    - tuple: Gradients for the first and second input arrays
+    - out_buffer (np.ndarray): Buffer to store the result
+    - target_shape (tuple): Shape of the target output
     """
     
-    # Compute the gradients for the first and second input arrays
-    grad_a = reduce_to_shape(out_grad, a_shape)
-    grad_b = reduce_to_shape(out_grad, b_shape)
-    
-    # Return the gradients
-    return grad_a, grad_b
+    # Compute the gradient for the first input array
+    out_buffer += reduce_to_shape(out_grad, target_shape)

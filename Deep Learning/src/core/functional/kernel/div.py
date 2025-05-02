@@ -46,23 +46,32 @@ def div_forward(a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
 
 
 @njit(fastmath=True)
-def div_gradient(out_grad: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple:
+def div_backward_a(out_grad: np.ndarray, out_buffer: np.ndarray, target_shape: tuple, b_data: np.ndarray) -> None:
     """
     Computes the gradients for the inputs of the elementwise division operation.
     
     Parameters:
     - out_grad (np.ndarray): Gradient of the output
-    - a (np.ndarray): First input array
-    - b (np.ndarray): Second input array
-    - out (np.ndarray): Output array to store the result
+    - out_buffer (np.ndarray): Buffer to store the result
+    - target_shape (tuple): Shape of the target output
+    - b_data (np.ndarray): Second input array
+    """
     
-    Returns:
-    - tuple: Gradients for the first and second input arrays
+    # Compute the gradient for the first input array
+    out_buffer += reduce_to_shape(out_grad / b_data, target_shape)
+
+
+@njit(fastmath=True)
+def div_backward_b(out_grad: np.ndarray, out_buffer: np.ndarray, a_data: np.ndarray, b_data: np.ndarray) -> None:
+    """
+    Computes the gradients for the inputs of the elementwise division operation.
+    
+    Parameters:
+    - out_grad (np.ndarray): Gradient of the output
+    - out_buffer (np.ndarray): Buffer to store the result
+    - a_data (np.ndarray): First input array
+    - b_data (np.ndarray): Second input array
     """
     
     # Compute the gradients for the first and second input arrays
-    grad_a = reduce_to_shape(out_grad / b, a.shape)
-    grad_b = reduce_to_shape(-a * out_grad / (b ** 2), b.shape)
-    
-    # Return the gradients
-    return grad_a, grad_b
+    out_buffer += reduce_to_shape(-a_data * out_grad / (b_data ** 2), b_data.shape)

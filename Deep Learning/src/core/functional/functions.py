@@ -1,4 +1,5 @@
 import numpy as np
+from functools import partial
 from typing import Optional, Tuple, List, Union, TYPE_CHECKING
 
 if TYPE_CHECKING: from ..tensor import Tensor
@@ -17,7 +18,7 @@ from .kernel.repeat import repeat_forward, repeat_gradient
 from .kernel.sum import sum_flat_forward, sum_flat_gradient
 from .kernel.max import max_flat_forward, max_flat_gradient
 from .kernel.max_pool_2d import max_pool_2d_forward, max_pool_2d_gradient
-from .kernel.conv_2d import conv_2d_forward, conv_2d_gradient_w, conv_2d_gradient_x
+from .kernel.conv_2d import conv_2d_forward, conv_2d_backward_w, conv_2d_backward_x
 from .kernel.masked_fill import masked_fill_forward, masked_fill_gradient, masked_fill_forward_neg_inf, masked_fill_forward_inf
 
 
@@ -845,55 +846,13 @@ def conv_2d(x: 'Tensor', kernel: 'Tensor', stride: Tuple[int, int] = (1, 1)) -> 
     - ValueError: If the kernel or stride is too large for the input size.
     """
     
-    # Extract the stride values
-    stride_height, stride_width = stride
-    
-    # Define the forward function
-    def forward() -> np.ndarray:
-        # Extract the input dimensions
-        batch_size, height, width, channels = x.data.shape
-        out_channels, kernel_in_channels, kernel_height, kernel_width = kernel.data.shape
-        
-        # Check if the input channels match the kernel channels
-        assert kernel_in_channels == channels, "w in_channels != x channels"
-        
-        # Compute the output dimensions
-        out_height = (height - kernel_height) // stride_height + 1
-        out_width = (width - kernel_width) // stride_width + 1
-        
-        # Check if the kernel is too large or the stride is too large for the input size
-        if out_height < 1 or out_width < 1:
-            raise ValueError("Kernel or stride too large for input size")
-
-        # Create the output array
-        out_data = np.empty((batch_size, out_height, out_width, out_channels), dtype=x.data.dtype)
-        
-        # Perform the 2D convolution
-        conv_2d_forward(x.data, kernel.data, stride_height, stride_width, out_data)
-        
-        # Return the output data
-        return out_data
-    
-    # Define the backward function
-    def backward(out_grad: np.ndarray) -> None:
-        # Gradient for kernel
-        if kernel.requires_grad:
-            # Check if the gradient is initialized
-            assert kernel.grad is not None, "Gradient must be initialized"
-            
-            # Compute the gradient with respect to the kernel
-            conv_2d_gradient_w(x.data, out_grad, stride_height, stride_width, kernel.grad)
-            
-        # Gradient for input
-        if x.requires_grad:
-            # Check if the gradient is initialized
-            assert x.grad is not None, "Gradient must be initialized"
-            
-            # Compute the gradient with respect to the input
-            conv_2d_gradient_x(out_grad, kernel.data, stride_height, stride_width, x.grad)
-    
     # Return the tensor operation with the specified forward and backward functions
-    return tensor_binary_op((x, kernel), forward, backward)
+    return tensor_binary_op(
+        input = (x, kernel), 
+        forward_fn = partial(conv_2d_forward, stride=stride),
+        backward_fn_a = partial(conv_2d_backward_x, kernel_data=kernel.data, stride=stride),
+        backward_fn_b = partial(conv_2d_backward_w, x_data=x.data, stride=stride)
+    )
 
 
 def max_pool_2d(x: 'Tensor', kernel_size: Tuple[int,int] = (2, 2), stride: Tuple[int,int] = (2, 2)) -> 'Tensor':

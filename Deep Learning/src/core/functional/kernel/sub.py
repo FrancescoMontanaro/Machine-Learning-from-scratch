@@ -46,23 +46,30 @@ def sub_forward(a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
 
 
 @njit(fastmath=True)
-def sub_gradient(out_grad: np.ndarray, a_shape: tuple, b_shape: tuple) -> tuple:
+def sub_backward_a(out_grad: np.ndarray, out_buffer: np.ndarray, target_shape: tuple) -> None:
     """
     Computes the gradients for the inputs of the elementwise subtraction operation.
     
     Parameters:
     - out_grad (np.ndarray): Gradient of the output
-    - a_shape (tuple): Shape of the first input array
-    - b_shape (tuple): Shape of the second input array
-    - out (np.ndarray): Output array to store the result
-    
-    Returns:
-    - tuple: Gradients for the first and second input arrays
+    - out_buffer (np.ndarray): Buffer to store the result
+    - target_shape (tuple): Shape of the target output
     """
     
     # Compute the gradients for the first and second input arrays
-    grad_a = reduce_to_shape(out_grad, a_shape)
-    grad_b = reduce_to_shape(-out_grad, b_shape)
+    out_buffer += reduce_to_shape(out_grad, target_shape)
+
+
+@njit(fastmath=True)
+def sub_backward_b(out_grad: np.ndarray, out_buffer: np.ndarray, target_shape: tuple) -> None:
+    """
+    Computes the gradients for the inputs of the elementwise subtraction operation.
     
-    # Return the gradients
-    return grad_a, grad_b
+    Parameters:
+    - out_grad (np.ndarray): Gradient of the output
+    - out_buffer (np.ndarray): Buffer to store the result
+    - target_shape (tuple): Shape of the target output
+    """
+    
+    # Compute the gradients for the first and second input arrays
+    out_buffer -= reduce_to_shape(out_grad, target_shape)
