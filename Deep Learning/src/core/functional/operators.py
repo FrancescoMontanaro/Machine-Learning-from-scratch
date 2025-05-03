@@ -7,10 +7,11 @@ from .base import tensor_unary_op, tensor_binary_op, accumulate_gradient
 
 # Import the necessary kernel functions
 from .kernel.add import add_forward, add_backward
+from .kernel.pow import pow_forward, pow_gradient
 from .kernel.sub import sub_forward, sub_backward_a, sub_backward_b
 from .kernel.mul import mul_forward, mul_backward_a, mul_backward_b
 from .kernel.div import div_forward, div_backward_a, div_backward_b
-from .kernel.pow import pow_forward, pow_gradient
+from .kernel.mat_mul import matmul_forward, matmul_backward_a, matmul_backward_b
 
 
 def add(a: 'Tensor', b: 'Tensor') -> 'Tensor':
@@ -112,28 +113,14 @@ def mat_mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     Returns:
     - Tensor: Matrix product of the two tensors
     """
-    
-    # Define the forward function
-    def forward(a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
-        # Compute the matrix product of the two tensors
-        return np.matmul(a_data, b_data)
-    
-    # Define the backward function
-    def backward_a(out_grad: np.ndarray, b_data: np.ndarray, out_buffer: np.ndarray) -> None:
-        # Compute the gradients for the inputs of the matrix multiplication operation
-        out_buffer += np.matmul(out_grad, np.swapaxes(b_data, -1, -2))
-    
-    def backward_b(out_grad: np.ndarray, a_data: np.ndarray, out_buffer: np.ndarray) -> None:
-        # Compute the gradient for the second input tensor
-        out_buffer += np.matmul(np.swapaxes(a_data, -1, -2), out_grad)
             
     # Return the tensor operation with the specified forward and backward functions
     return tensor_binary_op(
         t1 = a,
         t2 = b,
-        forward_fn = forward,
-        backward_fn_a = partial(backward_a, b_data=b.data),
-        backward_fn_b = partial(backward_b, a_data=a.data)
+        forward_fn = matmul_forward,
+        backward_fn_a = partial(matmul_backward_a, b_data=b.data),
+        backward_fn_b = partial(matmul_backward_b, a_data=a.data)
     )
 
 
