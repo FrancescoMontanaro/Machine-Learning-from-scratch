@@ -5,23 +5,6 @@ from .reductions import reduce_to_shape
 
 
 @njit(parallel=True, fastmath=True)
-def elementwise_add(a_view: np.ndarray, b_view: np.ndarray, out: np.ndarray) -> None:
-    """
-    Elementwise addition of two arrays.
-    
-    Parameters:
-    - a_view (np.ndarray): First input array
-    - b_view (np.ndarray): Second input array
-    - out (np.ndarray): Output array to store the result
-    """
-    
-    # Iterate over the flattened arrays
-    for i in prange(out.size):
-        # Perform elementwise addition
-        out.flat[i] = a_view.flat[i] + b_view.flat[i]
-
-
-@njit(fastmath=True)
 def add_forward(a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
     """
     Forward pass for elementwise addition.
@@ -38,8 +21,14 @@ def add_forward(a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
     # Create an output array with the broadcasted shape
     out = np.empty(out_shape, dtype=a_data.dtype)
     
-    # Perform elementwise addition
-    elementwise_add(np.broadcast_to(a_data, out_shape), np.broadcast_to(b_data, out_shape), out)
+    # Broadcast the input arrays to the output shape
+    a_view = np.broadcast_to(a_data, out_shape)
+    b_view = np.broadcast_to(b_data, out_shape)
+
+    # Iterate over the flattened arrays
+    for i in prange(out.size):
+        # Perform elementwise addition
+        out.flat[i] = a_view.flat[i] + b_view.flat[i]
     
     # Return the output array
     return out

@@ -1,24 +1,8 @@
 import numpy as np
 from numba import njit, prange
-
+        
+        
 @njit(parallel=True, fastmath=True)
-def elementwise_pow(t_view: np.ndarray, power: float, out: np.ndarray) -> None:
-    """
-    Elementwise raise to the power of two arrays.
-    
-    Parameters:
-    - t_view (np.ndarray): The input array to be raised to the power
-    - power (float): Power to raise the elements of the first array
-    - out (np.ndarray): Output array to store the result
-    """
-    
-    # Iterate over the flattened arrays
-    for i in prange(out.size):
-        # Perform elementwise raise to the power
-        out.flat[i] = t_view.flat[i] ** power
-        
-        
-@njit(fastmath=True)
 def pow_forward(t: np.ndarray, power: float) -> np.ndarray:
     """
     Forward pass for element
@@ -34,8 +18,10 @@ def pow_forward(t: np.ndarray, power: float) -> np.ndarray:
     # Create an output array with the same shape as the input
     out = np.empty(t.shape, dtype=t.dtype)
     
-    # Perform elementwise raise to the power
-    elementwise_pow(t, power, out)
+    # Iterate over the flattened arrays
+    for i in prange(out.size):
+        # Perform elementwise raise to the power
+        out.flat[i] = t.flat[i] ** power
     
     # Return the output array
     return out

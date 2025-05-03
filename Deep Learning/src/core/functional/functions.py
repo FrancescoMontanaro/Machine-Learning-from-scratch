@@ -848,7 +848,8 @@ def conv_2d(x: 'Tensor', kernel: 'Tensor', stride: Tuple[int, int] = (1, 1)) -> 
     
     # Return the tensor operation with the specified forward and backward functions
     return tensor_binary_op(
-        input = (x, kernel), 
+        t1 = x,
+        t2 = kernel, 
         forward_fn = partial(conv_2d_forward, stride=stride),
         backward_fn_a = partial(conv_2d_backward_x, kernel_data=kernel.data, stride=stride),
         backward_fn_b = partial(conv_2d_backward_w, x_data=x.data, stride=stride)

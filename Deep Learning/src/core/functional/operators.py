@@ -27,7 +27,8 @@ def add(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     
     # Return the tensor operation with the specified forward and backward functions
     return tensor_binary_op(
-        input = (a, b), 
+        t1 = a,
+        t2 = b, 
         forward_fn = add_forward, 
         backward_fn_a = partial(add_backward, target_shape=a.data.shape),
         backward_fn_b = partial(add_backward, target_shape=b.data.shape)
@@ -48,7 +49,8 @@ def sub(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     
     # Return the tensor operation with the specified forward and backward functions
     return tensor_binary_op(
-        input = (a, b), 
+        t1 = a,
+        t2 = b,
         forward_fn = sub_forward,
         backward_fn_a = partial(sub_backward_a, target_shape=a.data.shape),
         backward_fn_b = partial(sub_backward_b, target_shape=b.data.shape)
@@ -69,7 +71,8 @@ def mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
             
     # Return the tensor operation with the specified forward and backward functions
     return tensor_binary_op(
-        input = (a, b),
+        t1 = a,
+        t2 = b,
         forward_fn = mul_forward,
         backward_fn_a = partial(mul_backward_a, target_shape=a.data.shape, b_data=b.data),
         backward_fn_b = partial(mul_backward_b, target_shape=b.data.shape, a_data=a.data)
@@ -90,7 +93,8 @@ def div(a: 'Tensor', b: 'Tensor') -> 'Tensor':
             
     # Return the tensor operation with the specified forward and backward functions
     return tensor_binary_op(
-        input = (a, b),
+        t1 = a,
+        t2 = b,
         forward_fn = div_forward, 
         backward_fn_a = partial(div_backward_a, target_shape=a.data.shape, b_data=b.data),
         backward_fn_b = partial(div_backward_b, a_data=a.data, b_data=b.data)
@@ -125,7 +129,8 @@ def mat_mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
             
     # Return the tensor operation with the specified forward and backward functions
     return tensor_binary_op(
-        input = (a, b),
+        t1 = a,
+        t2 = b,
         forward_fn = forward,
         backward_fn_a = partial(backward_a, b_data=b.data),
         backward_fn_b = partial(backward_b, a_data=a.data)

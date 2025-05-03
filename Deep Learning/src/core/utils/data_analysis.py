@@ -138,36 +138,3 @@ def format_summary_output(value: str, width: int) -> str:
         
     # Format each line to fit the specified width
     return "\n".join(line.ljust(width) for line in formatted_lines)
-
-
-def unbroadcast(arr: np.ndarray, shape: tuple) -> np.ndarray:
-    """
-    Unbroadcasts an array to a specified shape.
-    
-    Parameters:
-    - arr (np.ndarray): Array to unbroadcast
-    - shape (tuple): Shape to unbroadcast to
-    
-    Returns:
-    - np.ndarray: Unbroadcasted array
-    """
-    
-    # Padding the shape with leading 1s to match the number of dimensions of arr
-    ndim_diff = arr.ndim - len(shape)
-    shape_full = (1,) * ndim_diff + shape
-
-    # Identify axes to sum where shape_full has 1 but arr.shape > 1
-    axes_to_sum = tuple(i for i, (a_dim, t_dim) in enumerate(zip(arr.shape, shape_full)) if t_dim == 1)
-
-    # If arr has more dimensions than shape_full, sum over the extra dimensions
-    if axes_to_sum:
-        # Sum over the identified axes
-        arr = arr.sum(axis=axes_to_sum, keepdims=True)
-
-    # Now arr has shape where dims match shape_full; reshape to target_shape
-    # Squeeze the leading dummy dimensions
-    if ndim_diff:
-        arr = arr.reshape(shape_full)
-        arr = arr.squeeze(axis=tuple(range(ndim_diff)))
-
-    return arr
