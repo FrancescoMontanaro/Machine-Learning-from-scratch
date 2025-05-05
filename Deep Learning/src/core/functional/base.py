@@ -170,7 +170,7 @@ def tensor_nary_op(tensors: List['Tensor'], forward_fn: Callable[..., np.ndarray
         raise TypeError("All inputs must be instances of Tensor.")
     
     # Call the forward function
-    out_data = forward_fn()
+    out_data = forward_fn([t.data for t in tensors])
     
     # Check if any input tensor requires gradients
     requires_grad = any(t.requires_grad for t in tensors)
@@ -188,14 +188,16 @@ def tensor_nary_op(tensors: List['Tensor'], forward_fn: Callable[..., np.ndarray
             return
         
         # Iterate over the input tensors
-        for t in tensors:
-            # If the tensor requires gradients, set its gradient to zero
-            if t.requires_grad and t.grad is None:
-                # Initialize the gradient to zero
-                t.grad = np.zeros_like(t.data, dtype=t.data.dtype)
+        for idx, t in enumerate(tensors):
+            # Check if the tensor requires gradients
+            if t.requires_grad:
+                # If the gradient is None, initialize it to zero
+                if t.grad is None:
+                    # Initialize the gradient to zero
+                    t.grad = np.zeros_like(t.data, dtype=t.data.dtype)
                 
-        # Call the backward function with the output gradient
-        backward_fn(out.grad)
+                # Call the backward function with the output gradient
+                backward_fn(out_grad=out.grad, out_buffer=t.grad, idx=idx)
         
     # Set the backward function to the output tensor
     out._backward = _backward

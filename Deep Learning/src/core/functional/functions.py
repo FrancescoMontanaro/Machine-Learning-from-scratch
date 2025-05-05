@@ -13,11 +13,11 @@ from .kernel.mean import mean_flat_backward
 from .kernel.unsqueeze import unsqueeze_gradient
 from .kernel.pad import pad_forward, pad_gradient
 from .kernel.clip import clip_forward, clip_gradient
-from .kernel.concat import concat_forward, concat_gradient
 from .kernel.repeat import repeat_forward, repeat_gradient
 from .kernel.sum import sum_flat_forward, sum_flat_gradient
 from .kernel.max import max_flat_forward, max_flat_gradient
 from .kernel.max_pool_2d import max_pool_2d_forward, max_pool_2d_gradient
+from .kernel.concat import concat_1d_forward, concat_2d_forward, concat_backward
 from .kernel.conv_2d import conv_2d_forward, conv_2d_backward_w, conv_2d_backward_x
 from .kernel.masked_fill import masked_fill_forward, masked_fill_gradient, masked_fill_forward_neg_inf, masked_fill_forward_inf
 
@@ -625,64 +625,45 @@ def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
     - Tensor: Concatenated tensor
     """
     
-    # Define the offset array to store the offsets of each tensor
+    # Create variables to store the offsets and shapes
     offsets: np.ndarray
-    
+
     # Define the forward function
-    def forward() -> np.ndarray:
-        # Set the nonlocal variable offsets to store the offsets of each tensor
+    def forward(ts: List[np.ndarray]) -> np.ndarray:
         nonlocal offsets
         
-        # Flatten the tensors and compute their sizes
-        parts = [t.data.ravel() for t in tensors]
-        sizes = [p.size for p in parts]
-        offsets = np.array(np.cumsum([0] + sizes), dtype=np.int64)
-
-        # Create a flattened array to hold the concatenated tensors
-        parts_flat = np.empty(offsets[-1], dtype=tensors[0].data.dtype)
+        # Extract the rank of the first tensor
+        rank = ts[0].ndim
         
-        # Interleave the flattened tensors into a single array
-        for i, p in enumerate(parts):
-            # Fill the flattened array with the data from each tensor
-            parts_flat[offsets[i]:offsets[i+1]] = p
+        # Rank 0
+        if rank == 1:
+            # Concatenate 1D tensors
+            out, offsets = concat_1d_forward(ts)
             
-        # Create an output array to hold the concatenated result
-        out_flat = np.empty_like(parts_flat)
-        
-        # Concatenate the flattened tensors along the specified axis
-        concat_forward(parts_flat, offsets, out_flat)
-        
-        # Extract the shape of the first tensor to determine the output shape
-        out_shape = list(tensors[0].data.shape)
-        
-        # Update the shape of the output tensor along the specified axis
-        out_shape[axis] = int(np.sum([t.data.shape[axis] for t in tensors]))
-        
-        # Reshape the output data to match the concatenated shape
-        out_data = out_flat.reshape(out_shape)
-        
+        # Rank 1
+        elif rank == 2:
+            # Concatenate 2D tensors
+            out, offsets = concat_2d_forward(ts, axis)
+          
+        # Invalid rank  
+        else:
+            # Raise an error for unsupported tensor dimensions
+            raise ValueError(f"Unsupported tensor dimension for concatenation: {rank}")
+            
         # Return the concatenated tensor
-        return out_data
+        return out
     
     # Define the backward function
-    def backward(out_grad: np.ndarray) -> None:
-        # Flatten the output gradient
-        flat_grad = out_grad.ravel()
-        
-        # Iterate over the tensors and their offsets
-        for i, t in enumerate(tensors):
-            # Check if the tensor requires gradient computation
-            if not t.requires_grad:
-                continue
-            
-            # Check if the gradient is initialized
-            assert t.grad is not None, f"Gradient of the {i}-th tensor must be initialized"
-                
-            # Compute the gradient of the concatenation operation
-            concat_gradient(offsets, flat_grad, t.grad.ravel(), i)
+    def backward(out_grad: np.ndarray, out_buffer: np.ndarray, idx: int) -> None:
+        # Call the kernel function to compute the gradient of the concatenation operation
+        concat_backward(out_grad, out_buffer, offsets, idx)
 
     # Return the tensor operation with the specified forward and backward functions
-    return tensor_nary_op(tensors, forward, backward)
+    return tensor_nary_op(
+        tensors = tensors, 
+        forward_fn = forward, 
+        backward_fn = backward
+    )
 
 
 def reshape(x: 'Tensor', new_shape: Tuple[int, ...]) -> 'Tensor':
