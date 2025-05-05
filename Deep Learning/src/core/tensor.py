@@ -458,6 +458,17 @@ class Tensor:
         self._prev.clear()
     
     
+    def to_numpy(self) -> np.ndarray:
+        """
+        Method to convert the tensor to a numpy array
+        
+        Returns:
+        - np.ndarray: Numpy array containing the data of the tensor
+        """
+        
+        # Return the data of the tensor as a numpy array
+        return self.data
+    
     ###########################
     ####### Activations #######
     ###########################
