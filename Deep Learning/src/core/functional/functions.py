@@ -3,7 +3,7 @@ from functools import partial
 from typing import Optional, Tuple, List, Union, TYPE_CHECKING
 
 if TYPE_CHECKING: from ..tensor import Tensor
-from .base import tensor_unary_op, tensor_binary_op, tensor_nary_op, accumulate_gradient
+from .base import Context, tensor_unary_op, tensor_binary_op, tensor_nary_op, accumulate_gradient
 
 # Importing the kernel functions
 from .kernel.exp import exp_gradient
@@ -624,44 +624,42 @@ def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
     Returns:
     - Tensor: Concatenated tensor
     """
-    
-    # Create variables to store the offsets and shapes
-    offsets: np.ndarray
 
     # Define the forward function
-    def forward(ts: List[np.ndarray]) -> np.ndarray:
-        nonlocal offsets
-        
+    def forward(ctx: Context, tensors_list: List[np.ndarray], axis: int) -> np.ndarray:
         # Extract the rank of the first tensor
-        rank = ts[0].ndim
+        rank = tensors_list[0].ndim
         
         # Rank 0
         if rank == 1:
             # Concatenate 1D tensors
-            out, offsets = concat_1d_forward(ts)
+            out, offsets = concat_1d_forward(tensors_list)
             
         # Rank 1
         elif rank == 2:
             # Concatenate 2D tensors
-            out, offsets = concat_2d_forward(ts, axis)
+            out, offsets = concat_2d_forward(tensors_list, axis)
           
         # Invalid rank  
         else:
             # Raise an error for unsupported tensor dimensions
             raise ValueError(f"Unsupported tensor dimension for concatenation: {rank}")
+        
+        # Save the offsets in the context for use in the backward pass
+        ctx.save(offsets=offsets)
             
         # Return the concatenated tensor
         return out
     
     # Define the backward function
-    def backward(out_grad: np.ndarray, out_buffer: np.ndarray, idx: int) -> None:
+    def backward(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
         # Call the kernel function to compute the gradient of the concatenation operation
-        concat_backward(out_grad, out_buffer, offsets, idx)
+        concat_backward(out_grad, out_buffer, ctx.offsets, ctx.idx)
 
     # Return the tensor operation with the specified forward and backward functions
     return tensor_nary_op(
         tensors = tensors, 
-        forward_fn = forward, 
+        forward_fn = partial(forward, axis=axis), 
         backward_fn = backward
     )
 
@@ -827,13 +825,31 @@ def conv_2d(x: 'Tensor', kernel: 'Tensor', stride: Tuple[int, int] = (1, 1)) -> 
     - ValueError: If the kernel or stride is too large for the input size.
     """
     
+    # Define the forward function
+    def forward(ctx: Context, x_data: np.ndarray, kernel_data: np.ndarray, stride: Tuple[int, int]) -> np.ndarray:
+        # Save the data in the context for use in the backward pass
+        ctx.save(x_data=x_data, kernel_data=kernel_data, stride=stride)
+        
+        # Perform the convolution operation
+        return conv_2d_forward(x_data, kernel_data, stride)
+    
+    # Define the backward function for the input tensor
+    def backward_x(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
+        # Backprop the gradient through the convolution operation
+        conv_2d_backward_x(out_grad=out_grad, out_buffer=out_buffer, kernel_data=ctx.kernel_data, stride=ctx.stride)
+        
+    # Define the backward function for the kernel
+    def backward_w(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
+        # Backprop the gradient through the convolution operation
+        conv_2d_backward_w(out_grad=out_grad, out_buffer=out_buffer, x_data=ctx.x_data, stride=ctx.stride)
+    
     # Return the tensor operation with the specified forward and backward functions
     return tensor_binary_op(
         t1 = x,
         t2 = kernel, 
-        forward_fn = partial(conv_2d_forward, stride=stride),
-        backward_fn_a = partial(conv_2d_backward_x, kernel_data=kernel.data, stride=stride),
-        backward_fn_b = partial(conv_2d_backward_w, x_data=x.data, stride=stride)
+        forward_fn = partial(forward, stride=stride),
+        backward_fn_a = backward_x,
+        backward_fn_b = backward_w
     )
 
 

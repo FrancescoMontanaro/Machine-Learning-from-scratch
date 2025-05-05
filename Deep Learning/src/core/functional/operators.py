@@ -1,9 +1,8 @@
 import numpy as np
-from functools import partial
 from typing import Union, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING: from ..tensor import Tensor
-from .base import tensor_unary_op, tensor_binary_op, accumulate_gradient
+from .base import Context, tensor_unary_op, tensor_binary_op, accumulate_gradient
 
 # Import the necessary kernel functions
 from .kernel.add import add_forward, add_backward
@@ -26,13 +25,31 @@ def add(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     - Tensor: Sum of the two tensors
     """
     
+    # Define the forward function
+    def forward(ctx: Context, a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
+        # Save the data for backward pass
+        ctx.save(a_data=a_data, b_data=b_data)
+        
+        # Compute the sum of the two tensors
+        return add_forward(a_data, b_data)
+    
+    # Define the backward function for tensor a
+    def backward_a(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
+        # Compute the gradient of the sum operation
+        add_backward(out_grad=out_grad, out_buffer=out_buffer, target_shape=ctx.a_data.shape)
+        
+    # Define the backward function for tensor b
+    def backward_b(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
+        # Compute the gradient of the sum operation
+        add_backward(out_grad=out_grad, out_buffer=out_buffer, target_shape=ctx.b_data.shape)
+    
     # Return the tensor operation with the specified forward and backward functions
     return tensor_binary_op(
         t1 = a,
         t2 = b, 
-        forward_fn = add_forward, 
-        backward_fn_a = partial(add_backward, target_shape=a.data.shape),
-        backward_fn_b = partial(add_backward, target_shape=b.data.shape)
+        forward_fn = forward, 
+        backward_fn_a = backward_a,
+        backward_fn_b = backward_b
     )
 
 
@@ -48,13 +65,31 @@ def sub(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     - Tensor: Difference of the two tensors
     """
     
+    # Define the forward function
+    def forward(ctx: Context, a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
+        # Save the data for backward pass
+        ctx.save(a_data=a_data, b_data=b_data)
+        
+        # Compute the difference of the two tensors
+        return sub_forward(a_data, b_data)
+    
+    # Define the backward function for tensor a
+    def backward_a(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
+        # Compute the gradient of the subtraction operation
+        sub_backward_a(out_grad=out_grad, out_buffer=out_buffer, target_shape=ctx.a_data.shape)
+        
+    # Define the backward function for tensor b
+    def backward_b(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
+        # Compute the gradient of the subtraction operation
+        sub_backward_b(out_grad=out_grad, out_buffer=out_buffer, target_shape=ctx.b_data.shape)
+    
     # Return the tensor operation with the specified forward and backward functions
     return tensor_binary_op(
         t1 = a,
         t2 = b,
-        forward_fn = sub_forward,
-        backward_fn_a = partial(sub_backward_a, target_shape=a.data.shape),
-        backward_fn_b = partial(sub_backward_b, target_shape=b.data.shape)
+        forward_fn = forward,
+        backward_fn_a = backward_a,
+        backward_fn_b = backward_b
     )
 
 
@@ -69,14 +104,32 @@ def mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     Returns:
     - Tensor: Product of the two tensors
     """
+    
+    # Define the forward function
+    def forward(ctx: Context, a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
+        # Save the data for backward pass
+        ctx.save(a_data=a_data, b_data=b_data)
+        
+        # Compute the product of the two tensors
+        return mul_forward(a_data, b_data)
+    
+    # Define the backward function for tensor a
+    def backward_a(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
+        # Compute the gradient of the multiplication operation
+        mul_backward_a(out_grad=out_grad, out_buffer=out_buffer, target_shape=ctx.a_data.shape, b_data=ctx.b_data)
+        
+    # Define the backward function for tensor b
+    def backward_b(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
+        # Compute the gradient of the multiplication operation
+        mul_backward_b(out_grad=out_grad, out_buffer=out_buffer, target_shape=ctx.b_data.shape, a_data=ctx.a_data)
             
     # Return the tensor operation with the specified forward and backward functions
     return tensor_binary_op(
         t1 = a,
         t2 = b,
-        forward_fn = mul_forward,
-        backward_fn_a = partial(mul_backward_a, target_shape=a.data.shape, b_data=b.data),
-        backward_fn_b = partial(mul_backward_b, target_shape=b.data.shape, a_data=a.data)
+        forward_fn = forward,
+        backward_fn_a = backward_a,
+        backward_fn_b = backward_b
     )
 
 
@@ -91,14 +144,32 @@ def div(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     Returns:
     - Tensor: Quotient of the two tensors
     """
+    
+    # Define the forward function
+    def forward(ctx: Context, a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
+        # Save the data for backward pass
+        ctx.save(a_data=a_data, b_data=b_data)
+        
+        # Compute the quotient of the two tensors
+        return div_forward(a_data, b_data)
+    
+    # Define the backward function for tensor a
+    def backward_a(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
+        # Compute the gradient of the division operation
+        div_backward_a(out_grad=out_grad, out_buffer=out_buffer, target_shape=ctx.a_data.shape, b_data=ctx.b_data)
+        
+    # Define the backward function for tensor b
+    def backward_b(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
+        # Compute the gradient of the division operation
+        div_backward_b(out_grad=out_grad, out_buffer=out_buffer, a_data=ctx.a_data, b_data=ctx.b_data)
             
     # Return the tensor operation with the specified forward and backward functions
     return tensor_binary_op(
         t1 = a,
         t2 = b,
-        forward_fn = div_forward, 
-        backward_fn_a = partial(div_backward_a, target_shape=a.data.shape, b_data=b.data),
-        backward_fn_b = partial(div_backward_b, a_data=a.data, b_data=b.data)
+        forward_fn = forward, 
+        backward_fn_a = backward_a,
+        backward_fn_b = backward_b
     )
 
 
@@ -113,14 +184,32 @@ def mat_mul(a: 'Tensor', b: 'Tensor') -> 'Tensor':
     Returns:
     - Tensor: Matrix product of the two tensors
     """
-            
+    
+    # Define the forward function
+    def forward(ctx: Context, a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
+        # Save the data for backward pass
+        ctx.save(a_data=a_data, b_data=b_data)
+        
+        # Compute the matrix product of the two tensors
+        return matmul_forward(a_data, b_data)
+    
+    # Define the backward function for tensor a
+    def backward_a(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
+        # Compute the gradient of the matrix multiplication operation
+        matmul_backward_a(out_grad=out_grad, out_buffer=out_buffer, b_data=ctx.b_data)
+        
+    # Define the backward function for tensor b
+    def backward_b(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
+        # Compute the gradient of the matrix multiplication operation
+        matmul_backward_b(out_grad=out_grad, out_buffer=out_buffer, a_data=ctx.a_data)
+    
     # Return the tensor operation with the specified forward and backward functions
     return tensor_binary_op(
         t1 = a,
         t2 = b,
-        forward_fn = matmul_forward,
-        backward_fn_a = partial(matmul_backward_a, b_data=b.data),
-        backward_fn_b = partial(matmul_backward_b, a_data=a.data)
+        forward_fn = forward,
+        backward_fn_a = backward_a,
+        backward_fn_b = backward_b
     )
 
 
