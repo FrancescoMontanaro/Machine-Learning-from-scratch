@@ -3,16 +3,16 @@ from functools import partial
 from typing import Optional, Tuple, List, Union, TYPE_CHECKING
 
 if TYPE_CHECKING: from ..tensor import Tensor
-from .base import Context, tensor_unary_op, tensor_binary_op, tensor_nary_op, accumulate_gradient
+from .base import Context, tensor_unary_op, tensor_unary_op_1, tensor_binary_op, tensor_nary_op, accumulate_gradient
 
 # Importing the kernel functions
 from .kernel.exp import exp_gradient
 from .kernel.log import log_gradient
-from .kernel.sqrt import sqrt_gradient
 from .kernel.mean import mean_flat_backward
 from .kernel.unsqueeze import unsqueeze_gradient
 from .kernel.pad import pad_forward, pad_gradient
 from .kernel.clip import clip_forward, clip_gradient
+from .kernel.sqrt import sqrt_forward, sqrt_backward
 from .kernel.repeat import repeat_forward, repeat_gradient
 from .kernel.sum import sum_flat_forward, sum_flat_gradient
 from .kernel.max import max_flat_forward, max_flat_gradient
@@ -186,24 +186,20 @@ def sqrt(x: 'Tensor') -> 'Tensor':
     """
     
     # Define the forward function
-    def forward() -> np.ndarray:
+    def forward(ctx: Context, x_data: np.ndarray) -> np.ndarray:
+        # Save the input data in the context for use in the backward pass
+        ctx.save(x_data=x_data)
+        
         # Compute the square root of the tensor
-        return np.sqrt(x.data)
+        return sqrt_forward(x_data)
     
     # Define the backward function
-    def backward(out_grad: np.ndarray) -> None:
-        # Check if the gradient needs to be computed
-        if not x.requires_grad: 
-            return
-        
-        # Check if the gradient is initialized
-        assert x.grad is not None, "Gradient must be initialized"
-        
+    def backward(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
         # Compute the gradient of the square root operation
-        sqrt_gradient(out_grad.ravel(), x.data.ravel(), x.grad.ravel())
+        sqrt_backward(out_grad, out_buffer, ctx.x_data)
     
     # Return the tensor operation with the specified forward and backward functions
-    return tensor_unary_op(x, forward, backward)
+    return tensor_unary_op_1(x, forward, backward)
 
 
 def mean(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':

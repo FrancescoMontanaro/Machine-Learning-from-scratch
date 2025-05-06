@@ -158,6 +158,65 @@ def tensor_unary_op(t: 'Tensor', forward_fn: Callable[..., np.ndarray], backward
     return out
 
 
+def tensor_unary_op_1(t: 'Tensor', forward_fn: Callable[..., np.ndarray], backward_fn: Callable[..., None]) -> 'Tensor':
+    """
+    Function to create a tensor operation with automatic differentiation.
+    
+    Parameters:
+    - t (Tensor): Input tensor for the operation.
+    - forward_fn (Callable[..., np.ndarray]): Forward function that computes the output.
+    - backward_fn (Callable[..., None]): Backward function that computes the gradients.
+    
+    Returns:
+    - Tensor: Output tensor with the computed gradients.
+    
+    Raises:
+    - TypeError: If any input is not a Tensor.
+    """
+    
+    # Get the tensor class
+    TensorCls = cast(Type['Tensor'], get_tensor_class())
+    
+    # Check if the input is a tensor
+    if not isinstance(t, TensorCls):
+        raise TypeError("Input must be an instance of Tensor.")
+    
+    # Create a context
+    ctx = Context()
+    
+    # Call the forward function
+    out_data = forward_fn(ctx, t.data)
+    
+    # Create output tensor
+    out = TensorCls(out_data, requires_grad=t.requires_grad)
+    
+    # If no gradients are required, return the output tensor without backward
+    if _NO_GRAD: return out
+    
+    # Define the backward function
+    def _backward():
+        # If the output tensor is None, return
+        if out.grad is None:
+            return
+        
+        # If the tensor requires gradients, set its gradient to zero
+        if t.requires_grad and t.grad is None:
+            # Initialize the gradient to zero
+            t.grad = np.zeros_like(t.data, dtype=t.data.dtype)
+            
+        # Call the backward function with the output gradient
+        backward_fn(ctx, out_grad=out.grad, out_buffer=t.grad)
+        
+    # Set the backward function to the output tensor
+    out._backward = _backward
+    
+    # Set the previous tensors that require gradients
+    out._prev = {t} if t.requires_grad else set()
+    
+    # Return the output tensor
+    return out
+
+
 def tensor_binary_op(t1: 'Tensor', t2: 'Tensor', forward_fn: Callable[..., np.ndarray], backward_fn_a: Callable[..., None], backward_fn_b: Callable[..., None]) -> 'Tensor':
     """
     Function to create a tensor operation with automatic differentiation.
