@@ -11,7 +11,7 @@ from typing import Union, Optional, Tuple
 ### Rank 1 kernels ###
 ######################
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def _sum_all_1d(x: np.ndarray) -> np.ndarray:
     acc = x.dtype.type(0)
     for i in prange(x.size):
@@ -20,11 +20,11 @@ def _sum_all_1d(x: np.ndarray) -> np.ndarray:
 
 # --- keepdims wrappers --- #
 
-@njit
+@njit(fastmath=True)
 def _sum_all_1d_kd_true(x: np.ndarray) -> np.ndarray:
     return np.reshape(_sum_all_1d(x), (1,))
 
-@njit
+@njit(fastmath=True)
 def _sum_all_1d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_all_1d(x)
 
@@ -33,7 +33,7 @@ def _sum_all_1d_kd_false(x: np.ndarray) -> np.ndarray:
 ### Rank 2 kernels ###
 ######################
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def _sum_axis0_2d(x: np.ndarray) -> np.ndarray:
     m, n = x.shape
     out = np.zeros(n, dtype=x.dtype)
@@ -44,7 +44,7 @@ def _sum_axis0_2d(x: np.ndarray) -> np.ndarray:
         out[j] = s
     return out
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def _sum_axis1_2d(x: np.ndarray) -> np.ndarray:
     m, n = x.shape
     out = np.zeros(m, dtype=x.dtype)
@@ -55,7 +55,7 @@ def _sum_axis1_2d(x: np.ndarray) -> np.ndarray:
         out[i] = s
     return out
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def _sum_all_2d(x: np.ndarray) -> np.ndarray:
     m, n = x.shape
     acc = x.dtype.type(0)
@@ -68,27 +68,27 @@ def _sum_all_2d(x: np.ndarray) -> np.ndarray:
 
 # --- keepdims wrappers --- #
 
-@njit
+@njit(fastmath=True)
 def _sum_axis0_2d_kd_true(x: np.ndarray) -> np.ndarray:
     return np.reshape(_sum_axis0_2d(x), (1, x.shape[1]))
 
-@njit
+@njit(fastmath=True)
 def _sum_axis0_2d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_axis0_2d(x)
 
-@njit
+@njit(fastmath=True)
 def _sum_axis1_2d_kd_true(x: np.ndarray) -> np.ndarray:
     return np.reshape(_sum_axis1_2d(x), (x.shape[0], 1))
 
-@njit
+@njit(fastmath=True)
 def _sum_axis1_2d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_axis1_2d(x)
 
-@njit
+@njit(fastmath=True)
 def _sum_all_2d_kd_true(x: np.ndarray) -> np.ndarray:
     return np.reshape(_sum_all_2d(x), (1, 1))
 
-@njit
+@njit(fastmath=True)
 def _sum_all_2d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_all_2d(x)
 
@@ -97,7 +97,7 @@ def _sum_all_2d_kd_false(x: np.ndarray) -> np.ndarray:
 ### Rank 3 kernels ###
 ######################
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def _sum_axis0_3d(x: np.ndarray) -> np.ndarray:
     d0, d1, d2 = x.shape
     out = np.zeros((d1, d2), dtype=x.dtype)
@@ -109,7 +109,7 @@ def _sum_axis0_3d(x: np.ndarray) -> np.ndarray:
             out[j, k] = s
     return out
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def _sum_axis1_3d(x: np.ndarray) -> np.ndarray:
     d0, d1, d2 = x.shape
     out = np.zeros((d0, d2), dtype=x.dtype)
@@ -121,7 +121,7 @@ def _sum_axis1_3d(x: np.ndarray) -> np.ndarray:
             out[i, k] = s
     return out
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def _sum_axis2_3d(x: np.ndarray) -> np.ndarray:
     d0, d1, d2 = x.shape
     out = np.zeros((d0, d1), dtype=x.dtype)
@@ -133,7 +133,7 @@ def _sum_axis2_3d(x: np.ndarray) -> np.ndarray:
             out[i, j] = s
     return out
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def _sum_all_3d(x: np.ndarray) -> np.ndarray:
     d0, d1, d2 = x.shape
     acc = x.dtype.type(0)
@@ -149,38 +149,38 @@ def _sum_all_3d(x: np.ndarray) -> np.ndarray:
 
 # --- keepdims wrappers --- #
 
-@njit
+@njit(fastmath=True)
 def _sum_axis0_3d_kd_true(x: np.ndarray) -> np.ndarray:
     d1, d2 = x.shape[1:]
     return np.reshape(_sum_axis0_3d(x), (1, d1, d2))
 
-@njit
+@njit(fastmath=True)
 def _sum_axis0_3d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_axis0_3d(x)
 
-@njit
+@njit(fastmath=True)
 def _sum_axis1_3d_kd_true(x: np.ndarray) -> np.ndarray:
     d0, d2 = x.shape[0], x.shape[2]
     return np.reshape(_sum_axis1_3d(x), (d0, 1, d2))
 
-@njit
+@njit(fastmath=True)
 def _sum_axis1_3d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_axis1_3d(x)
 
-@njit
+@njit(fastmath=True)
 def _sum_axis2_3d_kd_true(x: np.ndarray) -> np.ndarray:
     d0, d1 = x.shape[:2]
     return np.reshape(_sum_axis2_3d(x), (d0, d1, 1))
 
-@njit
+@njit(fastmath=True)
 def _sum_axis2_3d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_axis2_3d(x)
 
-@njit
+@njit(fastmath=True)
 def _sum_all_3d_kd_true(x: np.ndarray) -> np.ndarray:
     return np.reshape(_sum_all_3d(x), (1, 1, 1))
 
-@njit
+@njit(fastmath=True)
 def _sum_all_3d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_all_3d(x)
 
@@ -189,7 +189,7 @@ def _sum_all_3d_kd_false(x: np.ndarray) -> np.ndarray:
 ### Rank 4 kernels ###
 ######################
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def _sum_axis0_4d(x: np.ndarray) -> np.ndarray:
     d0, d1, d2, d3 = x.shape
     out = np.zeros((d1, d2, d3), dtype=x.dtype)
@@ -202,7 +202,7 @@ def _sum_axis0_4d(x: np.ndarray) -> np.ndarray:
                 out[j, k, l] = s
     return out
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def _sum_axis1_4d(x: np.ndarray) -> np.ndarray:
     d0, d1, d2, d3 = x.shape
     out = np.zeros((d0, d2, d3), dtype=x.dtype)
@@ -215,7 +215,7 @@ def _sum_axis1_4d(x: np.ndarray) -> np.ndarray:
                 out[i, k, l] = s
     return out
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def _sum_axis2_4d(x: np.ndarray) -> np.ndarray:
     d0, d1, d2, d3 = x.shape
     out = np.zeros((d0, d1, d3), dtype=x.dtype)
@@ -228,7 +228,7 @@ def _sum_axis2_4d(x: np.ndarray) -> np.ndarray:
                 out[i, j, l] = s
     return out
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def _sum_axis3_4d(x: np.ndarray) -> np.ndarray:
     d0, d1, d2, d3 = x.shape
     out = np.zeros((d0, d1, d2), dtype=x.dtype)
@@ -241,7 +241,7 @@ def _sum_axis3_4d(x: np.ndarray) -> np.ndarray:
                 out[i, j, k] = s
     return out
 
-@njit(parallel=True)
+@njit(parallel=True, fastmath=True)
 def _sum_all_4d(x: np.ndarray) -> np.ndarray:
     d0, d1, d2, d3 = x.shape
     acc = x.dtype.type(0)
@@ -260,52 +260,52 @@ def _sum_all_4d(x: np.ndarray) -> np.ndarray:
 
 # --- keepdims wrappers --- #
 
-@njit
+@njit(fastmath=True)
 def _sum_axis0_4d_kd_true(x: np.ndarray) -> np.ndarray:
     d1, d2, d3 = x.shape[1:]
     return np.reshape(_sum_axis0_4d(x), (1, d1, d2, d3))
 
-@njit
+@njit(fastmath=True)
 def _sum_axis0_4d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_axis0_4d(x)
 
-@njit
+@njit(fastmath=True)
 def _sum_axis1_4d_kd_true(x: np.ndarray) -> np.ndarray:
     d0, d2, d3 = x.shape[0], x.shape[2], x.shape[3]
     return np.reshape(_sum_axis1_4d(x), (d0, 1, d2, d3))
 
-@njit
+@njit(fastmath=True)
 def _sum_axis1_4d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_axis1_4d(x)
 
-@njit
+@njit(fastmath=True)
 def _sum_axis2_4d_kd_true(x: np.ndarray) -> np.ndarray:
     d0, d1, d3 = x.shape[0], x.shape[1], x.shape[3]
     return np.reshape(_sum_axis2_4d(x), (d0, d1, 1, d3))
 
-@njit
+@njit(fastmath=True)
 def _sum_axis2_4d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_axis2_4d(x)
 
-@njit
+@njit(fastmath=True)
 def _sum_axis3_4d_kd_true(x: np.ndarray) -> np.ndarray:
     d0, d1, d2 = x.shape[:3]
     return np.reshape(_sum_axis3_4d(x), (d0, d1, d2, 1))
 
-@njit
+@njit(fastmath=True)
 def _sum_axis3_4d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_axis3_4d(x)
 
-@njit
+@njit(fastmath=True)
 def _sum_all_4d_kd_true(x: np.ndarray) -> np.ndarray:
     return np.reshape(_sum_all_4d(x), (1, 1, 1, 1))
 
-@njit
+@njit(fastmath=True)
 def _sum_all_4d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_all_4d(x)
 
 
-@njit
+@njit(fastmath=True)
 def _reduce_multi_axes(x: np.ndarray, axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> np.ndarray:
     # Convert the axes to a tuple of integers
     if axis is None:
