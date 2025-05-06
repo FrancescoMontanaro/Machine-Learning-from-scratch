@@ -1,4 +1,3 @@
-import math
 import numpy as np
 from numba import njit, prange
 
@@ -43,8 +42,8 @@ def sqrt_backward(out_grad: np.ndarray, out_buffer: np.ndarray, x_data: np.ndarr
     
     # Create a flattened view of the input tensor
     out_grad_flat = out_grad.ravel()
-    x_data_flat = x_data.flatten()
-    out_buffer_flat = out_buffer.flatten()
+    x_data_flat = x_data.ravel()
+    out_buffer_flat = out_buffer.ravel()
     
     # Iterate over the flattened tensor
     for i in prange(out_buffer_flat.size):
