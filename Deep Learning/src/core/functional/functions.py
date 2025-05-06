@@ -10,11 +10,11 @@ from .kernel.exp import exp_gradient
 from .kernel.log import log_gradient
 from .kernel.mean import mean_flat_backward
 from .kernel.unsqueeze import unsqueeze_gradient
+from .kernel.sum import sum_forward, sum_backward
 from .kernel.pad import pad_forward, pad_gradient
 from .kernel.clip import clip_forward, clip_gradient
 from .kernel.sqrt import sqrt_forward, sqrt_backward
 from .kernel.repeat import repeat_forward, repeat_gradient
-from .kernel.sum import sum_flat_forward, sum_flat_gradient
 from .kernel.max import max_flat_forward, max_flat_gradient
 from .kernel.max_pool_2d import max_pool_2d_forward, max_pool_2d_gradient
 from .kernel.concat import concat_1d_forward, concat_2d_forward, concat_backward
@@ -22,7 +22,7 @@ from .kernel.conv_2d import conv_2d_forward, conv_2d_backward_w, conv_2d_backwar
 from .kernel.masked_fill import masked_fill_forward, masked_fill_gradient, masked_fill_forward_neg_inf, masked_fill_forward_inf
 
 
-def sum(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Tensor':
+def sum(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':
     """
     Compute the sum of the tensor along the specified axis.
     
@@ -36,56 +36,20 @@ def sum(x: 'Tensor', axis: Optional[int] = None, keepdims: bool = False) -> 'Ten
     """
     
     # Define the forward function
-    def forward() -> np.ndarray:
-        # If axis is None, compute the sum of the flattened tensor
-        if axis is None:
-            # Create a buffer to store the sum
-            buf = np.zeros((1,), dtype=x.data.dtype)
-            
-            # Compute the sum of the flattened tensor
-            sum_flat_forward(x.data.ravel(), buf)
-            
-            # If keepdims is True, create an output tensor with the same shape as the input tensor
-            if keepdims:
-                # Create an output tensor with the same shape as the input tensor
-                out_data = np.full([1]*x.data.ndim, buf[0], dtype=x.data.dtype)
-            else:
-                # Create an output tensor with the shape of the sum
-                out_data = buf[0]
-        else:
-            # If axis is not None, compute the sum along the specified axis
-            out_data = x.data.sum(axis=axis, keepdims=keepdims)
-            
-        # Return the computed sum
-        return out_data
+    def forward(ctx: Context, x_data: np.ndarray) -> np.ndarray:
+        # Save the input data in the context for use in the backward pass
+        ctx.save(axis=axis, keepdims=keepdims)
+        
+        # Compute the sum of the tensor along the specified axis
+        return sum_forward(x_data, axis=axis, keepdims=keepdims)
 
     # Define the backward function
-    def backward(out_grad: np.ndarray) -> None:
-        # Check if the gradient needs to be computed
-        if not x.requires_grad: 
-            return
-        
-        # Check if the gradient is initialized
-        assert x.grad is not None, "Gradient must be initialized"
-        
-        # If axis is None, broadcast the gradient to the shape of the input tensor
-        if axis is None:
-            # Broadcast the gradient to the shape of the input tensor
-            sum_flat_gradient(np.array([out_grad]).ravel(), x.grad.ravel())
-        else:
-            # If axis is not None, compute the gradient along the specified axis
-            grad = out_grad
-            
-            # If axis is a tuple, compute the gradient for each axis in the tuple
-            if not keepdims:
-                # If keepdims is False, expand the gradient along the specified axis
-                grad = np.expand_dims(grad, axis=axis)
-                
-            # Accumulate the gradient in the input tensor
-            accumulate_gradient(x, np.broadcast_to(grad, x.data.shape))
+    def backward(ctx: Context, out_grad: np.ndarray, out_buffer: np.ndarray) -> None:
+        # Backprop the gradient through the sum operation
+        sum_backward(out_grad=out_grad, out_buffer=out_buffer, axis=ctx.axis, keepdims=ctx.keepdims)
 
     # Return the tensor operation withe the specified forward and backward functions         
-    return tensor_unary_op(x, forward, backward)
+    return tensor_unary_op_1(x, forward, backward)
 
 
 def max(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':

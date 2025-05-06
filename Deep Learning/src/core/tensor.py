@@ -555,7 +555,7 @@ class Tensor:
     ######## Functions ########
     ###########################
     
-    def sum(self, axis: Optional[int] = None, keepdims: bool = False) -> 'Tensor':
+    def sum(self, axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':
         """
         Method to compute the sum of the tensor along the specified axis
         
