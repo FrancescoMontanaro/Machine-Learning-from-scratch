@@ -32,21 +32,30 @@ class Tensor:
         - dtype (type): Data type of the tensor. Default is np.float32
         - is_parameter (bool): Flag to indicate if the tensor is a trainable parameter
         """
+        
+        # Check if the data is a numpy array
+        if isinstance(data, np.ndarray):
+            # Check if the data is already of the correct dtype
+            if data.dtype != dtype:
+                # Convert the data to the correct dtype
+                self.data = data.astype(dtype, copy=False)
+            else:
+                # Assign the data directly if already of the correct dtype
+                self.data = data
+        else:
+            # Convert the data to a numpy array of the correct dtype
+            self.data = np.array(data, dtype=dtype)
+        
+        # Gradient tracking flags
+        self.is_parameter = is_parameter
+        self.requires_grad = False if _NO_GRAD else requires_grad
+        
+        # Initialize gradient and graph metadata
+        self.grad = None
+        self._backward: Callable = lambda: None
+        self._prev: set['Tensor'] = set()
 
-        # Store the data, gradient, and the flag to compute the gradient
-        self.data = np.array(data).astype(dtype)
-            
-        # Import the global flag to disable gradient computation
-        global _NO_GRAD
-        
-        # Initialize the control variables
-        self.is_parameter = is_parameter # Flag to indicate if the tensor is a trainable parameter
-        self.requires_grad = False if _NO_GRAD else requires_grad # Flag to indicate if the gradient needs to be computed for the tensor
-        self.grad = None # Gradient of the tensor with respect to the loss
-        self._backward: Callable = lambda: None # Function to backpropagate the gradient
-        self._prev: set['Tensor'] = set() # Set to store the previous tensors in the computation graph
-        
-        # Add the tensor to the live tensors set
+        # Register live tensor
         Tensor._live_tensors.add(self)
 
 
