@@ -8,7 +8,7 @@ import numpy as np
 # Ensure the src directory is on sys.path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from src.core.functional.kernel.add import add_forward, add_backward
+from src import Tensor
 
 
 class TestAddKernel(unittest.TestCase):
@@ -22,22 +22,27 @@ class TestAddKernel(unittest.TestCase):
         self.x_raw = np.random.rand(1000, 100).astype(np.float32)
         self.y_raw = np.random.rand(1000, 100).astype(np.float32)
 
-        # Torch tensors
-        self.x_torch = torch.tensor(self.x_raw, dtype=torch.float32, requires_grad=False)
-        self.y_torch = torch.tensor(self.y_raw, dtype=torch.float32, requires_grad=False)
-
 
     def test_add_forward_values(self):
         """
         Test that add_forward matches torch.add on forward pass.
         """
         
+        # Custom tensors
+        x_tensor = Tensor(self.x_raw, dtype=np.float32, requires_grad=False)
+        y_tensor = Tensor(self.y_raw, dtype=np.float32, requires_grad=False)
+
+        # Torch tensors
+        x_torch = torch.tensor(self.x_raw, dtype=torch.float32, requires_grad=False)
+        y_torch = torch.tensor(self.y_raw, dtype=torch.float32, requires_grad=False)
+        
         # PyTorch forward
-        z_torch = torch.add(self.x_torch, self.y_torch)
+        z_torch = torch.add(x_torch, y_torch)
         out_torch = z_torch.detach().numpy()
 
         # Custom forward
-        out_custom = add_forward(self.x_raw, self.y_raw)
+        out_custom = x_tensor + y_tensor
+        out_custom = out_custom.detach().to_numpy()
 
         # Assert values are close
         self.assertTrue(
@@ -56,30 +61,37 @@ class TestAddKernel(unittest.TestCase):
         """
         
         # Setup tensors with grad
-        x = torch.tensor(self.x_raw, dtype=torch.float32, requires_grad=True)
-        y = torch.tensor(self.y_raw, dtype=torch.float32, requires_grad=True)
+        x_torch = torch.tensor(self.x_raw, dtype=torch.float32, requires_grad=True)
+        y_torch = torch.tensor(self.y_raw, dtype=torch.float32, requires_grad=True)
+        
+        # Custom tensors
+        x_custom = Tensor(self.x_raw, dtype=np.float32, requires_grad=True)
+        y_custom = Tensor(self.y_raw, dtype=np.float32, requires_grad=True)
 
         # PyTorch forward + backward
-        z = torch.add(x, y)
-        grad_output = torch.ones_like(z)
-        z.backward(grad_output)
+        z_torch = torch.add(x_torch, y_torch)
+        grad_output = torch.ones_like(z_torch)
+        z_torch.backward(grad_output)
         
         # Check gradients
-        assert x.grad is not None, "Gradient for z is None"
-        assert y.grad is not None, "Gradient for z is None"
+        assert x_torch.grad is not None, "Gradient for z is None"
+        assert y_torch.grad is not None, "Gradient for z is None"
 
         # Detach gradients to numpy
-        grad_x_torch = x.grad.detach().numpy()
-        grad_y_torch = y.grad.detach().numpy()
+        grad_x_torch = x_torch.grad.detach().numpy()
+        grad_y_torch = y_torch.grad.detach().numpy()
 
-        # Custom backward
-        out_grad = np.ones_like(self.x_raw)
-        grad_x_custom = np.zeros_like(self.x_raw)
-        grad_y_custom = np.zeros_like(self.y_raw)
-
-        # Custom backward pass
-        add_backward(out_grad, grad_x_custom, self.x_raw.shape)
-        add_backward(out_grad, grad_y_custom, self.y_raw.shape)
+        # Custom forward + backward
+        z_custom = x_custom + y_custom
+        z_custom.backward()
+        
+        # Check gradients
+        assert x_custom.grad is not None, "Gradient for z is None"
+        assert y_custom.grad is not None, "Gradient for z is None"
+        
+        # Detach gradients to numpy
+        grad_x_custom = x_custom.grad
+        grad_y_custom = y_custom.grad
 
         # Assert gradients are equal
         self.assertTrue(
@@ -110,18 +122,18 @@ class TestAddKernel(unittest.TestCase):
 
         # PyTorch forward
         start = time.time()
+        x = torch.tensor(self.x_raw, dtype=torch.float32)
+        y = torch.tensor(self.y_raw, dtype=torch.float32)
         for _ in range(n_iters):
-            x = torch.tensor(self.x_raw, dtype=torch.float32)
-            y = torch.tensor(self.y_raw, dtype=torch.float32)
             _ = torch.add(x, y)
         t_torch_fwd = time.time() - start
 
         # Custom forward
         start = time.time()
+        x = Tensor(self.x_raw, dtype=np.float32)
+        y = Tensor(self.y_raw, dtype=np.float32)
         for _ in range(n_iters):
-            x = np.array(self.x_raw, dtype=np.float32)
-            y = np.array(self.y_raw, dtype=np.float32)
-            _ = add_forward(x, y)
+            _ = x + y
         t_custom_fwd = time.time() - start
 
         # Print performance results
@@ -130,6 +142,7 @@ class TestAddKernel(unittest.TestCase):
         # Assert forward speed is within factor 3
         ratio_fwd = t_custom_fwd / t_torch_fwd if t_torch_fwd > 0 else float('inf')
         
+        # Assert forward speed is within factor 3
         self.assertLess(
             ratio_fwd, 3,
             msg=(
@@ -141,20 +154,20 @@ class TestAddKernel(unittest.TestCase):
 
         # PyTorch backward
         start = time.time()
+        x = torch.tensor(self.x_raw, dtype=torch.float32, requires_grad=True)
+        y = torch.tensor(self.y_raw, dtype=torch.float32, requires_grad=True)
         for _ in range(n_iters):
-            x = torch.tensor(self.x_raw, dtype=torch.float32, requires_grad=True)
-            y = torch.tensor(self.y_raw, dtype=torch.float32, requires_grad=True)
             z = torch.add(x, y)
             z.backward(torch.ones_like(z))
         t_torch_bwd = time.time() - start
 
         # Custom backward
         start = time.time()
+        x = Tensor(self.x_raw, dtype=np.float32, requires_grad=True)
+        y = Tensor(self.y_raw, dtype=np.float32, requires_grad=True)
         for _ in range(n_iters):
-            x = np.array(self.x_raw, dtype=np.float32)
-            out = add_forward(x, self.y_raw)
-            grad_buf = np.zeros_like(x)
-            add_backward(out, grad_buf, x.shape)
+            out = x + y
+            out.backward()
         t_custom_bwd = time.time() - start
 
         # Print performance results

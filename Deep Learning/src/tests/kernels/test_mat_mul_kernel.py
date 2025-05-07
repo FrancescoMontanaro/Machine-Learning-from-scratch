@@ -11,7 +11,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 from src import Tensor
 
 
-class TestSubKernel(unittest.TestCase):
+class TestMatMulKernel(unittest.TestCase):
     
     def setUp(self):
         """
@@ -19,13 +19,13 @@ class TestSubKernel(unittest.TestCase):
         """
 
         # Create random input data
-        self.x_raw = np.random.rand(1000, 100).astype(np.float32)
-        self.y_raw = np.random.rand(1000, 100).astype(np.float32)
+        self.x_raw = np.random.rand(100, 30, 40).astype(np.float32)
+        self.y_raw = np.random.rand(100, 40, 50).astype(np.float32)
 
 
-    def test_sub_forward_values(self):
+    def test_matmul_forward_values(self):
         """
-        Test that sub_forward matches torch.sub on forward pass.
+        Test that matmul_forward matches torch.matmul on forward pass.
         """
         
         # Custom tensors
@@ -37,11 +37,11 @@ class TestSubKernel(unittest.TestCase):
         y_torch = torch.tensor(self.y_raw, dtype=torch.float32, requires_grad=False)
         
         # PyTorch forward
-        z_torch = torch.sub(x_torch, y_torch)
+        z_torch = torch.matmul(x_torch, y_torch)
         out_torch = z_torch.detach().numpy()
 
         # Custom forward
-        out_custom = x_tensor - y_tensor
+        out_custom = x_tensor @ y_tensor
         out_custom = out_custom.detach().to_numpy()
 
         # Assert values are close
@@ -54,10 +54,10 @@ class TestSubKernel(unittest.TestCase):
             )
         )
         
-
-    def test_sub_backward_values(self):
+        
+    def test_matmul_backward_values(self):
         """
-        Test that sub_backward matches torch.sub backward gradients.
+        Test that matmul_forward matches torch.matmul backward gradients.
         """
         
         # Setup tensors with grad
@@ -69,7 +69,7 @@ class TestSubKernel(unittest.TestCase):
         y_custom = Tensor(self.y_raw, dtype=np.float32, requires_grad=True)
 
         # PyTorch forward + backward
-        z_torch = torch.sub(x_torch, y_torch)
+        z_torch = torch.matmul(x_torch, y_torch)
         grad_output = torch.ones_like(z_torch)
         z_torch.backward(grad_output)
         
@@ -82,7 +82,7 @@ class TestSubKernel(unittest.TestCase):
         grad_y_torch = y_torch.grad.detach().numpy()
 
         # Custom forward + backward
-        z_custom = x_custom - y_custom
+        z_custom = x_custom @ y_custom
         z_custom.backward()
         
         # Check gradients
@@ -110,8 +110,8 @@ class TestSubKernel(unittest.TestCase):
                 f"Torch:\n{grad_y_torch}"
             )
         )
-
-
+        
+    
     def test_performance(self):
         """
         Test to compare the performance
@@ -125,7 +125,7 @@ class TestSubKernel(unittest.TestCase):
         x = torch.tensor(self.x_raw, dtype=torch.float32)
         y = torch.tensor(self.y_raw, dtype=torch.float32)
         for _ in range(n_iters):
-            _ = torch.sub(x, y)
+            _ = torch.matmul(x, y)
         t_torch_fwd = time.time() - start
 
         # Custom forward
@@ -133,11 +133,11 @@ class TestSubKernel(unittest.TestCase):
         x = Tensor(self.x_raw, dtype=np.float32)
         y = Tensor(self.y_raw, dtype=np.float32)
         for _ in range(n_iters):
-            _ = x - y
+            _ = x @ y
         t_custom_fwd = time.time() - start
 
         # Print performance results
-        print(f"torch.sub forward: {t_torch_fwd:.6f}s, sub_forward: {t_custom_fwd:.6f}s")
+        print(f"torch.matmul forward: {t_torch_fwd:.6f}s, matmul_forward: {t_custom_fwd:.6f}s")
 
         # Assert forward speed is within factor 3
         ratio_fwd = t_custom_fwd / t_torch_fwd if t_torch_fwd > 0 else float('inf')
@@ -147,8 +147,8 @@ class TestSubKernel(unittest.TestCase):
             ratio_fwd, 3,
             msg=(
                 f"🟡 Forward kernel too slow: {ratio_fwd:.2f}x slower --> "
-                f"torch.sub: {t_torch_fwd:.6f}s "
-                f"sub_forward: {t_custom_fwd:.6f}s"
+                f"torch.matmul: {t_torch_fwd:.6f}s "
+                f"matmul_forward: {t_custom_fwd:.6f}s"
             )
         )
 
@@ -157,7 +157,7 @@ class TestSubKernel(unittest.TestCase):
         x = torch.tensor(self.x_raw, dtype=torch.float32, requires_grad=True)
         y = torch.tensor(self.y_raw, dtype=torch.float32, requires_grad=True)
         for _ in range(n_iters):
-            z = torch.sub(x, y)
+            z = torch.matmul(x, y)
             z.backward(torch.ones_like(z))
         t_torch_bwd = time.time() - start
 
@@ -166,12 +166,12 @@ class TestSubKernel(unittest.TestCase):
         x = Tensor(self.x_raw, dtype=np.float32, requires_grad=True)
         y = Tensor(self.y_raw, dtype=np.float32, requires_grad=True)
         for _ in range(n_iters):
-            out = x - y
+            out = x @ y
             out.backward()
         t_custom_bwd = time.time() - start
 
         # Print performance results
-        print(f"torch.sub backward: {t_torch_bwd:.6f}s, sub_backward: {t_custom_bwd:.6f}s")
+        print(f"torch.matmul backward: {t_torch_bwd:.6f}s, matmul_backward: {t_custom_bwd:.6f}s")
 
         # Assert backward speed is within factor 3
         ratio_bwd = t_custom_bwd / t_torch_bwd if t_torch_bwd > 0 else float('inf')
@@ -179,8 +179,8 @@ class TestSubKernel(unittest.TestCase):
             ratio_bwd, 3,
             msg = (
                 f"🟡 Backward kernel too slow: {ratio_bwd:.2f}x slower --> "
-                f"torch.sub backward: {t_torch_bwd:.6f}s "
-                f"sub_backward: {t_custom_bwd:.6f}s"
+                f"torch.matmul backward: {t_torch_bwd:.6f}s "
+                f"matmul_backward: {t_custom_bwd:.6f}s"
             )
         )
 
