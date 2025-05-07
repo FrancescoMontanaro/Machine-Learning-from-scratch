@@ -1,3 +1,4 @@
+import weakref
 import numpy as np
 from typing import Optional, Union, Tuple, Callable
 
@@ -8,6 +9,14 @@ from .utils.context_manager import _NO_GRAD
 
 
 class Tensor:
+    
+    ##########################
+    ##### Class variables ####
+    ##########################
+    
+    # Class variable to keep track of live tensors
+    _live_tensors = weakref.WeakSet()
+    
     
     ###########################
     ###### Magic methods ######
@@ -36,6 +45,9 @@ class Tensor:
         self.grad = None # Gradient of the tensor with respect to the loss
         self._backward: Callable = lambda: None # Function to backpropagate the gradient
         self._prev: set['Tensor'] = set() # Set to store the previous tensors in the computation graph
+        
+        # Add the tensor to the live tensors set
+        Tensor._live_tensors.add(self)
 
 
     def __repr__(self) -> str:
@@ -468,6 +480,20 @@ class Tensor:
         
         # Return the data of the tensor as a numpy array
         return self.data
+    
+    
+    @classmethod
+    def count_live(cls) -> int:
+        """
+        Method to count the number of live tensors in memory
+        
+        Returns:
+        - int: Number of live tensors in memory
+        """
+        
+        # Count the number of live tensors in memory
+        return len(cls._live_tensors)
+    
     
     ###########################
     ####### Activations #######

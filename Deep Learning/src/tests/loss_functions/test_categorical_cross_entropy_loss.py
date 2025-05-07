@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 # Add the project root to the system path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
 from src.loss_functions import CategoricalCrossEntropy

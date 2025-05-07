@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 from torch.nn import Dropout as TorchDropout
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
 from src.layers import Dropout as CustomDropout

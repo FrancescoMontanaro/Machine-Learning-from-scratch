@@ -3,15 +3,14 @@ import sys
 import torch
 import unittest
 import numpy as np
-from torch.nn import Flatten as TorchFlatten
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
-from src.layers import Flatten as CustomFlatten
+from src.layers import Reshape
 
 
-class TestFlattenLayer(unittest.TestCase):
+class TestReshapeLayer(unittest.TestCase):
 
     def setUp(self) -> None:
         """
@@ -20,20 +19,21 @@ class TestFlattenLayer(unittest.TestCase):
         """
 
         # Create random input data
-        self.x_np = np.random.randn(2, 4, 4, 3).astype(np.float32)
+        batch_size = 4
+        self.x_np = np.random.randn(batch_size, 8).astype(np.float32)
         
         # Create the input tensors
         self.x_tensor = Tensor(self.x_np, requires_grad=True)
         self.x_torch = torch.tensor(self.x_np, requires_grad=True)
 
-        # Create the Flatten layers
-        self.layer_custom = CustomFlatten()
-        self.layer_torch = TorchFlatten()
+        # Create the layers
+        self.layer_custom = Reshape(shape=(4, 2))
+        self.layer_torch = lambda x: x.reshape(batch_size, 4, 2)
 
 
-    def test_flatten_forward(self) -> None:
+    def test_reshape_forward(self) -> None:
         """
-        Test to verify that the forward pass of the Flatten in evaluation mode layer is consistent with PyTorch.
+        Test to verify that the forward pass of the Reshape layer is consistent with PyTorch.
         """
         
         # Forward pass
@@ -49,11 +49,11 @@ class TestFlattenLayer(unittest.TestCase):
                 f"Torch: {y_torch.detach().numpy()}"
             )
         )
-        
-    
-    def test_flatten_backward(self) -> None:
+
+
+    def test_reshape_backward(self) -> None:
         """
-        Test to verify that the backward pass of the Flatten layer is consistent with PyTorch.
+        Test to verify that the backward pass of the Reshape layer is consistent with PyTorch.
         """
         
         # Forward pass

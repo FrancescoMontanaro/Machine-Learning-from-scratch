@@ -70,4 +70,4 @@ class Architecture(Module):
         """
         
         # Count the number of tensors in memory using the garbage collector
-        return len([t for t in gc.get_objects() if isinstance(t, Tensor)])
+        return Tensor.count_live()

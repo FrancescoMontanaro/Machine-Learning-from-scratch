@@ -6,13 +6,13 @@ import numpy as np
 import tensorflow as tf
 
 # Add the project root to the system path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
-from src.activations import Sigmoid
+from src.activations import Tanh
 
 
-class TestSigmoidActivation(unittest.TestCase):
+class TestTanhActivation(unittest.TestCase):
     
     def setUp(self) -> None:
         """
@@ -28,13 +28,13 @@ class TestSigmoidActivation(unittest.TestCase):
         self.x_torch_tensor = tf.Variable(self.x_np)
 
         # Instantiate the activation functions
-        self.activation_custom = Sigmoid()
-        self.activation_tf = keras.layers.Activation("sigmoid")
+        self.activation_custom = Tanh()
+        self.activation_tf = keras.layers.Activation("tanh")
         
         
-    def test_sigmoid_activation_forward(self) -> None:
+    def test_tanh_activation_forward(self) -> None:
         """
-        Test to verify that the forward pass of the custom Sigmoid activation
+        Test to verify that the forward pass of the custom Tanh activation
         """
         
         # Compute the activation values for custom and TensorFlow implementations.
@@ -52,9 +52,9 @@ class TestSigmoidActivation(unittest.TestCase):
         )
         
     
-    def test_sigmoid_activation_backward(self) -> None:
+    def test_tanh_activation_backward(self) -> None:
         """
-        Test to verify that the backward pass of the custom Sigmoid activation
+        Test to verify that the backward pass of the custom Tanh activation
         """
         
         # Compute the activation values for custom and TensorFlow implementations.

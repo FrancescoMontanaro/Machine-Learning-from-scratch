@@ -6,13 +6,13 @@ import numpy as np
 import tensorflow as tf
 
 # Add the project root to the system path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
-from src.activations import ReLU
+from src.activations import LogSoftmax
 
 
-class TestReLUActivation(unittest.TestCase):
+class TestLogSoftmaxActivation(unittest.TestCase):
     
     def setUp(self) -> None:
         """
@@ -28,13 +28,13 @@ class TestReLUActivation(unittest.TestCase):
         self.x_torch_tensor = tf.Variable(self.x_np)
 
         # Instantiate the activation functions
-        self.activation_custom = ReLU()
-        self.activation_tf = keras.layers.Activation("relu")
+        self.activation_custom = LogSoftmax()
+        self.activation_tf = keras.layers.Activation("log_softmax")
         
         
-    def test_relu_activation_forward(self) -> None:
+    def test_log_softmax_activation_forward(self) -> None:
         """
-        Test to verify that the forward pass of the custom ReLU activation
+        Test to verify that the forward pass of the custom LogSoftmax activation
         """
         
         # Compute the activation values for custom and TensorFlow implementations.
@@ -52,9 +52,9 @@ class TestReLUActivation(unittest.TestCase):
         )
         
     
-    def test_relu_activation_backward(self) -> None:
+    def test_log_softmax_activation_backward(self) -> None:
         """
-        Test to verify that the backward pass of the custom ReLU activation
+        Test to verify that the backward pass of the custom LogSoftmax activation
         """
         
         # Compute the activation values for custom and TensorFlow implementations.

@@ -3,15 +3,14 @@ import sys
 import torch
 import unittest
 import numpy as np
-from torch.nn import UpsamplingNearest2d
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
-from src.layers import UpSampling2D
+from src.layers import Input
 
 
-class TestUpSampling2DLayer(unittest.TestCase):
+class TestInputLayer(unittest.TestCase):
 
     def setUp(self) -> None:
         """
@@ -26,19 +25,19 @@ class TestUpSampling2DLayer(unittest.TestCase):
         self.x_tensor = Tensor(self.x_np, requires_grad=True)
         self.x_torch = torch.tensor(self.x_np, requires_grad=True)
 
-        # Create the layers
-        self.layer_custom = UpSampling2D(size=(2, 2))
-        self.layer_torch = UpsamplingNearest2d(size=(8, 8))
+        # Create the Flatten layers
+        self.layer_custom = Input()
+        self.layer_torch = lambda x: x
 
 
-    def test_reshape_forward(self) -> None:
+    def test_flatten_forward(self) -> None:
         """
-        Test to verify that the forward pass of the Reshape layer is consistent with PyTorch.
+        Test to verify that the forward pass of the Flatten in evaluation mode layer is consistent with PyTorch.
         """
         
         # Forward pass
         y_custom = self.layer_custom(self.x_tensor)
-        y_torch = self.layer_torch(self.x_torch.permute(0, 3, 1, 2)).permute(0, 2, 3, 1)
+        y_torch = self.layer_torch(self.x_torch)
 
         # Compare the forward pass results
         self.assertTrue(
@@ -49,16 +48,16 @@ class TestUpSampling2DLayer(unittest.TestCase):
                 f"Torch: {y_torch.detach().numpy()}"
             )
         )
-
-
-    def test_reshape_backward(self) -> None:
+        
+    
+    def test_flatten_backward(self) -> None:
         """
-        Test to verify that the backward pass of the Reshape layer is consistent with PyTorch.
+        Test to verify that the backward pass of the Flatten layer is consistent with PyTorch.
         """
         
         # Forward pass
         y_custom = self.layer_custom(self.x_tensor)
-        y_torch = self.layer_torch(self.x_torch.permute(0, 3, 1, 2)).permute(0, 2, 3, 1)
+        y_torch = self.layer_torch(self.x_torch)
         
         # Define a simple loss (sum of all elements) and perform the backward pass
         loss_custom = y_custom.sum()

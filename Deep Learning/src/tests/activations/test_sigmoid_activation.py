@@ -6,13 +6,13 @@ import numpy as np
 import tensorflow as tf
 
 # Add the project root to the system path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
-from src.activations import LogSoftmax
+from src.activations import Sigmoid
 
 
-class TestLogSoftmaxActivation(unittest.TestCase):
+class TestSigmoidActivation(unittest.TestCase):
     
     def setUp(self) -> None:
         """
@@ -28,13 +28,13 @@ class TestLogSoftmaxActivation(unittest.TestCase):
         self.x_torch_tensor = tf.Variable(self.x_np)
 
         # Instantiate the activation functions
-        self.activation_custom = LogSoftmax()
-        self.activation_tf = keras.layers.Activation("log_softmax")
+        self.activation_custom = Sigmoid()
+        self.activation_tf = keras.layers.Activation("sigmoid")
         
         
-    def test_log_softmax_activation_forward(self) -> None:
+    def test_sigmoid_activation_forward(self) -> None:
         """
-        Test to verify that the forward pass of the custom LogSoftmax activation
+        Test to verify that the forward pass of the custom Sigmoid activation
         """
         
         # Compute the activation values for custom and TensorFlow implementations.
@@ -52,9 +52,9 @@ class TestLogSoftmaxActivation(unittest.TestCase):
         )
         
     
-    def test_log_softmax_activation_backward(self) -> None:
+    def test_sigmoid_activation_backward(self) -> None:
         """
-        Test to verify that the backward pass of the custom LogSoftmax activation
+        Test to verify that the backward pass of the custom Sigmoid activation
         """
         
         # Compute the activation values for custom and TensorFlow implementations.

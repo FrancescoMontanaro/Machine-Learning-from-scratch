@@ -3,14 +3,15 @@ import sys
 import torch
 import unittest
 import numpy as np
+from torch.nn import Linear
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
-from src.layers import Input
+from src.layers import Dense
 
 
-class TestInputLayer(unittest.TestCase):
+class TestDenseLayer(unittest.TestCase):
 
     def setUp(self) -> None:
         """
@@ -19,20 +20,34 @@ class TestInputLayer(unittest.TestCase):
         """
 
         # Create random input data
-        self.x_np = np.random.randn(2, 4, 4, 3).astype(np.float32)
+        self.x_np = np.random.randn(4, 8).astype(np.float32)
         
         # Create the input tensors
         self.x_tensor = Tensor(self.x_np, requires_grad=True)
         self.x_torch = torch.tensor(self.x_np, requires_grad=True)
 
-        # Create the Flatten layers
-        self.layer_custom = Input()
-        self.layer_torch = lambda x: x
+        # Create the layers
+        self.layer_custom = Dense(num_units=3)
+        self.layer_torch = Linear(in_features=self.x_np.shape[1], out_features=3)
+
+        # Initialize the custom layer
+        self.layer_custom.eval()
+        self.layer_custom(self.x_tensor)
+
+        # Copy the weights and bias from the custom layer to the PyTorch layer
+        with torch.no_grad():
+            # Extract the weights and bias from the custom layer
+            w_custom = torch.from_numpy(self.layer_custom.weights.data.transpose()).float()
+            b_custom = torch.from_numpy(self.layer_custom.bias.data.transpose()).float()
+            
+            # Copy the weights and bias to the PyTorch layer
+            self.layer_torch.weight.copy_(w_custom)
+            if self.layer_torch.bias is not None: self.layer_torch.bias.copy_(b_custom) 
 
 
-    def test_flatten_forward(self) -> None:
+    def test_dense_forward(self) -> None:
         """
-        Test to verify that the forward pass of the Flatten in evaluation mode layer is consistent with PyTorch.
+        Test to verify that the forward pass of the Dense layer is consistent with PyTorch.
         """
         
         # Forward pass
@@ -48,11 +63,11 @@ class TestInputLayer(unittest.TestCase):
                 f"Torch: {y_torch.detach().numpy()}"
             )
         )
-        
-    
-    def test_flatten_backward(self) -> None:
+
+
+    def test_dense_backward(self) -> None:
         """
-        Test to verify that the backward pass of the Flatten layer is consistent with PyTorch.
+        Test to verify that the backward pass of the Dense layer is consistent with PyTorch.
         """
         
         # Forward pass

@@ -5,11 +5,11 @@ import unittest
 import numpy as np
 import torch.nn as nn
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
 from src.layers import Dense
-from src.optimizers import SGD as CustomSGD
+from src.optimizers import Adam as CustomAdam
 
 
 class TestSGDOptimizer(unittest.TestCase):
@@ -49,26 +49,31 @@ class TestSGDOptimizer(unittest.TestCase):
             if self.model_torch.bias is not None: 
                 self.model_torch.bias.copy_(b_custom)
 
-        # Learning rate and momentum for testing
+        # Learning rate and momentum and weight decay for testing
         self.lr = 0.01
-        self.momentum = 0.9
+        self.beta1 = 0.8
+        self.beta2 = 0.999
+        self.weight_decay = 0.1
 
         # Create the custom optimizers
-        self.optimizer_custom = CustomSGD(
+        self.optimizer_custom = CustomAdam(
             learning_rate = self.lr,
-            momentum = self.momentum,
+            weight_decay = self.weight_decay,
+            beta1 = self.beta1,
+            beta2 = self.beta2,
             parameters = [self.model_custom.weights, self.model_custom.bias]
         )
         
         # Create the PyTorch optimizer
-        self.optimizer_torch = torch.optim.SGD(
+        self.optimizer_torch = torch.optim.AdamW(
             params = self.model_torch.parameters(),
+            weight_decay = self.weight_decay,
             lr = self.lr,
-            momentum = self.momentum
+            betas = (self.beta1, self.beta2)
         )
         
 
-    def test_sgd_optimizer_step(self) -> None:
+    def test_adam_optimizer_step(self) -> None:
         """
         Test that a single optimization step produces similar parameter updates
         in both custom and PyTorch implementations.
@@ -130,7 +135,7 @@ class TestSGDOptimizer(unittest.TestCase):
         )
 
 
-    def test_sgd_optimizer_zero_grad(self) -> None:
+    def test_adam_optimizer_zero_grad(self) -> None:
         """
         Test that zero_grad() properly clears the gradients.
         """

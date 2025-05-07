@@ -49,7 +49,11 @@ def sum(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdim
         sum_backward(out_grad=out_grad, out_buffer=out_buffer, axis=ctx.axis, keepdims=ctx.keepdims)
 
     # Return the tensor operation withe the specified forward and backward functions         
-    return tensor_unary_op_1(x, forward, backward)
+    return tensor_unary_op_1(
+        t = x, 
+        forward_fn = forward, 
+        backward_fn = backward
+    )
 
 
 def max(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':
@@ -163,7 +167,11 @@ def sqrt(x: 'Tensor') -> 'Tensor':
         sqrt_backward(out_grad, out_buffer, ctx.x_data)
     
     # Return the tensor operation with the specified forward and backward functions
-    return tensor_unary_op_1(x, forward, backward)
+    return tensor_unary_op_1(
+        t = x, 
+        forward_fn = forward, 
+        backward_fn = backward
+    )
 
 
 def mean(x: 'Tensor', axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> 'Tensor':

@@ -1,10 +1,10 @@
 import numpy as np
-from numba import njit, prange
+from numba import vectorize
 
 from .reductions import reduce_to_shape
 
 
-@njit(parallel=True, fastmath=True)
+@vectorize(["float32(float32, float32)"], fastmath=True)
 def div_forward(a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
     """
     Forward pass for elementwise division.
@@ -12,29 +12,15 @@ def div_forward(a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
     Parameters:
     - a_data (np.ndarray): First input array
     - b_data (np.ndarray): Second input array
-    - out (np.ndarray): Output array to store the result
+
+    Returns:
+    - np.ndarray: Result of the elementwise division
     """
     
-    # Extract the shapes of the input arrays
-    out_shape = np.broadcast_shapes(a_data.shape, b_data.shape)
-    
-    # Create an output array with the broadcasted shape
-    out = np.empty(out_shape, dtype=a_data.dtype)
-    
-    # Broadcast the input arrays to the output shape
-    a_view = np.broadcast_to(a_data, out_shape)
-    b_view = np.broadcast_to(b_data, out_shape)
-
-    # Iterate over the flattened arrays
-    for i in prange(out.size):
-        # Perform elementwise division
-        out.flat[i] = a_view.flat[i] / b_view.flat[i]
-    
-    # Return the output array
-    return out
+    # Perform elementwise division of two arrays
+    return a_data / b_data
 
 
-@njit(fastmath=True)
 def div_backward_a(out_grad: np.ndarray, out_buffer: np.ndarray, target_shape: tuple, b_data: np.ndarray) -> None:
     """
     Computes the gradients for the inputs of the elementwise division operation.
@@ -50,7 +36,6 @@ def div_backward_a(out_grad: np.ndarray, out_buffer: np.ndarray, target_shape: t
     out_buffer += reduce_to_shape(out_grad / b_data, target_shape)
 
 
-@njit(fastmath=True)
 def div_backward_b(out_grad: np.ndarray, out_buffer: np.ndarray, a_data: np.ndarray, b_data: np.ndarray) -> None:
     """
     Computes the gradients for the inputs of the elementwise division operation.

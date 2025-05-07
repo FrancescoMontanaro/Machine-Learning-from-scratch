@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 from torch.nn import BatchNorm1d
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
 from src.layers import BatchNormalization
