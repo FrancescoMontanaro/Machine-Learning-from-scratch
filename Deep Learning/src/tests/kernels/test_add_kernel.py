@@ -127,15 +127,15 @@ class TestAddKernel(unittest.TestCase):
         # Print performance results
         print(f"torch.add forward: {t_torch_fwd:.6f}s, add_forward: {t_custom_fwd:.6f}s")
 
-        # Assert forward speed is within factor 10
+        # Assert forward speed is within factor 3
         ratio_fwd = t_custom_fwd / t_torch_fwd if t_torch_fwd > 0 else float('inf')
         
         self.assertLess(
-            ratio_fwd, 10,
+            ratio_fwd, 3,
             msg=(
-                f"🟡 Forward kernel too slow: {ratio_fwd:.2f}x slower\n"
-                f"torch.add: {t_torch_fwd:.6f}s"
-                f"add_forward: {t_custom_fwd:.6f}s\n"
+                f"🟡 Forward kernel too slow: {ratio_fwd:.2f}x slower --> "
+                f"torch.add: {t_torch_fwd:.6f}s "
+                f"add_forward: {t_custom_fwd:.6f}s"
             )
         )
 
@@ -160,14 +160,14 @@ class TestAddKernel(unittest.TestCase):
         # Print performance results
         print(f"torch.add backward: {t_torch_bwd:.6f}s, add_backward: {t_custom_bwd:.6f}s")
 
-        # Assert backward speed is within factor 10
+        # Assert backward speed is within factor 3
         ratio_bwd = t_custom_bwd / t_torch_bwd if t_torch_bwd > 0 else float('inf')
         self.assertLess(
-            ratio_bwd, 10,
+            ratio_bwd, 3,
             msg = (
-                f"🟡 Backward kernel too slow: {ratio_bwd:.2f}x slower\n"
-                f"torch.add backward: {t_torch_bwd:.6f}s\n"
-                f"add_backward: {t_custom_bwd:.6f}s\n"
+                f"🟡 Backward kernel too slow: {ratio_bwd:.2f}x slower --> "
+                f"torch.add backward: {t_torch_bwd:.6f}s "
+                f"add_backward: {t_custom_bwd:.6f}s"
             )
         )
 
