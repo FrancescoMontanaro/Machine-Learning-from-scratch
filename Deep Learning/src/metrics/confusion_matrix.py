@@ -32,7 +32,7 @@ def confusion_matrix(num_classes: int, y_true: Tensor, y_pred: Tensor) -> Tensor
     # Fill the confusion matrix
     for i in range(len(y_true_data)):
         # Increment the confusion matrix
-        confusion_matrix[y_true_data[i], y_pred_data[i]] += 1
+        confusion_matrix[int(y_true_data[i]), int(y_pred_data[i])] += 1
         
     # Return the confusion matrix as a tensor
     return Tensor(confusion_matrix, requires_grad=False)
