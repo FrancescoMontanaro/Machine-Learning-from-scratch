@@ -1,8 +1,7 @@
 import numpy as np
 from numba import njit, prange
+            
 
-
-@njit(parallel=True, fastmath=True)
 def matmul_forward(a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
     """
     Matrix multiplication kernel for forward pass.
@@ -12,37 +11,11 @@ def matmul_forward(a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
     - b_data (np.ndarray): Second input array.
     
     Returns:
-    - np.ndarray: Result of the matrix multiplication.
+    - np.ndarray: Output array.
     """
     
-    # Define the output shape of the matrix multiplication
-    out_shape = np.broadcast_shapes(a_data.shape[:-2], b_data.shape[:-2]) + (a_data.shape[-2], b_data.shape[-1])
-    
-    # Create an empty output array with the appropriate shape
-    out = np.empty(out_shape, dtype=a_data.dtype)
-
-    # Get the dimensions of the input arrays
-    m, k = a_data.shape[-2], a_data.shape[-1]
-    n = b_data.shape[-1]
-    
-    # Broadcast the input arrays to the output shape
-    a_view = np.broadcast_to(a_data, out_shape[:-2] + (m, k))
-    b_view = np.broadcast_to(b_data, out_shape[:-2] + (k, n))
-
-    # Flatten the output array for easier manipulation
-    batch_size = out.size // (m * n)
-
-    # Create contiguous views of the input arrays
-    A = np.ascontiguousarray(a_view).reshape(batch_size, m, k)
-    B = np.ascontiguousarray(b_view).reshape(batch_size, k, n)
-    O = out.reshape(batch_size, m, n)
-
-    # Iterate over the batches and perform matrix multiplication
-    for i in prange(batch_size):
-        # Perform matrix multiplication for each batch
-        O[i] = A[i].dot(B[i])
-
-    return out
+    # Return the result of matrix multiplication
+    return np.matmul(a_data, b_data)
 
 
 @njit(parallel=True, fastmath=True)

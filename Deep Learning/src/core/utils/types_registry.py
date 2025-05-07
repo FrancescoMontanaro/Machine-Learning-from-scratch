@@ -1,47 +1,38 @@
-_Tensor = None
-_Module = None
+import functools
+from typing import Type, TYPE_CHECKING
 
-def get_tensor_class() -> type:
+if TYPE_CHECKING: from ..tensor import Tensor; from ..module import Module
+
+
+@functools.lru_cache(maxsize=1)
+def get_tensor_class() -> Type['Tensor']:
     """
-    Lazily import and return the Tensor class to avoid circular imports.
+    Get the Tensor class from the module.
+    This is a lazy import to avoid circular dependencies.
     
     Returns:
-    - Tensor class (type)
+    - Type[Tensor]: The Tensor class.
     """
     
-    # Access the global variable
-    global _Tensor
+    # Lazy import to avoid circular dependencies
+    from ..tensor import Tensor
     
-    # If the Tensor class has not been imported, import it
-    if _Tensor is None:
-        # Import the Tensor class
-        from ..tensor import Tensor
-        
-        # Store the Tensor class
-        _Tensor = Tensor
-        
     # Return the Tensor class
-    return _Tensor
+    return Tensor
 
 
-def get_module_class() -> type:
+@functools.lru_cache(maxsize=1)
+def get_module_class() -> Type['Module']:
     """
-    Lazily import and return the Module class to avoid circular imports.
+    Get the Module class from the module.
+    This is a lazy import to avoid circular dependencies.
     
     Returns:
-    - Module class (type)
+    - Type[Module]: The Module class.
     """
     
-    # Access the global variable
-    global _Module
+    # Lazy import to avoid circular dependencies
+    from ..module import Module
     
-    # If the Module class has not been imported, import it
-    if _Module is None:
-        # Import the Module class
-        from ..module import Module
-        
-        # Store the Module class
-        _Module = Module
-        
     # Return the Module class
-    return _Module
+    return Module

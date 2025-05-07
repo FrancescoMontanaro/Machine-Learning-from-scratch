@@ -122,10 +122,7 @@ def tensor_unary_op(t: 'Tensor', forward_fn: Callable[..., np.ndarray], backward
     """
     
     # Get the tensor class
-    global TensorCls
-    if TensorCls is None:
-        # Lazy load, only the first time
-        TensorCls = get_tensor_class()
+    TensorCls = get_tensor_class()
     
     # Check if the input is a tensor
     if not isinstance(t, TensorCls):
@@ -181,10 +178,7 @@ def tensor_unary_op_1(t: 'Tensor', forward_fn: Callable[..., np.ndarray], backwa
     """
     
     # Get the tensor class
-    global TensorCls
-    if TensorCls is None:
-        # Lazy load, only the first time
-        TensorCls = get_tensor_class()
+    TensorCls = get_tensor_class()
     
     # Check if the input is a tensor
     if not isinstance(t, TensorCls):
@@ -245,10 +239,7 @@ def tensor_binary_op(t1: 'Tensor', t2: 'Tensor', forward_fn: Callable[..., np.nd
     """
     
     # Get the tensor class
-    global TensorCls
-    if TensorCls is None:
-        # Lazy load, only the first time
-        TensorCls = get_tensor_class()
+    TensorCls = get_tensor_class()
     
     # Check if the inputs are tensors
     if not isinstance(t1, TensorCls) or not isinstance(t2, TensorCls):
@@ -256,7 +247,7 @@ def tensor_binary_op(t1: 'Tensor', t2: 'Tensor', forward_fn: Callable[..., np.nd
     
     # Create a context
     ctx = Context()
-    
+
     # Call the forward function
     out_data = forward_fn(ctx, t1.data, t2.data)
     
@@ -320,10 +311,7 @@ def tensor_nary_op(tensors: List['Tensor'], forward_fn: Callable[..., np.ndarray
     """
     
     # Get the tensor class
-    global TensorCls
-    if TensorCls is None:
-        # Lazy load, only the first time
-        TensorCls = get_tensor_class()
+    TensorCls = get_tensor_class()
 
     # Check if the inputs are tensors
     if not all(isinstance(t, TensorCls) for t in tensors):
