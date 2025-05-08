@@ -113,7 +113,7 @@ class TestMatMulKernel(Test):
         )
         
     
-    def test_performance(self):
+    def test_matmul_performance(self):
         """
         Test to compare the performance
         """
@@ -148,8 +148,7 @@ class TestMatMulKernel(Test):
             ratio_fwd, self.PERFORMANCE_FACTOR,
             msg=(
                 f"🟡 Forward kernel too slow: {ratio_fwd:.2f}x slower --> "
-                f"torch.matmul: {t_torch_fwd:.6f}s "
-                f"matmul_forward: {t_custom_fwd:.6f}s"
+                f"torch.matmul: {t_torch_fwd:.6f}s, matmul_forward: {t_custom_fwd:.6f}s"
             )
         )
 
@@ -180,8 +179,7 @@ class TestMatMulKernel(Test):
             ratio_bwd, self.PERFORMANCE_FACTOR,
             msg = (
                 f"🟡 Backward kernel too slow: {ratio_bwd:.2f}x slower --> "
-                f"torch.matmul backward: {t_torch_bwd:.6f}s "
-                f"matmul_backward: {t_custom_bwd:.6f}s"
+                f"torch.matmul backward: {t_torch_bwd:.6f}s, matmul_backward: {t_custom_bwd:.6f}s"
             )
         )
 

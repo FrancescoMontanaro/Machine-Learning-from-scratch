@@ -113,7 +113,7 @@ class TestDivKernel(Test):
         )
 
 
-    def test_performance(self):
+    def test_div_performance(self):
         """
         Test to compare the performance
         """
@@ -148,8 +148,7 @@ class TestDivKernel(Test):
             ratio_fwd, self.PERFORMANCE_FACTOR,
             msg=(
                 f"🟡 Forward kernel too slow: {ratio_fwd:.2f}x slower --> "
-                f"torch.div: {t_torch_fwd:.6f}s "
-                f"div_forward: {t_custom_fwd:.6f}s"
+                f"torch.div: {t_torch_fwd:.6f}s, div_forward: {t_custom_fwd:.6f}s"
             )
         )
 
@@ -180,8 +179,7 @@ class TestDivKernel(Test):
             ratio_bwd, self.PERFORMANCE_FACTOR,
             msg = (
                 f"🟡 Backward kernel too slow: {ratio_bwd:.2f}x slower --> "
-                f"torch.div backward: {t_torch_bwd:.6f}s "
-                f"div_backward: {t_custom_bwd:.6f}s"
+                f"torch.div backward: {t_torch_bwd:.6f}s, div_backward: {t_custom_bwd:.6f}s"
             )
         )
 

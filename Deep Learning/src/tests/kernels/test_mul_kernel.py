@@ -117,7 +117,7 @@ class TestMulKernel(Test):
         )
 
 
-    def test_performance(self):
+    def test_mul_performance(self):
         """
         Test to compare the performance
         """
@@ -152,8 +152,7 @@ class TestMulKernel(Test):
             ratio_fwd, self.PERFORMANCE_FACTOR,
             msg=(
                 f"🟡 Forward kernel too slow: {ratio_fwd:.2f}x slower --> "
-                f"torch.mul: {t_torch_fwd:.6f}s "
-                f"mul_forward: {t_custom_fwd:.6f}s"
+                f"torch.mul: {t_torch_fwd:.6f}s, mul_forward: {t_custom_fwd:.6f}s"
             )
         )
 
@@ -184,8 +183,7 @@ class TestMulKernel(Test):
             ratio_bwd, self.PERFORMANCE_FACTOR,
             msg = (
                 f"🟡 Backward kernel too slow: {ratio_bwd:.2f}x slower --> "
-                f"torch.mul backward: {t_torch_bwd:.6f}s "
-                f"mul_backward: {t_custom_bwd:.6f}s"
+                f"torch.mul backward: {t_torch_bwd:.6f}s, mul_backward: {t_custom_bwd:.6f}s"
             )
         )
 

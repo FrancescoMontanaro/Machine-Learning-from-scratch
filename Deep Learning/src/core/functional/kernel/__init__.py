@@ -20,7 +20,7 @@ from .mul import mul_forward, mul_backward_a, mul_backward_b
 from .div import div_forward, div_backward_a, div_backward_b
 from .max_pool_2d import max_pool_2d_forward, max_pool_2d_gradient
 from .log_softmax import log_softmax_forward, log_softmax_gradient
+from .matmul import matmul_forward, matmul_backward_a, matmul_backward_b
 from .concat import concat_1d_forward, concat_2d_forward, concat_backward
-from .mat_mul import matmul_forward, matmul_backward_a, matmul_backward_b
 from .conv_2d import conv_2d_forward, conv_2d_backward_x, conv_2d_backward_w
 from .masked_fill import masked_fill_forward, masked_fill_forward_inf, masked_fill_forward_neg_inf, masked_fill_gradient
