@@ -4,7 +4,6 @@ from typing import Optional, Union, Tuple, List, Callable, Any
 
 from .functional.kernel import *
 from .functional.tape import tape_push
-from .utils.context_manager import _NO_GRAD
 from .functional.base import tensor_unary_op, tensor_binary_op, tensor_nary_op, accumulate_gradient
 
 
@@ -34,22 +33,12 @@ class Tensor:
         - is_parameter (bool): Flag to indicate if the tensor is a trainable parameter
         """
         
-        # Check if the data is a numpy array
-        if isinstance(data, np.ndarray):
-            # Check if the data is already of the correct dtype
-            if data.dtype != dtype:
-                # Convert the data to the correct dtype
-                self.data = data.astype(dtype, copy=False)
-            else:
-                # Assign the data directly if already of the correct dtype
-                self.data = data
-        else:
-            # Convert the data to a numpy array of the correct dtype
-            self.data = np.array(data, dtype=dtype)
+        # Save the raw data
+        self.data = np.asarray(data, dtype=dtype)
         
         # Gradient tracking flags
         self.is_parameter = is_parameter
-        self.requires_grad = False if _NO_GRAD else requires_grad
+        self.requires_grad = requires_grad
         
         # Initialize gradient and graph metadata
         self.grad = None
