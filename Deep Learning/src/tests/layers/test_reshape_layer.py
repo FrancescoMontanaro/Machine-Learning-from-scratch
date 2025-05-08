@@ -8,9 +8,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
 from src.layers import Reshape
+from src.tests.base import Test
 
 
-class TestReshapeLayer(unittest.TestCase):
+class TestReshapeLayer(Test):
 
     def setUp(self) -> None:
         """

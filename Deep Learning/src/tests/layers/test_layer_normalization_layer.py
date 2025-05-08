@@ -8,10 +8,11 @@ from torch.nn import LayerNorm
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
+from src.tests.base import Test
 from src.layers import LayerNormalization
 
 
-class TestLayerNormalizationLayer(unittest.TestCase):
+class TestLayerNormalizationLayer(Test):
 
     def setUp(self) -> None:
         """

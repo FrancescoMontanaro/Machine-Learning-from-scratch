@@ -8,10 +8,11 @@ from torch.nn import Dropout as TorchDropout
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
+from src.tests.base import Test
 from src.layers import Dropout as CustomDropout
 
 
-class TestDropoutLayer(unittest.TestCase):
+class TestDropoutLayer(Test):
 
     def setUp(self) -> None:
         """

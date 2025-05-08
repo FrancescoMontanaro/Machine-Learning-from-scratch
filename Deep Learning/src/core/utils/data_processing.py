@@ -2,7 +2,6 @@ import numpy as np
 from typing import Union, Tuple, List
 
 from ..tensor import Tensor
-from ..functional import functions as F
 
 
 def shuffle_data(data: Union[Tensor, Tuple[Tensor, Tensor]]) -> Union[Tensor, Tuple[Tensor, Tensor]]:
@@ -165,4 +164,4 @@ def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
     """
     
     # Compute and return the concatenated tensor
-    return F.concat(tensors, axis)
+    return Tensor.concat(tensors, axis)

@@ -8,10 +8,11 @@ from torch.nn import BatchNorm1d
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
+from src.tests.base import Test
 from src.layers import BatchNormalization
 
 
-class TestBatchNormalizationLayer(unittest.TestCase):
+class TestBatchNormalizationLayer(Test):
 
     def setUp(self) -> None:
         """

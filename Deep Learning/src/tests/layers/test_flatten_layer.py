@@ -8,10 +8,11 @@ from torch.nn import Flatten as TorchFlatten
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
+from src.tests.base import Test
 from src.layers import Flatten as CustomFlatten
 
 
-class TestFlattenLayer(unittest.TestCase):
+class TestFlattenLayer(Test):
 
     def setUp(self) -> None:
         """

@@ -8,10 +8,11 @@ from torch.nn import UpsamplingNearest2d
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
+from src.tests.base import Test
 from src.layers import UpSampling2D
 
 
-class TestUpSampling2DLayer(unittest.TestCase):
+class TestUpSampling2DLayer(Test):
 
     def setUp(self) -> None:
         """

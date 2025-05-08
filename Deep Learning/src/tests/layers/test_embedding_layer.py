@@ -8,10 +8,11 @@ from torch.nn import Embedding as TorchEmbedding
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
+from src.tests.base import Test
 from src.layers import Embedding
 
 
-class TestEmbeddingLayer(unittest.TestCase):
+class TestEmbeddingLayer(Test):
 
     def setUp(self) -> None:
         """

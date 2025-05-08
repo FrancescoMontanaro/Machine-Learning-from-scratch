@@ -9,9 +9,10 @@ import numpy as np
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src import Tensor
+from src.tests.base import Test
 
 
-class TestDivKernel(unittest.TestCase):
+class TestDivKernel(Test):
     
     def setUp(self):
         """
@@ -139,12 +140,12 @@ class TestDivKernel(unittest.TestCase):
         # Print performance results
         print(f"torch.div forward: {t_torch_fwd:.6f}s, div_forward: {t_custom_fwd:.6f}s")
 
-        # Assert forward speed is within factor 3
+        # Assert forward speed is within factor
         ratio_fwd = t_custom_fwd / t_torch_fwd if t_torch_fwd > 0 else float('inf')
         
-        # Assert forward speed is within factor 3
+        # Assert forward speed is within factor
         self.assertLess(
-            ratio_fwd, 3,
+            ratio_fwd, self.PERFORMANCE_FACTOR,
             msg=(
                 f"🟡 Forward kernel too slow: {ratio_fwd:.2f}x slower --> "
                 f"torch.div: {t_torch_fwd:.6f}s "
@@ -173,10 +174,10 @@ class TestDivKernel(unittest.TestCase):
         # Print performance results
         print(f"torch.div backward: {t_torch_bwd:.6f}s, div_backward: {t_custom_bwd:.6f}s")
 
-        # Assert backward speed is within factor 3
+        # Assert backward speed is within factor
         ratio_bwd = t_custom_bwd / t_torch_bwd if t_torch_bwd > 0 else float('inf')
         self.assertLess(
-            ratio_bwd, 3,
+            ratio_bwd, self.PERFORMANCE_FACTOR,
             msg = (
                 f"🟡 Backward kernel too slow: {ratio_bwd:.2f}x slower --> "
                 f"torch.div backward: {t_torch_bwd:.6f}s "

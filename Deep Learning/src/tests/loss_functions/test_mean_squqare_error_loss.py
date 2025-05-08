@@ -9,10 +9,11 @@ from torch.nn import MSELoss
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.core import Tensor
+from src.tests.base import Test
 from src.loss_functions import MeanSquareError
 
 
-class TestMSELoss(unittest.TestCase):
+class TestMSELoss(Test):
     
     def setUp(self) -> None:
         """
