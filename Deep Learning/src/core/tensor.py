@@ -1651,23 +1651,8 @@ class Tensor:
 
         # Define the forward function
         def forward(tensors_list: List[np.ndarray]) -> tuple[np.ndarray, int]:
-            # Extract the rank of the first tensor
-            rank = tensors_list[0].ndim
-            
-            # Rank 0
-            if rank == 1:
-                # Concatenate 1D tensors
-                out, offsets = concat_1d_forward(tensors_list)
-                
-            # Rank 1
-            elif rank == 2:
-                # Concatenate 2D tensors
-                out, offsets = concat_2d_forward(tensors_list, axis)
-            
-            # Invalid rank  
-            else:
-                # Raise an error for unsupported tensor dimensions
-                raise ValueError(f"Unsupported tensor dimension for concatenation: {rank}")
+            # Perform the concatenation operation
+            out, offsets = concat_forward(tensors_list, axis)
             
             # Save the offsets in the data tape to use it in the backward pass
             tape_idx = tape_push((offsets,))

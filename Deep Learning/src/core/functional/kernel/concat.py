@@ -1,120 +1,142 @@
 import numpy as np
 from numba import njit, prange
-        
-        
-@njit(parallel=True, fastmath=True)
-def concat_1d_forward(ts_list: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+from typing import Dict, Callable
+
+
+# Cache for JIT-compiled functions
+_concat_cache: Dict[int, Callable] = {}
+
+
+def concat_forward_internal(rank: int) -> Callable:
     """
-    Concatenate a list of 1D tensors into a single 1D tensor.
+    Builds a JIT-compiled function for concatenating tensors of a specific rank.
     
     Parameters:
-    - ts_list (list of np.ndarray): List of 1D tensors to concatenate.
+    - rank (int): The rank of the tensors to be concatenated.
     
     Returns:
-    - tuple[np.ndarray, np.ndarray]: A tuple containing the concatenated tensor and an array of offsets.
+    - Callable: A function that takes a list of tensors and an axis, and returns the concatenated tensor and offsets.
     """
-    
-    # Extract the length of each tensor in the list
-    n = len(ts_list)
-    
-    # Create the offsets array to store the cumulative sizes
-    offsets = np.empty(n + 1, dtype=np.int64)
-    
-    # Initialize the first offset to 0
-    offsets[0] = 0
-    
-    # Iterate through the tensors to calculate the offsets
-    for i in range(n):
-        # Calculate the offset for the next tensor
-        offsets[i+1] = offsets[i] + ts_list[i].size
-        
-    # Calculate the total size
-    tot = offsets[-1]
 
-    # Create an empty array to hold the concatenated result
-    out = np.empty(tot, dtype=ts_list[0].dtype)
-    
-    # Iterate through the tensors and copy their data into the output array
-    for p in prange(n):
-        # Calculate the start and end indices for the current tensor
-        s, e = offsets[p], offsets[p+1]
-        
-        # Copy the data from the current tensor into the output array
-        out[s:e] = ts_list[p].ravel()
-        
-    # Return the concatenated array and the offsets
-    return out, offsets  
-        
-        
-@njit(parallel=True, fastmath=True)
-def concat_2d_forward(ts_list: list[np.ndarray], axis: int) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Concatenate a list of 2D tensors along the specified axis.
-    
-    Parameters:
-    - ts_list (list of np.ndarray): List of 2D tensors to concatenate.
-    - axis (int): Axis along which to concatenate (0 for rows, 1 for columns).
-    
-    Returns:
-    - tuple[np.ndarray, np.ndarray]: A tuple containing the concatenated tensor and an array of offsets.
-    """
-    
-    # Extract the length of each tensor in the list
-    n = len(ts_list)
-    
-    # Create the offsets array to store the cumulative sizes
-    offsets = np.empty(n+1, dtype=np.int64)
-    
-    # Initialize the first offset to 0
-    offsets[0] = 0
-    
-    # Iterate through the tensors to calculate the offsets
-    for i in range(n):
-        # Calculate the offset for the next tensor
-        offsets[i+1] = offsets[i] + ts_list[i].size
-        
-    # Calculate the total size
-    tot = offsets[-1]
+    # Convert the rank to a constant for Numba
+    R = rank
 
-    # Create an empty array to hold the concatenated result
-    flat = np.empty(tot, dtype=ts_list[0].dtype)
-    
-    # Iterate through the tensors and copy their data into the output array
-    for p in prange(n):
-        # Calculate the start and end indices for the current tensor
-        s, e = offsets[p], offsets[p+1]
+    @njit(parallel=True, fastmath=True)
+    def concat_rd_forward(ts_list: list[np.ndarray], axis: int = 0) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Concatenate a list of tensors of the same rank along the given axis.
         
-        # Copy the data from the current tensor into the output array
-        flat[s:e] = ts_list[p].ravel()
+        Parameters:
+        - ts_list (list[np.ndarray]): List of tensors to concatenate.
+        - axis (int): Axis along which to concatenate the tensors.
+        
+        Returns:
+        - tuple[np.ndarray, np.ndarray]: A tuple containing the concatenated tensor and offsets.
+        
+        Raises:
+        - ValueError: If the list of tensors is empty or if the axis is out of range.
+        """
+        
+        # Extract the number of tensors and validate the axis
+        n = len(ts_list)
+        
+        # Validate the number of tensors
+        if n == 0:
+            # Raise an error if the list is empty
+            raise ValueError("ts_list must contain at least one tensor")
+        
+        # Validate the axis
+        if axis < -R or axis >= R:
+            # Raise an error if the axis is out of range
+            raise ValueError("axis out of range")
+        
+        # If axis is negative, convert it to positive
+        if axis < 0:
+            # Convert negative axis to positive
+            axis += R
 
-    # Reshape the flat array into the desired shape based on the axis
-    if axis == 0:
-        # Concatenate along rows
-        rows = 0
-        cols = ts_list[0].shape[1]
+        # Create an array to hold the offsets for each tensor and initialize the first offset
+        offsets = np.empty(n + 1, dtype=np.int64)
+        offsets[0] = 0
         
-        # Iterate through the tensors to calculate the total number of rows
+        # Initialize the offsets for each tensor
         for i in range(n):
-            # Calculate the number of rows for the current tensor
-            rows += ts_list[i].shape[0]
+            offsets[i + 1] = offsets[i] + ts_list[i].size
             
-        # Reshape the flat array into the desired shape
-        out = flat.reshape(rows, cols)
-    else:
-        # Concatenate along columns
-        rows = ts_list[0].shape[0]
-        cols = 0
-        
-        # Iterate through the tensors to calculate the total number of columns
-        for i in range(n):
-            # Calculate the number of columns for the current tensor
-            cols += ts_list[i].shape[1]
-            
-        # Reshape the flat array into the desired shape
-        out = flat.reshape(rows, cols)
+        # Extract the total size of the concatenated tensor
+        tot = offsets[-1]
 
-    # Return the concatenated array and the offsets
-    return out, offsets
+        # Create an empty array to hold the concatenated tensor
+        flat = np.empty(tot, dtype=ts_list[0].dtype)
+
+        # Iterate over the tensors and copy their data into the concatenated array
+        for p in prange(n):
+            s, e = offsets[p], offsets[p + 1]
+            flat[s:e] = ts_list[p].ravel()
+
+        # Build the shape of the concatenated tensor
+        shape_elements_arr = np.empty(R, dtype=np.int64)
+
+        # Iterate over the dimensions of the tensors
+        for d_idx in range(R):
+            # If the current dimension is the axis along which we are concatenating, 
+            # sum the sizes of that dimension across all tensors
+            if d_idx == axis:
+                current_axis_dim_sum = 0
+                for t_idx in range(n):
+                    current_axis_dim_sum += ts_list[t_idx].shape[d_idx]
+                shape_elements_arr[d_idx] = current_axis_dim_sum
+                
+            # If the current dimension is not the axis, take the size from the first tensor
+            else:
+                shape_elements_arr[d_idx] = ts_list[0].shape[d_idx]
+
+        # Convert the shape elements to a tuple
+        final_shape_tuple = None
+        
+        # Switch based on the rank to create the final shape tuple
+        if R == 0:
+            final_shape_tuple = ()
+        elif R == 1:
+            final_shape_tuple = (shape_elements_arr[0],)
+        elif R == 2:
+            final_shape_tuple = (shape_elements_arr[0], shape_elements_arr[1])
+        elif R == 3:
+            final_shape_tuple = (shape_elements_arr[0], shape_elements_arr[1], shape_elements_arr[2])
+        elif R == 4:
+            final_shape_tuple = (shape_elements_arr[0], shape_elements_arr[1], shape_elements_arr[2], shape_elements_arr[3])
+        elif R == 5:
+            final_shape_tuple = (shape_elements_arr[0], shape_elements_arr[1], shape_elements_arr[2], shape_elements_arr[3], shape_elements_arr[4])
+        else:
+            # If the rank is greater than 5, raise an error
+            raise ValueError(f"Rank R={R} not supported by explicit tuple construction for reshape in JIT.")
+        
+        # Reshape the flat array to the final shape
+        out = flat.reshape(final_shape_tuple)
+        
+        # Return the concatenated tensor and offsets
+        return out, offsets
+
+    # Return the JIT-compiled function
+    return concat_rd_forward
+
+
+def concat_forward(ts_list: list[np.ndarray], axis: int = 0) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Concatenate a list of tensors of *any* rank along the given axis,
+    returning (concatenated_tensor, offsets).
+
+    The first call for a new rank triggers JIT compilation; subsequent
+    calls hit the cached, machine-code version.
+    """
+    if not ts_list:
+        raise ValueError("ts_list cannot be empty")
+
+    rank = ts_list[0].ndim
+    if rank not in _concat_cache:
+        _concat_cache[rank] = concat_forward_internal(rank)
+
+    return _concat_cache[rank](ts_list, axis)
 
 
 @njit(parallel=True, fastmath=True)
@@ -129,14 +151,17 @@ def concat_backward(out_grad: np.ndarray, out_buffer: np.ndarray, offsets: np.nd
     - idx (int): Index of the input tensor to which the gradient is being copied.
     """
     
-    # Compute the start index for the current tensor
+    # Get the starting index for the gradient of the input tensor
     start = offsets[idx]
+    
+    # The size of the portion of the gradient to copy is the size of the input tensor's gradient buffer
+    current_tensor_grad_size = out_buffer.size 
 
-    # viste piatte per la copia parallela
+    # Flatten the output gradient and buffer for easier access
     grad_flat = out_grad.ravel()
     buf_flat = out_buffer.ravel()
 
-    # Iterate through the gradient of the output tensor and copy it to the buffer
-    for i in prange(buf_flat.size):
-        # Copy the gradient from the output tensor to the buffer
-        buf_flat[i] += grad_flat[start + i]
+    # Iterate over the range of the current tensor's gradient size
+    for i in prange(current_tensor_grad_size):
+        # Copy the gradient from the output gradient to the buffer
+        buf_flat[i] = grad_flat[start + i]
