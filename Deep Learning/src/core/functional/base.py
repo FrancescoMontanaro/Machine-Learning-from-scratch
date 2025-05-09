@@ -2,6 +2,7 @@ import numpy as np
 from typing import Callable, List, TYPE_CHECKING
 
 from .tape import tape_pop
+from .kernel import add_forward
 if TYPE_CHECKING: from ..tensor import Tensor
 from ..utils.context_manager import _NO_GRAD
 
@@ -16,7 +17,7 @@ def accumulate_gradient(x: 'Tensor', grad: np.ndarray) -> None:
     """
     
     # Accumulate the gradient
-    x.grad = x.grad + grad if x.grad is not None else grad
+    x.grad = add_forward(x.grad, grad.astype(x.grad.dtype)) if x.grad is not None else grad
 
 
 def tensor_unary_op(t: 'Tensor', forward_fn: Callable[..., tuple[np.ndarray, int]], backward_fn: Callable[..., None], tensor_cls: type['Tensor']) -> 'Tensor':

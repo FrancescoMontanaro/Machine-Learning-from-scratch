@@ -94,7 +94,17 @@ class TestConv2DKernel(Test):
         
         # Detach gradients to numpy
         grad_w_custom = w_custom.grad
+        grad_x_custom = x_custom.grad.transpose(0, 3, 1, 2)
         
+        # Assert gradients are close
+        self.assertTrue(
+            np.allclose(grad_x_custom, grad_x_torch, atol=1e-6),
+            msg = (
+                f"❌ Backward grad_w differ!\n"
+                f"Custom:\n{grad_x_custom}\n"
+                f"Torch:\n{grad_x_torch}"
+            )
+        )
         self.assertTrue(
             np.allclose(grad_w_custom, grad_w_torch, atol=1e-6),
             msg = (
