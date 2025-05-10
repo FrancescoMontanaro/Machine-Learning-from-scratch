@@ -129,13 +129,26 @@ def concat_forward(ts_list: list[np.ndarray], axis: int = 0) -> tuple[np.ndarray
     The first call for a new rank triggers JIT compilation; subsequent
     calls hit the cached, machine-code version.
     """
+    
+    # Check if the list of tensors is empty
     if not ts_list:
+        # Raise an error if the list is empty
         raise ValueError("ts_list cannot be empty")
-
+    
+    # Check if all tensors in the list are of the same type
+    if not all(isinstance(t, np.ndarray) for t in ts_list):
+        # Uniform all the tensors to the same type
+        ts_list = [t.astype(ts_list[0].dtype) for t in ts_list]
+    
+    # Extract the rank of the first tensor in the list
     rank = ts_list[0].ndim
+    
+    # Validate the rank of all tensors in the list
     if rank not in _concat_cache:
+        # Check if all tensors have the same rank
         _concat_cache[rank] = concat_forward_internal(rank)
 
+    # Check if all tensors have the same rank
     return _concat_cache[rank](ts_list, axis)
 
 
