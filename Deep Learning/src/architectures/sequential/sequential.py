@@ -43,7 +43,7 @@ class Sequential(Architecture):
         batch_size: int = 8,
         gradient_accumulation_steps: int = 1,
         epochs: int = 10,
-        metrics: list[Callable] = [],
+        metrics: list[Callable[..., Tensor]] = [],
         callbacks: list[Callable] = []
     ) -> dict[str, Tensor]:
         """
@@ -141,11 +141,11 @@ class Sequential(Architecture):
                     optimizer.zero_grad()
                 
                 # Update the epoch loss
-                training_epoch_loss += training_loss.data
+                training_epoch_loss += training_loss.detach().to_numpy().item()
                 
                 # Compute the metrics
                 for metric in metrics:
-                    train_metrics[metric.__name__] += metric(y_training_batch, training_batch_output).data
+                    train_metrics[metric.__name__] += metric(y_training_batch, training_batch_output).detach().to_numpy().item()
                     
                 # Comute the the statistics
                 end_time = time.time() # Store the end time
@@ -154,7 +154,7 @@ class Sequential(Architecture):
                 tensors_in_memory = self.count_tensors_in_memory() # Compute the number of tensors in memory
                 
                 # Display epoch progress
-                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {tensors_in_memory} tensors in memory | {round(ms_per_step, 2)} ms/step --> loss: {training_loss.data:.4f}", end="")
+                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {tensors_in_memory} tensors in memory | {round(ms_per_step, 2)} ms/step --> loss: {training_loss.to_numpy():.4f}", end="")
             
             ##############################
             ### Start validation phase ###
@@ -178,11 +178,11 @@ class Sequential(Architecture):
                     
                     # Compute the loss of the model for the current validation batch
                     # and update the validation epoch loss
-                    valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output).data
+                    valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output).detach().to_numpy().item()
                     
                     # Compute the metrics
                     for metric in metrics:
-                        valid_metrics[metric.__name__] += metric(y_valid_batch, valid_batch_output).data
+                        valid_metrics[metric.__name__] += metric(y_valid_batch, valid_batch_output).detach().to_numpy().item()
                 
             ##########################
             ### Store the results  ###

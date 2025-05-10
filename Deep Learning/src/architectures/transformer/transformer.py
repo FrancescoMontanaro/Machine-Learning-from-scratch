@@ -180,7 +180,7 @@ class Transformer(Architecture):
                     loss = loss_fn(y, logits)
                     
                     # Store the loss
-                    losses[iter] = loss.data
+                    losses[iter] = loss.detach().to_numpy()
                 
                 # Compute the mean loss and store it in the history
                 history_loss_name = "loss" if split == "train" else "val_loss"
