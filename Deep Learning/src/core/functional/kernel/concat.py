@@ -139,29 +139,40 @@ def concat_forward(ts_list: list[np.ndarray], axis: int = 0) -> tuple[np.ndarray
     return _concat_cache[rank](ts_list, axis)
 
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=True, fastmath=True, cache=True)
 def concat_backward(out_grad: np.ndarray, out_buffer: np.ndarray, offsets: np.ndarray, idx: int) -> None:
     """
     Backward pass for the concatenation operation.
     
+    
     Parameters:
     - out_grad (np.ndarray): Gradient of the output tensor.
-    - out_buffer (np.ndarray): Buffer to store the gradients for each input tensor.
-    - offsets (np.ndarray): Offsets for each input tensor.
-    - idx (int): Index of the input tensor to which the gradient is being copied.
+    - out_buffer (np.ndarray): Buffer to store the gradient of the concatenated tensor.
+    - offsets (np.ndarray): Offsets for each tensor in the concatenated tensor.
+    - idx (int): Index of the tensor in the concatenated tensor.
     """
     
-    # Get the starting index for the gradient of the input tensor
-    start = offsets[idx]
+    # Extract the starting index and number of elements for the specified tensor
+    start_idx_in_grad = offsets[idx]
+    num_elements = out_buffer.size
+
+    # Flatten out_grad to 1D for easier indexing
+    out_grad_flat = out_grad.ravel()
     
-    # The size of the portion of the gradient to copy is the size of the input tensor's gradient buffer
-    current_tensor_grad_size = out_buffer.size 
+    # Extract the segment of out_grad corresponding to the specified tensor
+    source_segment = out_grad_flat[start_idx_in_grad : start_idx_in_grad + num_elements]
 
-    # Flatten the output gradient and buffer for easier access
-    grad_flat = out_grad.ravel()
-    buf_flat = out_buffer.ravel()
+    # Check if out_buffer is C-contiguous
+    if out_buffer.flags.c_contiguous:
+        # Copy the data from source_segment to out_buffer
+        buffer_flat_writable_view = out_buffer.ravel()
+        for i in prange(num_elements):
+            buffer_flat_writable_view[i] = source_segment[i]
+    else:
+        # Check if the size of out_buffer matches the number of elements
+        if num_elements != out_buffer.size:
+            raise ValueError("Size mismatch")
 
-    # Iterate over the range of the current tensor's gradient size
-    for i in prange(current_tensor_grad_size):
-        # Copy the gradient from the output gradient to the buffer
-        buf_flat[i] = grad_flat[start + i]
+        # Copy the data from source_segment to out_buffer
+        for i in range(num_elements):
+            out_buffer.flat[i] = source_segment[i]
