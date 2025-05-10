@@ -135,8 +135,8 @@ def concat_forward(ts_list: list[np.ndarray], axis: int = 0) -> tuple[np.ndarray
         # Raise an error if the list is empty
         raise ValueError("ts_list cannot be empty")
     
-    # Check if all tensors in the list are of the same type
-    if not all(isinstance(t, np.ndarray) for t in ts_list):
+    # Check if all tensors in the list are of the same dtype
+    if not all(t.dtype == ts_list[0].dtype for t in ts_list):
         # Uniform all the tensors to the same type
         ts_list = [t.astype(ts_list[0].dtype) for t in ts_list]
     

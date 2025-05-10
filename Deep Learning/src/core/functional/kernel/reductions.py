@@ -2,7 +2,7 @@ import numpy as np
 from numba import guvectorize, float32
 
 
-@guvectorize([(float32[:], float32[:])], '(n)->()', target='parallel', fastmath=True)
+@guvectorize([(float32[:], float32[:])], '(n)->()', fastmath=True)
 def sum_1d(in_arr: np.ndarray, out_scalar: np.ndarray) -> None:
     """
     Computes the sum of a 1D array and stores the result in a scalar.
