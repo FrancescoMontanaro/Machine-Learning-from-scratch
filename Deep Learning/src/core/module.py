@@ -4,7 +4,8 @@ import numpy as np
 import dill as pickle
 from typing import Optional, Any
 
-from ..core import Tensor
+from .tensor import Tensor
+from .tensors_list import TensorsList
 from .utils.data_analysis import format_summary_output
 
 
@@ -55,6 +56,21 @@ class Module:
         elif isinstance(value, Tensor) and value.requires_grad and value.is_parameter:
             # Add the parameter to the dictionary of parameters
             self.__dict__.setdefault("_parameters", {})[name] = value
+            
+        elif isinstance(value, TensorsList):
+            # Assign the list to the module
+            value._assign_to_module(parent_module=self, attribute_name=name)
+            
+        elif isinstance(value, (list)):
+            # Print a warning to suggest using TensorsList
+            print(f"Warning: {name} is a list of tensors. Consider using TensorsList instead for better and dynamic management.")
+            
+            # Iterate over the list of tensors
+            for i, v in enumerate(value):
+                # Check if the tensor is a parameter
+                if isinstance(v, Tensor) and v.requires_grad and v.is_parameter:
+                    # Add the parameter to the dictionary of parameters
+                    self.__dict__.setdefault("_parameters", {})[f"{name}_{i}"] = v
             
         # Set the attribute
         super().__setattr__(name, value)
@@ -516,3 +532,47 @@ class Module:
         """
         
         raise NotImplementedError("The forward method must be implemented in the child class.")
+
+
+    def _clear_indexed_tensors(self, list_name: str) -> None:
+        """
+        Remove all parameters from a list of parameters.
+        
+        Parameters:
+        - list_name (str): Name of the list of parameters to clear.
+        """
+        
+        # Extrae the parameters from the module
+        _params = self.__dict__.get("_parameters", {})
+        
+        # Remove all parameters that start with the list name
+        keys_to_remove = [k for k in _params if k.startswith(f"{list_name}_")]
+        
+        # Remove the parameters from the dictionary
+        for k in keys_to_remove:
+            # Remove the parameter from the dictionary
+            del _params[k]
+
+
+    def _register_indexed_tensor(self, list_name: str, index: int, parameter: Tensor) -> None:
+        """
+        Register a single tensor in a list of parameters with a specific index.
+        
+        Parameters:
+        - list_name (str): Name of the list of parameters.
+        - index (int): Index of the parameter in the list.
+        - parameter (Tensor): Parameter to register.
+        """
+        
+        # Ensure that the parameters list exists
+        _params = self.__dict__.setdefault("_parameters", {})
+        
+        # Check if the parameter is a valid tensor
+        if not (isinstance(parameter, Tensor)):
+            raise TypeError(
+                f"Parameter '{parameter}' is not a valid tensor. "
+                f"Expected a Tensor, but got {type(parameter)}."
+            )
+            
+        # Register the parameter in the dictionary
+        _params[f"{list_name}_{index}"] = parameter

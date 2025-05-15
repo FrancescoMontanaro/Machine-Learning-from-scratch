@@ -439,6 +439,39 @@ class Tensor:
             backward_fn = backward,
             tensor_cls = Tensor
         )
+        
+        
+    def __setitem__(self, key: Union[int, slice, np.ndarray, Tuple[Union[int, slice, np.ndarray], ...]], value: Union[int, float, np.ndarray, 'Tensor']) -> 'Tensor':
+        """
+        Implements slicing for the tensor using the [] operator.
+        
+        Parameters:
+        - key (Union[int, slice, np.ndarray, Tuple[Union[int, slice, np.ndarray], ...]]): Key to slice the tensor
+        - value (Union[int, float, np.ndarray, Tensor]): Value to set at the specified key
+        """
+        
+        def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
+            # Set the value at the specified key
+            self.data[key] = value.data if isinstance(value, Tensor) else value
+            
+            # Return the sliced data
+            return self.data, -1
+            
+        # Define the backward function
+        def backward(out_grad: np.ndarray, *args, **kwargs) -> None:
+            # Compute the gradient of the slice operation
+            grad = np.zeros_like(self.data)
+            
+            # Use direct assignment which handles slices correctly
+            np.add.at(grad, key, out_grad) # type: ignore
+        
+        # Return the tensor operation with the specified forward and backward functions
+        return tensor_unary_op(
+            t = self,
+            forward_fn = forward,
+            backward_fn = backward,
+            tensor_cls = Tensor
+        )
     
 
     ###########################
@@ -1673,6 +1706,41 @@ class Tensor:
         return tensor_nary_op(
             tensors = tensors, 
             forward_fn = forward, 
+            backward_fn = backward,
+            tensor_cls = Tensor
+        )
+        
+    
+    @staticmethod
+    def stack(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
+        """
+        Stack a list of tensors along the specified axis.
+        
+        Parameters:
+        - tensors (List[Tensor]): List of input tensors
+        - axis (int): Axis along which to stack the tensors
+        
+        Returns:
+        - Tensor: Stacked tensor
+        """
+        
+        # Define the forward function
+        def forward(tensors_list: List[np.ndarray]) -> tuple[np.ndarray, int]:
+            # Perform the stacking operation
+            out = stack_forward(tensors_list, axis)
+                
+            # Return the stacked tensor
+            return out, -1
+        
+        # Define the backward function
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, tensor_idx: int, *args, **kwargs) -> None:
+            # Call the kernel function to compute the gradient of the stacking operation
+            stack_backward(out_grad, out_buffer, axis, tensor_idx)
+
+        # Return the tensor operation with the specified forward and backward functions
+        return tensor_nary_op(
+            tensors = tensors,
+            forward_fn = forward,
             backward_fn = backward,
             tensor_cls = Tensor
         )

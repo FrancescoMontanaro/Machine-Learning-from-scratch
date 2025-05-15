@@ -165,3 +165,19 @@ def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
     
     # Compute and return the concatenated tensor
     return Tensor.concat(tensors, axis)
+
+
+def stack(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
+    """
+    Method to stack the tensors along the specified axis
+    
+    Parameters:
+    - tensors (Tensor): List of tensors to stack
+    - axis (int): Axis along which to stack the tensors
+    
+    Returns:
+    - Tensor: Stacked tensor
+    """
+    
+    # Compute and return the stacked tensor
+    return Tensor.stack(tensors, axis)

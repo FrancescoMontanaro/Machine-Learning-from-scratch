@@ -8,4 +8,5 @@ from .input import Input
 from .layer_normalization import LayerNormalization
 from .pooling import MaxPool2D
 from .reshape import Reshape
+from .rnn import RNN
 from .upsampling import UpSampling2D

@@ -205,7 +205,7 @@ class Sequential(Architecture):
             # Display progress with metrics
             print(
                 f"\rEpoch {self.epoch + 1}/{epochs} --> "
-                f"loss: {self.history['loss'].data[-1]:.4f} "
+                f"loss: {self.history['loss'].data[-1]:.4f}"
                 + " ".join(
                     [f"- {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__].data[-1]:.4f}" for metric in metrics]
                 )

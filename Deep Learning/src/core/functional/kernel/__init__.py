@@ -11,6 +11,7 @@ from .clip import clip_forward, clip_gradient
 from .sqrt import sqrt_forward, sqrt_backward
 from .tanh import tanh_forward, tanh_gradient
 from .relu import relu_forward, relu_gradient
+from .stack import stack_forward, stack_backward
 from .concat import concat_forward, concat_backward
 from .repeat import repeat_forward, repeat_gradient
 from .max import max_flat_forward, max_flat_gradient
