@@ -206,12 +206,12 @@ class Sequential(Architecture):
             print(
                 f"\rEpoch {self.epoch + 1}/{epochs} --> "
                 f"loss: {self.history['loss'].data[-1]:.4f}"
-                + " ".join(
-                    [f"- {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__].data[-1]:.4f}" for metric in metrics]
+                + "".join(
+                    [f" - {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__].data[-1]:.4f}" for metric in metrics]
                 )
-                + f" | Validation loss: {self.history['val_loss'].data[-1]:.4f} "
-                + " ".join(
-                    [f"- Validation {metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'].data[-1]:.4f}" for metric in metrics]
+                + f" | Validation loss: {self.history['val_loss'].data[-1]:.4f}"
+                + "".join(
+                    [f" - Validation {metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'].data[-1]:.4f}" for metric in metrics]
                 ).ljust(50)
             )
             

@@ -1,5 +1,6 @@
 import weakref
 import numpy as np
+from types import EllipsisType
 from typing import Optional, Union, Tuple, List, Callable, Any
 
 from .functional.kernel import *
@@ -405,7 +406,7 @@ class Tensor:
         return (-1) * self
     
     
-    def __getitem__(self, key: Union[int, slice, np.ndarray, Tuple[Union[int, slice, np.ndarray], ...]]) -> 'Tensor':
+    def __getitem__(self, key: Union[int, slice, np.ndarray, EllipsisType, Tuple[Union[int, slice, np.ndarray, EllipsisType], ...]]) -> 'Tensor':
         """
         Implements slicing for the tensor using the [] operator.
         

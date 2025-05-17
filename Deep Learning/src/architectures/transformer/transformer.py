@@ -1,18 +1,18 @@
 import time
 import numpy as np
-from typing import Union, Generator
+from typing import Generator
 
 from ...core import Tensor
 from .decoder import Decoder
 from ...optimizers import Adam
-from ..base import Architecture
 from .data_loader import DataLoader
 from ...loss_functions import CrossEntropy
+from ..auto_regressive import AutoRegressive
 from ...core.utils.data_processing import concat
 from ...core.utils.context_manager import no_grad
 
 
-class Transformer(Architecture):
+class Transformer(AutoRegressive):
     
     ### Magic methods ###
     
@@ -48,6 +48,7 @@ class Transformer(Architecture):
     
     
     ### Public methods ###
+    
     
     def fit(
         self, 
@@ -189,103 +190,6 @@ class Transformer(Architecture):
         # Set the model back to training mode
         self.train()
             
-        
-    def generate(self, input_tokens: Tensor, max_new_tokens: int, stream: bool = False) -> Union[Tensor, Generator[Tensor, None, None]]:
-        """
-        Method to generate new tokens (inference).
-        
-        Parameters:
-        - input_tokens (Tensor): The input tokens.
-        - max_new_tokens (int): The maximum number of new tokens to generate.
-        - stream (bool): Whether to generate the tokens in a streaming fashion.
-        
-        Returns:
-        - Union[Tensor, Generator[Tensor]]: The generated tokens or a generator to iterate over the generated tokens in a streaming fashion.
-        """
-        
-        
-        # Disable gradient computation
-        with no_grad():
-            # Set the model to evaluation mode
-            self.eval()
-            
-            # Stream the generated tokens using a generator
-            if stream:
-                # Define the generator to stream the tokens
-                def stream_tokens() -> Generator[Tensor, None, None]:
-                    """
-                    Generator to stream the generated tokens.
-                    
-                    Yields:
-                    - Tensor: The next token generated.
-                    """
-                    
-                    # Initialize the local tokens
-                    local_tokens = input_tokens
-                    
-                    # Iterate over the maximum number of new tokens
-                    for _ in range(max_new_tokens):
-                        # Crop the input tokens to the sequence length if larger
-                        cropped_input_tokens = local_tokens[:, -self.sequence_length:]
-                        
-                        # Get the predictions
-                        logits = self(cropped_input_tokens)
-                        
-                        # Focus only on the last time step
-                        logits = logits[:, -1, :]
-                        
-                        # Apply the softmax function to get the probabilities
-                        probs = logits.softmax(axis=-1)
-                        
-                        # Sample the next token from the distribution
-                        next_token = Tensor(
-                            np.array([
-                                np.random.choice(probs.shape()[1], p=probs.data[i])
-                                for i in range(probs.shape()[0])
-                            ]).reshape(-1, 1),
-                            dtype=np.int32
-                        )
-                        
-                        # Yield the next token
-                        yield next_token
-                        
-                        # Concatenate the token for the next iteration
-                        local_tokens = concat([local_tokens, next_token], axis=-1)
-                
-                # Return the generator to stream the tokens         
-                return stream_tokens()
-            
-            # Generate all the tokens at once
-            else:
-                # Iterate over the maximum number of new tokens
-                for _ in range(max_new_tokens):
-                    # Crop the input tokens to the sequence length if it is larger
-                    cropped_input_tokens = input_tokens[:, -self.sequence_length:] # (B, S)
-                    
-                    # Get the predictions
-                    logits = self.forward(cropped_input_tokens)
-                    
-                    # Focus only on the last time step
-                    logits = logits[:, -1, :]
-                    
-                    # Apply the softmax function to get the probabilities
-                    probs = logits.softmax(axis=-1)
-                    
-                    # Sample the next token from the distribution
-                    next_token = Tensor( # (B, 1)
-                        np.array([
-                            np.random.choice(probs.shape()[1], p=probs.data[i]) 
-                            for i in range(probs.shape()[0])
-                        ]).reshape(-1, 1),
-                        dtype=np.int32
-                    )
-                        
-                    # Concatenate the token
-                    input_tokens = concat([input_tokens, next_token], axis=-1) # (B, S+1)
-                    
-                # Return the generated tokens
-                return input_tokens
-
 
     ### Protected methods ###
             
@@ -325,3 +229,46 @@ class Transformer(Architecture):
         
         # Check if the input shape is valid
         assert len(x.shape()) == 2, f"Invalid input shape. Input must be a 2D array. The shape must be (Batch size, sequence length). Got shape: {x.shape()}"
+        
+        
+    def _autoregressive_step_loop(self, x: Tensor, num_steps: int, concat_axis: int = -1, *args, **kwargs) -> Generator[Tensor, None, None]:
+        """
+        Autoregressive step loop to generate data.
+        
+        Parameters:
+        - x (Tensor): The input tensor.
+        - num_steps (int): The number of steps to generate.
+        - concat_axis (int): The axis to concatenate the generated data.
+        
+        Yields:
+        - Tensor: The next token generated.
+        """
+        
+        # Iterate over the maximum number of new tokens
+        for _ in range(num_steps):
+            # Crop the input tokens to the sequence length if larger
+            cropped_input_tokens = x[:, -self.sequence_length:]
+            
+            # Get the predictions
+            logits = self(cropped_input_tokens)
+            
+            # Focus only on the last time step
+            logits = logits[:, -1, :]
+            
+            # Apply the softmax function to get the probabilities
+            probs = logits.softmax(axis=-1)
+            
+            # Sample the next token from the distribution
+            next_token = Tensor(
+                np.array([
+                    np.random.choice(probs.shape()[1], p=probs.data[i])
+                    for i in range(probs.shape()[0])
+                ]).reshape(-1, 1),
+                dtype=np.int32
+            )
+            
+            # Yield the next token
+            yield next_token
+            
+            # Concatenate the token for the next iteration
+            x = concat([x, next_token], axis=concat_axis)
