@@ -43,7 +43,8 @@ class Sequential(Architecture):
         gradient_accumulation_steps: int = 1,
         epochs: int = 10,
         metrics: list[Callable[..., Tensor]] = [],
-        callbacks: list[Callable] = []
+        callbacks: list[Callable] = [],
+        shuffle: bool = True,
     ) -> Dict[str, list[Tensor]]:
         """
         Method to train the neural network
@@ -60,6 +61,7 @@ class Sequential(Architecture):
         - epochs (int): Number of epochs to train the model. Default is 10
         - metrics (list[Callable]): List of metrics to evaluate the model. Default is an empty list
         - callbacks (list[Callback]): List of callbacks to execute
+        - shuffle (bool): Flag to shuffle the data. Default is True
         
         Returns:
         - Dict[str, list[Tensor]]: Dictionary containing the history of the model
@@ -103,7 +105,7 @@ class Sequential(Architecture):
             self.train()
             
             # Shuffle the dataset at the beginning of each epoch
-            X_train_shuffled, Y_train_shuffled = shuffle_data((X_train, y_train))
+            X_train_shuffled, Y_train_shuffled = shuffle_data((X_train, y_train)) if shuffle else (X_train, y_train)
             
             # Iterate over the batches
             elapsed_time = 0.0
