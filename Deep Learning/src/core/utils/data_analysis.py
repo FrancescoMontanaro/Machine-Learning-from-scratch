@@ -1,5 +1,8 @@
 import numpy as np
+from typing import Optional
 import matplotlib.pyplot as plt
+
+from ..tensor import Tensor
 
 
 def plot_data(datasets: list[dict], title: str, xlabel: str, ylabel: str) -> None:
@@ -46,13 +49,13 @@ def plot_data(datasets: list[dict], title: str, xlabel: str, ylabel: str) -> Non
     plt.show()
 
 
-def plot_history(train_loss: np.ndarray, valid_loss: np.ndarray, title: str, xlabel: str, ylabel: str) -> None:
+def plot_history(train_loss: list[Tensor], valid_loss: Optional[list[Tensor]], title: str, xlabel: str, ylabel: str) -> None:
     """
     Method to plot the training and validation loss
     
     Parameters:
-    - train_loss (np.ndarray): Training losses
-    - valid_loss (np.ndarray): Validation losses
+    - train_loss (list[Tensor]): Training losses
+    - valid_loss (Optional[list[Tensor]]): Validation losses
     - title (str): Title of the plot
     - xlabel (str): Label of the x-axis
     - ylabel (str): Label of the y-axis
@@ -62,8 +65,8 @@ def plot_history(train_loss: np.ndarray, valid_loss: np.ndarray, title: str, xla
     plt.figure(figsize=(8, 4))
     
     # Plot the training and validation loss
-    plt.plot(train_loss, label="Training loss", color="blue")
-    plt.plot(valid_loss, label="Validation loss", color="orange")
+    plt.plot(np.array([item.to_numpy() for item in train_loss]), label="Training loss", color="blue")
+    if valid_loss: plt.plot(np.array([item.to_numpy() for item in valid_loss]), label="Validation loss", color="orange")
     
     # Set the title and labels
     plt.title(title)
@@ -77,25 +80,28 @@ def plot_history(train_loss: np.ndarray, valid_loss: np.ndarray, title: str, xla
     plt.show()
  
  
-def plot_confusion_matrix(cm: np.ndarray, title: str = "Confusion Matrix") -> None:
+def plot_confusion_matrix(cm: Tensor, title: str = "Confusion Matrix") -> None:
     """
     Method to plot the confusion matrix
     
     Parameters:
-    - cm (np.ndarray): Confusion matrix
+    - cm (Tensor): Confusion matrix to plot
     - title (str): Title of the plot
     """
     
     # Create a new figure
-    fig, ax = plt.subplots(figsize=(6, 6))
+    _, ax = plt.subplots(figsize=(6, 6))
+    
+    # Extract the confusion matrix data
+    cm_data = cm.to_numpy()
     
     # Plot the confusion matrix
-    ax.matshow(cm, cmap=plt.colormaps['Blues'], alpha=0.3)
+    ax.matshow(cm_data, cmap=plt.colormaps['Blues'], alpha=0.3)
     
     # Add the class labels
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            ax.text(x=j, y=i, s=str(int(cm[i, j])), va='center', ha='center')
+    for i in range(cm_data.shape[0]):
+        for j in range(cm_data.shape[1]):
+            ax.text(x=j, y=i, s=str(int(cm_data[i, j])), va='center', ha='center')
     
     # Showing the confusion matrix
     plt.xlabel('Predictions', fontsize=12)

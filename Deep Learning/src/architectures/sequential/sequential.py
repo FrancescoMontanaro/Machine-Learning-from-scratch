@@ -1,7 +1,6 @@
 import math
 import time
-import numpy as np
-from typing import Callable, Optional
+from typing import Callable, Optional, Dict
 
 from ..base import Architecture
 from ...optimizers import Optimizer
@@ -45,7 +44,7 @@ class Sequential(Architecture):
         epochs: int = 10,
         metrics: list[Callable[..., Tensor]] = [],
         callbacks: list[Callable] = []
-    ) -> dict[str, Tensor]:
+    ) -> Dict[str, list[Tensor]]:
         """
         Method to train the neural network
         
@@ -63,7 +62,7 @@ class Sequential(Architecture):
         - callbacks (list[Callback]): List of callbacks to execute
         
         Returns:
-        - dict[str, Tensor]: Dictionary containing the training and validation losses
+        - Dict[str, list[Tensor]]: Dictionary containing the history of the model
         """
         
         #######################
@@ -108,8 +107,8 @@ class Sequential(Architecture):
             
             # Iterate over the batches
             elapsed_time = 0.0
-            training_epoch_loss = 0.0
-            train_metrics = {metric.__name__: 0.0 for metric in metrics}
+            training_epoch_loss = Tensor(0.0, requires_grad=False)
+            train_metrics = {metric.__name__: Tensor(0.0, requires_grad=False) for metric in metrics}
             for training_step in range(n_training_steps):
                 # Store the start time
                 start_time = time.time()
@@ -139,14 +138,16 @@ class Sequential(Architecture):
                     
                     # Zero the gradients of the parameters
                     optimizer.zero_grad()
-                
-                # Update the epoch loss
-                training_epoch_loss += training_loss.detach().to_numpy().item()
-                
-                # Compute the metrics
-                for metric in metrics:
-                    train_metrics[metric.__name__] += metric(y_training_batch, training_batch_output).detach().to_numpy().item()
                     
+                # Disable automatic gradient computation
+                with no_grad():
+                    # Update the epoch loss
+                    training_epoch_loss += training_loss.detach()
+                    
+                    # Compute the metrics
+                    for metric in metrics:
+                        train_metrics[metric.__name__] += metric(y_training_batch, training_batch_output).detach()
+                        
                 # Comute the the statistics
                 end_time = time.time() # Store the end time
                 elapsed_time += (end_time - start_time) # Update the elapsed time
@@ -154,7 +155,7 @@ class Sequential(Architecture):
                 tensors_in_memory = self.count_tensors_in_memory() # Compute the number of tensors in memory
                 
                 # Display epoch progress
-                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {tensors_in_memory} tensors in memory | {round(ms_per_step, 2)} ms/step --> loss: {training_loss.to_numpy():.4f}", end="")
+                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {tensors_in_memory} tensors in memory | {round(ms_per_step, 2)} ms/step --> loss: {training_loss.to_numpy():.5g}", end="")
             
             ##############################
             ### Start validation phase ###
@@ -166,8 +167,8 @@ class Sequential(Architecture):
             # Disable automatic gradient computation
             with no_grad(): 
                 # Iterate over the validation steps
-                valid_epoch_loss = 0.0
-                valid_metrics = {metric.__name__: 0.0 for metric in metrics}
+                valid_epoch_loss = Tensor(0.0, requires_grad=False)
+                valid_metrics = {metric.__name__: Tensor(0.0, requires_grad=False) for metric in metrics}
                 for valid_step in range(n_valid_steps):
                     # Get the current batch of validation data
                     X_valid_batch = X_valid[valid_step * batch_size:(valid_step + 1) * batch_size]
@@ -178,42 +179,42 @@ class Sequential(Architecture):
                     
                     # Compute the loss of the model for the current validation batch
                     # and update the validation epoch loss
-                    valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output).detach().to_numpy().item()
+                    valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output).detach()
                     
                     # Compute the metrics
                     for metric in metrics:
-                        valid_metrics[metric.__name__] += metric(y_valid_batch, valid_batch_output).detach().to_numpy().item()
+                        valid_metrics[metric.__name__] += metric(y_valid_batch, valid_batch_output).detach()
                 
-            ##########################
-            ### Store the results  ###
-            ##########################
-                  
-            # Store the training and validation losses
-            self.history["loss"].data = np.append(self.history["loss"].data, training_epoch_loss / n_training_steps)
-            self.history["val_loss"].data = np.append(self.history["val_loss"].data, valid_epoch_loss / n_valid_steps)
+                ##########################
+                ### Store the results  ###
+                ##########################
+                    
+                # Store the training and validation losses
+                self.history["loss"].append(training_epoch_loss / n_training_steps)
+                self.history["val_loss"].append(valid_epoch_loss / n_valid_steps)
+                
+                # Compute the average metrics
+                for metric in metrics:
+                    # Compute the average of the metrics for the training and validation sets and store them
+                    self.history[metric.__name__].append(train_metrics[metric.__name__] / n_training_steps)
+                    self.history[f"val_{metric.__name__}"].append(valid_metrics[metric.__name__] / n_valid_steps)
             
-            # Compute the average metrics
-            for metric in metrics:
-                # Compute the average of the metrics for the training and validation sets and store them
-                self.history[metric.__name__].data = np.append(self.history[metric.__name__].data, train_metrics[metric.__name__] / n_training_steps)
-                self.history[f"val_{metric.__name__}"].data = np.append(self.history[f"val_{metric.__name__}"].data, valid_metrics[metric.__name__] / n_valid_steps)
-            
-            #############################
-            ### Display the progress  ###
-            #############################
-            
-            # Display progress with metrics
-            print(
-                f"\rEpoch {self.epoch + 1}/{epochs} --> "
-                f"loss: {self.history['loss'].data[-1]:.4f}"
-                + "".join(
-                    [f" - {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__].data[-1]:.4f}" for metric in metrics]
+                #############################
+                ### Display the progress  ###
+                #############################
+                
+                # Display progress with metrics
+                print(
+                    f"\rEpoch {self.epoch + 1}/{epochs} --> "
+                    f"loss: {self.history['loss'][-1].to_numpy().item():.5g}"
+                    + "".join(
+                        [f" - {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__][-1].to_numpy().item():.5g}" for metric in metrics]
+                    )
+                    + f" | Valid loss: {self.history['val_loss'][-1].to_numpy().item():.5g}"
+                    + "".join(
+                        [f" - Valid {metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'][-1].to_numpy().item():.5g}" for metric in metrics]
+                    ).ljust(50)
                 )
-                + f" | Validation loss: {self.history['val_loss'].data[-1]:.4f}"
-                + "".join(
-                    [f" - Validation {metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'].data[-1]:.4f}" for metric in metrics]
-                ).ljust(50)
-            )
             
             #############################
             ### Execute the callbacks ###

@@ -1,6 +1,5 @@
 import gc
-import numpy as np
-from typing import Callable
+from typing import Callable, Dict
 
 from ..core import Module, Tensor
 
@@ -18,7 +17,7 @@ class Architecture(Module):
         super().__init__(*args, **kwargs)
         
         # Initialize the history of the model
-        self.history = {}
+        self.history: Dict[str, list[Tensor]] = {}
         
         
     ### Public methods ###
@@ -33,19 +32,19 @@ class Architecture(Module):
         
         # Initialize the history of the model
         self.history = {
-            "loss": Tensor(np.array([])),
-            **{f"{metric.__name__}": Tensor(np.array([])) for metric in metrics},
-            "val_loss": Tensor(np.array([])),
-            **{f"val_{metric.__name__}": Tensor(np.array([])) for metric in metrics}
+            "loss": [],
+            **{f"{metric.__name__}": [] for metric in metrics},
+            "val_loss": [],
+            **{f"val_{metric.__name__}": [] for metric in metrics}
         }
     
     
-    def fit(self, *args, **kwargs) -> dict[str, Tensor]:
+    def fit(self, *args, **kwargs) -> Dict[str, list[Tensor]]:
         """
         Method to fit the model.
         
         Returns:
-        - dict[str, Tensor]: Dictionary containing the history of the model
+        - Dict[str, list[Tensor]]: Dictionary containing the history of the model
         """
         
         # Raise an error if the method is not implemented

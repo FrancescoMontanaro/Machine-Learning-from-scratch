@@ -1,6 +1,6 @@
 import time
 import numpy as np
-from typing import Generator
+from typing import Generator, Dict
 
 from ...core import Tensor
 from .decoder import Decoder
@@ -57,7 +57,7 @@ class Transformer(AutoRegressive):
         batch_size: int, 
         eval_iters: int = 10,
         grad_accumulation_steps: int = 1
-    ) -> dict[str, Tensor]:
+    ) -> Dict[str, list[Tensor]]:
         """
         Method to train the model.
         
@@ -68,6 +68,9 @@ class Transformer(AutoRegressive):
         - batch_size (int): The batch size.
         - eval_iters (int): The number of iterations to evaluate the loss on the training and validation sets. If it is less than the number of gradient accumulation steps, it will be set to the number of gradient accumulation steps.
         - grad_accumulation_steps (int): The number of gradient accumulation steps.
+        
+        Returns:
+        - Dict[str, list[Tensor]]: Dictionary containing the history of the model
         """
         
         # Ensure that eval_iters is greater than or equal to grad_accumulation_steps
@@ -103,8 +106,14 @@ class Transformer(AutoRegressive):
                 elapsed_time += time.time() - start_time
                 ms_per_step = (elapsed_time / (step + 1)) * 1000
                 
-                # Print the validation loss
-                print(f'Step {step+1}/{steps} | {tensors_in_memory} tensors in memory | {ms_per_step:.2f} ms/step - Train Loss: {self.history["loss"].data[-1]:.4f} | Validation loss: {self.history["val_loss"].data[-1]:.4f}')
+                # Print the training statistics
+                print(
+                    f'Step {step+1}/{steps} | '
+                    f'{tensors_in_memory} tensors in memory | '
+                    f'{ms_per_step:.2f} ms/step - '
+                    f'Train Loss: {self.history["loss"][-1].to_numpy():.4f} | '
+                    f'Valid loss: {self.history["val_loss"][-1].to_numpy():.4f}'
+                )
             
             # Get the batch
             x, y = data_loader.get_batch(split='train', batch_size=batch_size, sequence_length=self.sequence_length) # (B, S), (B, S)
@@ -185,7 +194,7 @@ class Transformer(AutoRegressive):
                 
                 # Compute the mean loss and store it in the history
                 history_loss_name = "loss" if split == "train" else "val_loss"
-                self.history[history_loss_name].data = np.append(self.history[history_loss_name].data, losses.mean())
+                self.history[history_loss_name].append(losses.mean())
             
         # Set the model back to training mode
         self.train()

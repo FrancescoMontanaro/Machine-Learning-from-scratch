@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Literal
+from typing import Literal, List
 
 from .base import Callback
 from ..core import Module, Tensor
@@ -54,14 +54,14 @@ class EarlyStopping(Callback):
             raise ValueError("History not found in the module.")
         
         # Get the target value
-        target: Tensor = history.get(self.monitor)
+        target: List[Tensor] = history.get(self.monitor)
         
         # Check if the target value is None
         if target is None:
             raise ValueError(f"Target value '{self.monitor}' not found in the history.")
         
         # Get the current value
-        value = target.data[-1]
+        value = target[-1].detach().to_numpy()
         
         # Check if the value is better
         if self.mode == "min":
@@ -73,7 +73,7 @@ class EarlyStopping(Callback):
             
         # Update the best value
         if is_better:
-            self.best_value = value
+            self.best_value = value.item()
             self.counter = 0
         else:
             self.counter += 1
@@ -81,7 +81,7 @@ class EarlyStopping(Callback):
         # Check if the training should be stopped
         if self.counter >= self.patience:
             # Extract the epoch number
-            epoch = len(target.data)
+            epoch = len(target)
             
             # Print a message
             print(f"Early stopping: stopping training after {epoch} epochs.")
