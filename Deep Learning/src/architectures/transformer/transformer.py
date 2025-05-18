@@ -30,7 +30,7 @@ class Transformer(AutoRegressive):
         """
         
         # Initialize the superclass
-        super().__init__(*args, **kwargs)
+        super().__init__(sequence_length=sequence_length, *args, **kwargs)
         
         # Store the parameters
         self.vocab_size = vocab_size
@@ -169,7 +169,7 @@ class Transformer(AutoRegressive):
             # Iterate over the splits
             for split in ['train', 'validation']:
                 # Initialize the losses tensor
-                losses = np.zeros(eval_iters)
+                losses = Tensor(np.zeros((eval_iters,)), dtype=np.float32)
                 
                 # Iterate over the evaluation iterations
                 for iter in range(eval_iters):
@@ -190,7 +190,7 @@ class Transformer(AutoRegressive):
                     loss = loss_fn(y, logits)
                     
                     # Store the loss
-                    losses[iter] = loss.detach().to_numpy()
+                    losses[iter] = loss.detach()
                 
                 # Compute the mean loss and store it in the history
                 history_loss_name = "loss" if split == "train" else "val_loss"
