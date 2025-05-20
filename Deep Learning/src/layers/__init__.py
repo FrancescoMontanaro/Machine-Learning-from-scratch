@@ -5,6 +5,7 @@ from .dropout import Dropout
 from .embedding import Embedding
 from .flatten import Flatten
 from .input import Input
+from .lstm import LSTM
 from .layer_normalization import LayerNormalization
 from .pooling import MaxPool2D
 from .reshape import Reshape

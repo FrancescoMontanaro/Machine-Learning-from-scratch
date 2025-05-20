@@ -138,7 +138,7 @@ class TestRNNLayer(Test):
             np.allclose(self.x_tensor.grad, self.x_torch.grad.numpy(), atol=1e-5),
             msg=(
                 f"❌ Backward gradients differ beyond tolerance!\n"
-                f"Custom grad:\n{self.x_tensor.grad}\n\n"
+                f"Custom grad:\n{self.x_tensor.grad}\n"
                 f"Torch grad:\n{self.x_torch.grad.numpy()}"
             )
         )
