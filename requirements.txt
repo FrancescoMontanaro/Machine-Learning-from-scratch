@@ -3,6 +3,7 @@ dill
 numpy
 regex
 numba
+pandas
 matplotlib
 
 # Used only for downloading datasets

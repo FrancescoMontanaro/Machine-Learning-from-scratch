@@ -1,4 +1,4 @@
-from typing import Generator, Union
+from typing import Generator, Union, Optional, Callable
 
 from ...core import Tensor
 from ..base import Architecture
@@ -26,7 +26,15 @@ class AutoRegressive(Architecture):
     
     ### Public Methods ###
     
-    def autoregressive_generation(self, x: Tensor, num_steps: int, concat_axis: int = 1, stream: bool = False) -> Union[Tensor, Generator[Tensor, None, None]]:
+    def autoregressive_generation(
+        self, 
+        x: Tensor, 
+        num_steps: int, 
+        concat_axis: int = 1, 
+        stream: bool = False,
+        normalize_fn: Optional[Callable[[Tensor], Tensor]] = None,
+        denormalize_fn: Optional[Callable[[Tensor], Tensor]] = None
+    ) -> Union[Tensor, Generator[Tensor, None, None]]:
         """
         Autoregressive generation function to generate data.
         
@@ -35,6 +43,8 @@ class AutoRegressive(Architecture):
         - num_steps (int): The number of steps to generate.
         - concat_axis (int): The axis to concatenate the generated data.
         - stream (bool): Whether to generate the data in a streaming fashion.
+        - normalize_fn (Callable, optional): Function to normalize input before model forward pass.
+        - denormalize_fn (Callable, optional): Function to denormalize model output.
         """
         
         # Disable gradient computation
@@ -45,12 +55,26 @@ class AutoRegressive(Architecture):
             # Stream requested
             if stream:
                 # Return the generator to stream the data
-                return self._autoregressive_step_loop(x, num_steps, concat_axis)
+                return self._autoregressive_step_loop(
+                    x = x, 
+                    num_steps = num_steps, 
+                    concat_axis = concat_axis, 
+                    normalize_fn = normalize_fn, 
+                    denormalize_fn = denormalize_fn
+                )
             
             # Generate all the data at once
             else:   
                 # Return the generated data
-                return self.concat_generation(self._autoregressive_step_loop(x, num_steps, concat_axis))
+                return self.concat_generation(
+                    self._autoregressive_step_loop(
+                        x = x, 
+                        num_steps = num_steps, 
+                        concat_axis = concat_axis, 
+                        normalize_fn = normalize_fn, 
+                        denormalize_fn = denormalize_fn
+                    )
+                )
             
             
     @staticmethod
@@ -59,8 +83,7 @@ class AutoRegressive(Architecture):
         Concatenate generation function to generate data.
         
         Parameters:
-        - x (Tensor): The input tensor.
-        - num_steps (int): The number of steps to generate.
+        - generator (Generator): The generator yielding tensors.
         - concat_axis (int): The axis to concatenate the generated data.
         
         Returns:
@@ -81,7 +104,16 @@ class AutoRegressive(Architecture):
     
     ### Protected Methods ###
             
-    def _autoregressive_step_loop(self, x: Tensor, num_steps: int, concat_axis: int = 1, *args, **kwargs) -> Generator[Tensor, None, None]:
+    def _autoregressive_step_loop(
+        self, 
+        x: Tensor, 
+        num_steps: int, 
+        concat_axis: int = 1,
+        normalize_fn: Optional[Callable[[Tensor], Tensor]] = None,
+        denormalize_fn: Optional[Callable[[Tensor], Tensor]] = None,
+        *args, 
+        **kwargs
+    ) -> Generator[Tensor, None, None]:
         """
         Autoregressive step loop to generate data.
         
@@ -89,6 +121,8 @@ class AutoRegressive(Architecture):
         - x (Tensor): The input tensor.
         - num_steps (int): The number of steps to generate.
         - concat_axis (int): The axis to concatenate the generated data.
+        - normalize_fn (Callable, optional): Function to normalize input before model forward pass.
+        - denormalize_fn (Callable, optional): Function to denormalize model output.
         
         Yields:
         - Tensor: The generated data at each step.
@@ -99,8 +133,16 @@ class AutoRegressive(Architecture):
             # Crop the input tokens to the sequence length if larger
             cropped_x = x[:, -self.sequence_length:, ...]
             
+            # Apply normalization if provided
+            if normalize_fn is not None:
+                cropped_x = normalize_fn(cropped_x)
+            
             # Get the predictions
             logits = self(cropped_x)
+            
+            # Apply denormalization if provided
+            if denormalize_fn is not None:
+                logits = denormalize_fn(logits)
             
             # Add the time axis to the logits
             logits = logits.unsqueeze(1)
@@ -108,7 +150,7 @@ class AutoRegressive(Architecture):
             # Yield the next token
             yield logits
             
-            # Concatenate the token for the next iteration
+            # Concatenate the logits to the input tensor along the specified axis
             x = concat([x, logits], axis=concat_axis)
 
 
