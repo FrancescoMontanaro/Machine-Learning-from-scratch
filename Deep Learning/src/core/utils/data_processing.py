@@ -1,7 +1,8 @@
 import numpy as np
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Optional
 
 from ..tensor import Tensor
+from .constants import EPSILON
 
 
 def shuffle_data(data: Union[Tensor, Tuple[Tensor, Tensor]]) -> Union[Tensor, Tuple[Tensor, Tensor]]:
@@ -149,6 +150,102 @@ def one_hot_encoding(y: Tensor, n_classes: int) -> Tensor:
     
     # Return the one-hot encoded target variable
     return Tensor(one_hot, requires_grad=False, dtype=np.int8)
+
+
+def compute_stats(X: Tensor, axis: Optional[Union[int, Tuple[int, ...]]] = None) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    """
+    Compute normalization statistics from training data only.
+    
+    Parameters:
+    - X: Tensor, training data
+    - axis: Optional[Union[int, Tuple[int, ...]]], axis along which to compute the statistics
+    
+    Returns:
+    - tuple[Tensor, Tensor, Tensor, Tensor], mean, std, min, max
+    """
+    
+    # Extract the data from the Tensor
+    data = X.to_numpy()
+    
+    # Compute mean, std, min, and max across the first two axes (time and features)
+    min = np.min(data, axis=axis)
+    max = np.max(data, axis=axis)
+    mean = np.mean(data, axis=axis)
+    std = np.std(data, axis=axis)
+    
+    # Ensure std is not zero to avoid division by zero
+    std = np.maximum(std, EPSILON)
+    
+    # Return as Tensors
+    return Tensor(mean), Tensor(std), Tensor(min), Tensor(max)
+
+
+def z_score_normalize(X: Tensor, mean: Tensor, std: Tensor) -> Tensor:
+    """
+    Z-score normalization
+    
+    Parameters:
+    - X: Tensor, input data to normalize
+    - mean: Tensor, mean for normalization
+    - std: Tensor, standard deviation for normalization
+    
+    Returns:
+    - Tensor, normalized data
+    """
+    
+    # Compute Z-score normalization
+    return (X - mean) / std
+
+
+def z_score_denormalize(X: Tensor, mean: Tensor, std: Tensor) -> Tensor:
+    """
+    Z-score denormalization
+    
+    Parameters:
+    - X: Tensor, normalized data to denormalize
+    - mean: Tensor, mean used for normalization
+    - std: Tensor, standard deviation used for normalization
+    
+    Returns:
+    - Tensor, denormalized data
+    """
+    
+    # Compute denormalization
+    return X * std + mean
+
+
+def min_max_normalize(X: Tensor, min: Tensor, max: Tensor) -> Tensor:
+    """
+    Min-Max normalization
+    
+    Parameters:
+    - X: Tensor, input data to normalize
+    - min: Tensor, minimum for normalization
+    - max: Tensor, maximum for normalization
+    
+    Returns:
+    - Tensor, normalized data
+    """
+    
+    # Compute Min-Max normalization
+    return (X - min) / (max - min + EPSILON)
+
+
+def min_max_denormalize(X: Tensor, min: Tensor, max: Tensor) -> Tensor:
+    """
+    Min-Max denormalization
+    
+    Parameters:
+    - X: Tensor, normalized data to denormalize
+    - min: Tensor, minimum used for normalization
+    - max: Tensor, maximum used for normalization
+    
+    Returns:
+    - Tensor, denormalized data
+    """
+    
+    # Compute denormalization
+    return X * (max - min) + min
 
 
 def concat(tensors: List['Tensor'], axis: int = 0) -> 'Tensor':
