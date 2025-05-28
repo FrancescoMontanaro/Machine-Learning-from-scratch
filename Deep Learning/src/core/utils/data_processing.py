@@ -5,7 +5,7 @@ from ..tensor import Tensor
 from .constants import EPSILON
 
 
-def shuffle_data(data: Union[Tensor, Tuple[Tensor, Tensor]]) -> Union[Tensor, Tuple[Tensor, Tensor]]:
+def shuffle_data(data: Union[Tensor, Tuple[Tensor, Tensor]]) -> Tuple[Union[Tensor, Tuple[Tensor, ...]], np.ndarray]:
     """
     Method to shuffle the dataset
     
@@ -13,7 +13,7 @@ def shuffle_data(data: Union[Tensor, Tuple[Tensor, Tensor]]) -> Union[Tensor, Tu
     - data (Union[Tensor, Tuple[Tensor, Tensor]]): Dataset to shuffle
     
     Returns:
-    - Union[Tensor, Tuple[Tensor, Tensor]]: Shuffled dataset
+    - Tuple[Union[Tensor, Tuple[Tensor, Tensor]], np.ndarray]: Shuffled dataset and the indices used for shuffling
     
     Raises:
     - ValueError: If the data is not a tensor or a tuple
@@ -35,7 +35,7 @@ def shuffle_data(data: Union[Tensor, Tuple[Tensor, Tensor]]) -> Union[Tensor, Tu
         y_shuffled = y[indices]
     
         # Return the shuffled dataset
-        return X_shuffled, y_shuffled
+        return (X_shuffled, y_shuffled), indices
     
     # Check if the data is a tensor
     elif isinstance(data, Tensor):
@@ -49,14 +49,14 @@ def shuffle_data(data: Union[Tensor, Tuple[Tensor, Tensor]]) -> Union[Tensor, Tu
         data_shuffled = data[indices]
         
         # Return the shuffled dataset
-        return data_shuffled
+        return data_shuffled, indices
     
     else:
         # Raise a ValueError if the data is not a tensor or a tuple of tensors
         raise ValueError("data must be a tensor or a tuple of two tensors")
 
 
-def split_data(data: Union[Tensor, Tuple[Tensor, Tensor]], split_pct: float = 0.1, shuffle: bool = False) -> Tuple[Tensor, ...]:
+def split_data(data: Union[Tensor, Tuple[Tensor, ...]], split_pct: float = 0.1, shuffle: bool = False) -> Tuple[Tuple[Tensor, ...], Optional[np.ndarray]]:
     """
     Splits datasets into two subsets: for example, training and testing sets.
     The input dataset can be a single tensor or a tuple of tensors (X, y).
@@ -67,7 +67,7 @@ def split_data(data: Union[Tensor, Tuple[Tensor, Tensor]], split_pct: float = 0.
     - shuffle (bool): Whether to shuffle the dataset before splitting.
     
     Returns:
-    - Union[Tuple[Tensor, Tensor, Tensor, Tensor], Tuple[Tensor, Tensor]]: Dataset split into training and testing sets.
+    - Tuple[Tuple[Tensor, ...], Optional[np.ndarray]]: Tuple containing the training and testing sets, and optionally the indices used for shuffling.
     
     Raises:
     - ValueError: If test_size is not between 0 and 1.
@@ -84,10 +84,13 @@ def split_data(data: Union[Tensor, Tuple[Tensor, Tensor]], split_pct: float = 0.
         # Unpack the data
         X, y = data
         
+        # Initialize indices to None
+        indices = None
+        
         # Check if the data should be shuffled
         if shuffle:
             # Shuffle the data
-            X, y = shuffle_data((X, y))
+            (X, y), indices = shuffle_data((X, y))
             
         # Get the number of samples
         n_samples = X.shape()[0]
@@ -100,14 +103,17 @@ def split_data(data: Union[Tensor, Tuple[Tensor, Tensor]], split_pct: float = 0.
         y_train, y_test = y[:-test_size], y[-test_size:]
         
         # Return the split data
-        return X_train, X_test, y_train, y_test
+        return (X_train, X_test, y_train, y_test), indices
     
     # Check if the data is a tensor
     elif isinstance(data, Tensor):
+        # Initialize indices to None
+        indices = None
+        
         # Check if the data should be shuffled
         if shuffle:
             # Shuffle the data
-            data = shuffle_data(data)
+            data, indices = shuffle_data(data)
             
         if not isinstance(data, Tensor):
             # Raise a ValueError if the data is not a tensor or a tuple of tensors
@@ -123,7 +129,7 @@ def split_data(data: Union[Tensor, Tuple[Tensor, Tensor]], split_pct: float = 0.
         X_train, X_test = data[:-test_size], data[-test_size:]
         
         # Return the split data
-        return X_train, X_test
+        return (X_train, X_test), indices
         
     else:
         # Raise a ValueError if the data is not a tensor or a tuple of tensors

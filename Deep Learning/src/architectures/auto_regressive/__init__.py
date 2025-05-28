@@ -1,1 +1,1 @@
-from .autoregressive import AutoRegressive, SequentialAutoRegressive
+from .autoregressive import AutoRegressive

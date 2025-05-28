@@ -40,7 +40,7 @@ def tensor_unary_op(t: 'Tensor', forward_fn: Callable[..., tuple[np.ndarray, int
     # Check if the gradient is required
     if _NO_GRAD or not t.requires_grad:
         # If no gradients are required, return the output tensor without backward
-        return tensor_cls(out_data, requires_grad=False)
+        out = tensor_cls(out_data, requires_grad=False)
     
     # Create output tensor
     out = tensor_cls(out_data, requires_grad=True)

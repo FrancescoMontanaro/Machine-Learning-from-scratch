@@ -105,7 +105,7 @@ class Sequential(Architecture):
             self.train()
             
             # Shuffle the dataset at the beginning of each epoch
-            X_train_shuffled, Y_train_shuffled = shuffle_data((X_train, y_train)) if shuffle else (X_train, y_train)
+            (X_train_shuffled, Y_train_shuffled), _ = shuffle_data((X_train, y_train)) if shuffle else (X_train, y_train)
             
             # Iterate over the batches
             elapsed_time = 0.0
@@ -124,31 +124,24 @@ class Sequential(Architecture):
                 
                 # Compute the loss of the model
                 training_loss = loss_fn(y_training_batch, training_batch_output)
-                
-                # Check if the number of accumulation steps is greater than 1
-                if gradient_accumulation_steps > 1:
-                    # Scale the loss by the number of accumulation steps
-                    training_loss /= gradient_accumulation_steps
                     
-                # Execute the backward pass
-                training_loss.backward()
+                # Divide the loss by the number of gradient accumulation steps and execute the backward pass
+                (training_loss / gradient_accumulation_steps).backward()
                 
                 # If the number of accumulation steps is reached or it is the last step, update the parameters
-                if training_step % gradient_accumulation_steps == 0 or training_step == n_training_steps - 1:
+                if (training_step + 1) % gradient_accumulation_steps == 0 or training_step == n_training_steps - 1:
                     # Update the parameters of the model
                     optimizer.update()
                     
                     # Zero the gradients of the parameters
                     optimizer.zero_grad()
                     
-                # Disable automatic gradient computation
-                with no_grad():
-                    # Update the epoch loss
-                    training_epoch_loss += training_loss.detach()
-                    
-                    # Compute the metrics
-                    for metric in metrics:
-                        train_metrics[metric.__name__] += metric(y_training_batch, training_batch_output).detach()
+                # Update the epoch loss
+                training_epoch_loss += training_loss.detach()
+                
+                # Compute the metrics
+                for metric in metrics:
+                    train_metrics[metric.__name__] += metric(y_training_batch.detach(), training_batch_output.detach())
                         
                 # Comute the the statistics
                 end_time = time.time() # Store the end time

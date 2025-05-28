@@ -1,27 +1,42 @@
-from typing import Generator, Union, Optional, Callable
+import numpy as np
+from typing import Generator, Union, Optional, Callable, Literal
 
 from ...core import Tensor
-from ..base import Architecture
 from ..sequential import Sequential
 from ...core.utils.data_processing import concat
 from ...core.utils.context_manager import no_grad
 
 
-class AutoRegressive(Architecture):
+class AutoRegressive(Sequential):
     
-    def __init__(self, sequence_length: int, *args, **kwargs) -> None:
+    ### Magic methods ###
+    
+    def __init__(
+        self, 
+        sequence_length: int,
+        return_sequence: bool = False,
+        input_type: Literal["discrete", "continuous"] = "discrete",
+        do_sample: bool = True,
+        *args, **kwargs
+    ) -> None:
         """
         Initialize the autoregressive architecture.
         
         Parameters:
         - sequence_length (int): The length of the input sequence.
+        - return_sequence (bool): Whether to return the sequence or just the last output. Default is False.
+        - input_type (Literal["discrete", "continuous"]): The type of input data. It can be "discrete" for text data or "continuous" for other types of data.
+        - do_sample (bool): Whether to sample from the distribution or take the argmax. Default is True.
         """
             
         # Initialize the autoregressive architecture with a sequence length.
         super().__init__(*args, **kwargs)
         
-        # Set the sequence length
+        # Save the configuration parameters
         self.sequence_length = sequence_length
+        self.return_sequence = return_sequence
+        self.input_type = input_type
+        self.do_sample = do_sample
     
     
     ### Public Methods ###
@@ -32,8 +47,8 @@ class AutoRegressive(Architecture):
         num_steps: int, 
         concat_axis: int = 1, 
         stream: bool = False,
-        normalize_fn: Optional[Callable[[Tensor], Tensor]] = None,
-        denormalize_fn: Optional[Callable[[Tensor], Tensor]] = None
+        preprocess_fn: Optional[Callable[[Tensor], Tensor]] = None,
+        postprocess_fn: Optional[Callable[[Tensor], Tensor]] = None
     ) -> Union[Tensor, Generator[Tensor, None, None]]:
         """
         Autoregressive generation function to generate data.
@@ -43,8 +58,8 @@ class AutoRegressive(Architecture):
         - num_steps (int): The number of steps to generate.
         - concat_axis (int): The axis to concatenate the generated data.
         - stream (bool): Whether to generate the data in a streaming fashion.
-        - normalize_fn (Callable, optional): Function to normalize input before model forward pass.
-        - denormalize_fn (Callable, optional): Function to denormalize model output.
+        - preprocess_fn (Callable, optional): Function to normalize input before model forward pass.
+        - postprocess_fn (Callable, optional): Function to denormalize model output.
         """
         
         # Disable gradient computation
@@ -59,8 +74,8 @@ class AutoRegressive(Architecture):
                     x = x, 
                     num_steps = num_steps, 
                     concat_axis = concat_axis, 
-                    normalize_fn = normalize_fn, 
-                    denormalize_fn = denormalize_fn
+                    preprocess_fn = preprocess_fn, 
+                    postprocess_fn = postprocess_fn
                 )
             
             # Generate all the data at once
@@ -71,11 +86,11 @@ class AutoRegressive(Architecture):
                         x = x, 
                         num_steps = num_steps, 
                         concat_axis = concat_axis, 
-                        normalize_fn = normalize_fn, 
-                        denormalize_fn = denormalize_fn
+                        preprocess_fn = preprocess_fn, 
+                        postprocess_fn = postprocess_fn
                     )
                 )
-            
+
             
     @staticmethod
     def concat_generation(generator: Generator[Tensor, None, None], concat_axis: int = 1) -> Tensor:
@@ -109,10 +124,8 @@ class AutoRegressive(Architecture):
         x: Tensor, 
         num_steps: int, 
         concat_axis: int = 1,
-        normalize_fn: Optional[Callable[[Tensor], Tensor]] = None,
-        denormalize_fn: Optional[Callable[[Tensor], Tensor]] = None,
-        *args, 
-        **kwargs
+        preprocess_fn: Optional[Callable[[Tensor], Tensor]] = None,
+        postprocess_fn: Optional[Callable[[Tensor], Tensor]] = None
     ) -> Generator[Tensor, None, None]:
         """
         Autoregressive step loop to generate data.
@@ -121,42 +134,64 @@ class AutoRegressive(Architecture):
         - x (Tensor): The input tensor.
         - num_steps (int): The number of steps to generate.
         - concat_axis (int): The axis to concatenate the generated data.
-        - normalize_fn (Callable, optional): Function to normalize input before model forward pass.
-        - denormalize_fn (Callable, optional): Function to denormalize model output.
+        - preprocess_fn (Callable, optional): Function to normalize input before model forward pass.
+        - postprocess_fn (Callable, optional): Function to denormalize model output.
         
         Yields:
         - Tensor: The generated data at each step.
         """
         
-        # Iterate over the maximum number of new tokens
+        # Iterate over the maximum number of new steps to generate
         for _ in range(num_steps):
-            # Crop the input tokens to the sequence length if larger
+            # Crop the input sequence to the sequence length if larger
             cropped_x = x[:, -self.sequence_length:, ...]
             
             # Apply normalization if provided
-            if normalize_fn is not None:
-                cropped_x = normalize_fn(cropped_x)
+            if preprocess_fn is not None:
+                cropped_x = preprocess_fn(cropped_x)
             
-            # Get the predictions
-            logits = self(cropped_x)
+            # Get the prediction logits from the model
+            out = self(cropped_x)
             
             # Apply denormalization if provided
-            if denormalize_fn is not None:
-                logits = denormalize_fn(logits)
+            if postprocess_fn is not None:
+                out = postprocess_fn(out)
+                
+            # Unsqueeze the output to add the time dimension if needed
+            if out.data.ndim <= 2:
+                # Add a new axis for the time dimension
+                out = out.unsqueeze(axis=1)
             
-            # Add the time axis to the logits
-            logits = logits.unsqueeze(1)
+            # If the model is not set to return the full sequence, take only the last output
+            if not self.return_sequence:
+                out = out[:, -1:, ...]
             
-            # Yield the next token
-            yield logits
+            # If the input type is discrete, apply softmax and sample or take argmax
+            if self.input_type == "discrete":
+                # Apply the softmax function to get the probabilities
+                out = out.softmax(axis=-1)
+                
+                # If sampling is enabled, sample from the distribution or take the argmax
+                if self.do_sample:
+                    # Sample the next item from the distribution
+                    out = Tensor(
+                        np.array([
+                            np.random.choice(out.shape()[-1], p=out.data[i, -1])
+                            for i in range(out.shape()[0])
+                        ]).reshape(-1, 1),
+                        requires_grad = out.requires_grad,
+                        dtype = np.int32
+                    )
+                else:
+                    # Take the argmax of the probabilities to get the next item
+                    out = Tensor(
+                        np.argmax(out.data, axis=-1).reshape(-1, 1),
+                        requires_grad = out.requires_grad,
+                        dtype = np.int32
+                    )
+            
+            # Yield the next item
+            yield out
             
             # Concatenate the logits to the input tensor along the specified axis
-            x = concat([x, logits], axis=concat_axis)
-
-
-class SequentialAutoRegressive(AutoRegressive, Sequential):
-    """
-    Autoregressive architecture with Sequential architecture functionalities
-    """
-    
-    pass
+            x = concat([x, out], axis=concat_axis)
