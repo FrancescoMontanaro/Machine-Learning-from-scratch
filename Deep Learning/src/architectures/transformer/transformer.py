@@ -38,9 +38,6 @@ class Transformer(AutoRegressive):
         - do_sample (bool): Whether to sample from the distribution or take the argmax. Default is True.
         """
         
-        # Save the return sequence flag
-        self.return_sequence = return_sequence
-        
         # Create the decoder module
         decoder: Decoder = Decoder( # (B, S) -> (B, S, O) if return_sequence is True, else (B, O)
             input_dim = input_dim,

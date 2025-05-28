@@ -15,7 +15,7 @@ class AutoRegressive(Sequential):
         self, 
         sequence_length: int,
         return_sequence: bool = False,
-        input_type: Literal["discrete", "continuous"] = "discrete",
+        input_type: Literal["discrete", "continuous"] = "continuous",
         do_sample: bool = True,
         *args, **kwargs
     ) -> None:
