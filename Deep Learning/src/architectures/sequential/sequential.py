@@ -5,9 +5,9 @@ from typing import Callable, Optional, Dict
 from ..base import Architecture
 from ...optimizers import Optimizer
 from ...loss_functions import LossFn
-from ...core.utils.data_processing import *
 from ...core import Tensor, Module, ModuleList
 from ...core.utils.context_manager import no_grad
+from ...core.utils.data_processing import shuffle_data, concat
 
 
 class Sequential(Architecture):
@@ -35,8 +35,6 @@ class Sequential(Architecture):
         self, 
         X_train: Tensor, 
         y_train: Tensor,
-        X_valid: Tensor,
-        y_valid: Tensor,
         optimizer: Optimizer,
         loss_fn: LossFn,
         batch_size: int = 8,
@@ -45,6 +43,8 @@ class Sequential(Architecture):
         metrics: list[Callable[..., Tensor]] = [],
         callbacks: list[Callable] = [],
         shuffle_between_epochs: bool = True,
+        X_valid: Optional[Tensor] = None,
+        y_valid: Optional[Tensor] = None,
         *args, **kwargs
     ) -> Dict[str, list[Tensor]]:
         """
@@ -66,7 +66,19 @@ class Sequential(Architecture):
         
         Returns:
         - Dict[str, list[Tensor]]: Dictionary containing the history of the model
+        
+        Raises:
+        - ValueError: If the validation set is provided but the validation target is not provided
         """
+        
+        ############################
+        ### Check the input data ###
+        ############################
+        
+        # If the vaidation set is provided check if the validation target is provided
+        if X_valid is not None and y_valid is None:
+            # Raise an error if the validation target is not provided
+            raise ValueError("If the validation set is provided, the validation target must also be provided.")
         
         #######################
         ### Initializations ###
@@ -78,7 +90,7 @@ class Sequential(Architecture):
         # Initialize the control variables
         self.epoch, self.stop_training = 0, False
         n_training_steps = max(1, math.ceil(X_train.shape()[0] / batch_size))
-        n_valid_steps = max(1, math.ceil(X_valid.shape()[0] / batch_size))
+        n_valid_steps = max(1, math.ceil(X_valid.shape()[0] / batch_size)) if X_valid is not None else 0
         
         # Execute a first forward pass in evaluation mode to initialize the parameters and their shapes
         with no_grad():
@@ -153,64 +165,70 @@ class Sequential(Architecture):
                 # Display epoch progress
                 print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {tensors_in_memory} tensors in memory | {round(ms_per_step, 2)} ms/step --> loss: {training_loss.to_numpy():.5g}", end="")
             
+            # Store the loss in the history
+            self.history["loss"].append(training_epoch_loss / n_training_steps)
+            
+            # Compute the training metrics
+            for metric in metrics:
+                # Compute the average of the metrics for the training set and store them
+                self.history[metric.__name__].append(train_metrics[metric.__name__] / n_training_steps)
+            
             ##############################
             ### Start validation phase ###
             ##############################
             
-            # Set the model in evaluation mode
-            self.eval()
-            
-            # Disable automatic gradient computation
-            with no_grad(): 
-                # Iterate over the validation steps
-                valid_epoch_loss = Tensor(0.0, requires_grad=False)
-                valid_metrics = {metric.__name__: Tensor(0.0, requires_grad=False) for metric in metrics}
-                for valid_step in range(n_valid_steps):
-                    # Get the current batch of validation data
-                    X_valid_batch = X_valid[valid_step * batch_size:(valid_step + 1) * batch_size]
-                    y_valid_batch = y_valid[valid_step * batch_size:(valid_step + 1) * batch_size]
+            # Check if the validation set is provided
+            if X_valid is not None and y_valid is not None:
+                # Set the model in evaluation mode
+                self.eval()
                 
-                    # Compute the output of the model for the current validation batch
-                    valid_batch_output = self.forward(X_valid_batch, *args, **kwargs)
+                # Disable automatic gradient computation
+                with no_grad(): 
+                    # Iterate over the validation steps
+                    valid_epoch_loss = Tensor(0.0, requires_grad=False)
+                    valid_metrics = {metric.__name__: Tensor(0.0, requires_grad=False) for metric in metrics}
+                    for valid_step in range(n_valid_steps):
+                        # Get the current batch of validation data
+                        X_valid_batch = X_valid[valid_step * batch_size:(valid_step + 1) * batch_size]
+                        y_valid_batch = y_valid[valid_step * batch_size:(valid_step + 1) * batch_size]
                     
-                    # Compute the loss of the model for the current validation batch
-                    # and update the validation epoch loss
-                    valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output).detach()
-                    
-                    # Compute the metrics
-                    for metric in metrics:
-                        valid_metrics[metric.__name__] += metric(y_valid_batch, valid_batch_output).detach()
+                        # Compute the output of the model for the current validation batch
+                        valid_batch_output = self.forward(X_valid_batch, *args, **kwargs)
+                        
+                        # Compute the loss of the model for the current validation batch
+                        # and update the validation epoch loss
+                        valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output).detach()
+                        
+                        # Compute the metrics
+                        for metric in metrics:
+                            valid_metrics[metric.__name__] += metric(y_valid_batch, valid_batch_output).detach()
                 
-                ##########################
-                ### Store the results  ###
-                ##########################
-                    
-                # Store the training and validation losses
-                self.history["loss"].append(training_epoch_loss / n_training_steps)
+                # Store the validation losses in the history
                 self.history["val_loss"].append(valid_epoch_loss / n_valid_steps)
-                
-                # Compute the average metrics
-                for metric in metrics:
-                    # Compute the average of the metrics for the training and validation sets and store them
-                    self.history[metric.__name__].append(train_metrics[metric.__name__] / n_training_steps)
-                    self.history[f"val_{metric.__name__}"].append(valid_metrics[metric.__name__] / n_valid_steps)
             
-                #############################
-                ### Display the progress  ###
-                #############################
-                
-                # Display progress with metrics
-                print(
-                    f"\rEpoch {self.epoch + 1}/{epochs} --> "
-                    f"loss: {self.history['loss'][-1].to_numpy().item():.5g}"
-                    + "".join(
-                        [f" - {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__][-1].to_numpy().item():.5g}" for metric in metrics]
-                    )
-                    + f" | Valid loss: {self.history['val_loss'][-1].to_numpy().item():.5g}"
+                # Compute the average metrics for the validation set
+                for metric in metrics:
+                    # Compute the average of the metrics for the validation set and store them
+                    self.history[f"val_{metric.__name__}"].append(valid_metrics[metric.__name__] / n_valid_steps)
+        
+            #############################
+            ### Display the progress  ###
+            #############################
+            
+            # Display progress with metrics
+            print(
+                f"\rEpoch {self.epoch + 1}/{epochs} --> "
+                f"loss: {self.history['loss'][-1].to_numpy().item():.5g}"
+                + "".join(
+                    [f" - {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__][-1].to_numpy().item():.5g}" for metric in metrics]
+                ) +
+                (
+                    f" | Valid loss: {self.history['val_loss'][-1].to_numpy().item():.5g}"
                     + "".join(
                         [f" - Valid {metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'][-1].to_numpy().item():.5g}" for metric in metrics]
-                    ).ljust(50)
-                )
+                    ).ljust(50)   
+                ) if X_valid is not None and y_valid is not None else "".ljust(50)
+            )
             
             #############################
             ### Execute the callbacks ###
