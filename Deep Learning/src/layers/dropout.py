@@ -24,7 +24,7 @@ class Dropout(Module):
     
     ### Protected methods ###
     
-    def _forward(self, x: Tensor) -> Tensor:
+    def _forward(self, x: Tensor, *args, **kwargs) -> Tensor:
         """
         Forward pass of the dropout layer.
         

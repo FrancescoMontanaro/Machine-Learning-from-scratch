@@ -60,7 +60,7 @@ class LSTM(Module):
     
     ### Protected methods ###
     
-    def _forward(self, x: Tensor, h_prev: Optional[List[Tuple[Tensor, Tensor]]] = None) -> Tensor:
+    def _forward(self, x: Tensor, h_prev: Optional[List[Tuple[Tensor, Tensor]]] = None, *args, **kwargs) -> Tensor:
         """
         Forward pass of the LSTM layer
         

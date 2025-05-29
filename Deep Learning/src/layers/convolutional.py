@@ -53,7 +53,7 @@ class Conv2D(Module):
 
     ### Protected methods ###
         
-    def _forward(self, x: Tensor) -> Tensor:
+    def _forward(self, x: Tensor, *args, **kwargs) -> Tensor:
         """
         Function to compute the forward pass of the Conv2D layer.
         
@@ -107,7 +107,7 @@ class Conv2D(Module):
         return out
     
     
-    def _lazy_init(self, x: Tensor) -> None:
+    def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
         """
         Function to initialize the filters of the Conv2D layer.
         

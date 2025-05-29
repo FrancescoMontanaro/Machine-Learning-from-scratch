@@ -34,7 +34,7 @@ class Dense(Module):
     
     ### Protected methods ###
 
-    def _forward(self, x: Tensor) -> Tensor:
+    def _forward(self, x: Tensor, *args, **kwargs) -> Tensor:
         """
         Foward pass of the layer
         
@@ -88,7 +88,7 @@ class Dense(Module):
             return out_flat.reshape(new_shape)
     
         
-    def _lazy_init(self, x: Tensor) -> None:
+    def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
         """
         Method to initialize the module
         

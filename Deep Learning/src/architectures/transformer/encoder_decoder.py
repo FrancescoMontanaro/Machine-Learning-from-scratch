@@ -97,13 +97,13 @@ class EncoderDecoder(Module):
     
     ### Protected methods ###
     
-    def _forward(self, encoder_input: Tensor, decoder_input: Tensor) -> Tensor:
+    def _forward(self, x: Tensor, encoder_input: Tensor) -> Tensor:
         """
         Full forward pass through encoder and decoder.
         
         Parameters:
+        - x (Tensor): Input to the decoder        
         - encoder_input (Tensor): Input to the encoder
-        - decoder_input (Tensor): Input to the decoder
         
         Returns:
         - Tensor: Output from the decoder, which is the final output of the model
@@ -113,7 +113,7 @@ class EncoderDecoder(Module):
         encoder_output = self.encoder(encoder_input) # (B, S_enc, E) -> (B, S_enc, E)
         
         # Compute the decoder output
-        decoder_output = self.decoder(decoder_input, encoder_output) # (B, S_dec, E) -> (B, S_dec, O)
+        decoder_output = self.decoder(x, encoder_output) # (B, S_dec, E) -> (B, S_dec, O)
 
         # Check if the model is set to return the full sequence or just the last output
         if self.return_sequence:

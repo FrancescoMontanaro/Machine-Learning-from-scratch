@@ -44,7 +44,8 @@ class Sequential(Architecture):
         epochs: int = 10,
         metrics: list[Callable[..., Tensor]] = [],
         callbacks: list[Callable] = [],
-        shuffle: bool = True,
+        shuffle_between_epochs: bool = True,
+        *args, **kwargs
     ) -> Dict[str, list[Tensor]]:
         """
         Method to train the neural network
@@ -61,7 +62,7 @@ class Sequential(Architecture):
         - epochs (int): Number of epochs to train the model. Default is 10
         - metrics (list[Callable]): List of metrics to evaluate the model. Default is an empty list
         - callbacks (list[Callback]): List of callbacks to execute
-        - shuffle (bool): Flag to shuffle the data. Default is True
+        - shuffle_between_epochs (bool): Flag to shuffle the data between epochs. Default is True
         
         Returns:
         - Dict[str, list[Tensor]]: Dictionary containing the history of the model
@@ -85,7 +86,7 @@ class Sequential(Architecture):
             self.eval()
             
             # Compute the output of the model
-            self(X_train[:1])
+            self(X_train[:1], *args, **kwargs)
         
         # Set the parameters of the optimizer
         optimizer.set_parameters(self.parameters())
@@ -105,7 +106,7 @@ class Sequential(Architecture):
             self.train()
             
             # Shuffle the dataset at the beginning of each epoch
-            (X_train_shuffled, Y_train_shuffled), _ = shuffle_data((X_train, y_train)) if shuffle else (X_train, y_train)
+            (X_train_shuffled, Y_train_shuffled), _ = shuffle_data((X_train, y_train)) if shuffle_between_epochs else (X_train, y_train)
             
             # Iterate over the batches
             elapsed_time = 0.0
@@ -120,7 +121,7 @@ class Sequential(Architecture):
                 y_training_batch = Y_train_shuffled[training_step * batch_size:(training_step + 1) * batch_size]
                 
                 # Forward pass: Compute the output of the model
-                training_batch_output = self.forward(X_training_batch)
+                training_batch_output = self.forward(X_training_batch, *args, **kwargs)
                 
                 # Compute the loss of the model
                 training_loss = loss_fn(y_training_batch, training_batch_output)
@@ -170,7 +171,7 @@ class Sequential(Architecture):
                     y_valid_batch = y_valid[valid_step * batch_size:(valid_step + 1) * batch_size]
                 
                     # Compute the output of the model for the current validation batch
-                    valid_batch_output = self.forward(X_valid_batch)
+                    valid_batch_output = self.forward(X_valid_batch, *args, **kwargs)
                     
                     # Compute the loss of the model for the current validation batch
                     # and update the validation epoch loss
@@ -232,7 +233,7 @@ class Sequential(Architecture):
 
     ### Protected methods ###
     
-    def _forward(self, x: Tensor, batch_size: Optional[int] = None, verbose: bool = False) -> Tensor:
+    def _forward(self, x: Tensor, batch_size: Optional[int] = None, verbose: bool = False, *args, **kwargs) -> Tensor:
         """
         Forward pass of the model
         
@@ -264,7 +265,7 @@ class Sequential(Architecture):
             batch_out = x[step * batch_size:(step + 1) * batch_size] if batch_size else x
             
             # Forward pass: Compute the output of the model
-            batch_out = self.modules.forward(batch_out)
+            batch_out = self.modules.forward(batch_out, *args, **kwargs)
                 
             # Append the output of the batch
             outputs.append(batch_out)
@@ -291,7 +292,7 @@ class Sequential(Architecture):
         return out
     
     
-    def _lazy_init(self, x: Tensor) -> None:
+    def _lazy_init(self, *args, **kwargs) -> None:
         """
         Method to initialize the module
         

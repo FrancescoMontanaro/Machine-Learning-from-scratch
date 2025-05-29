@@ -30,7 +30,7 @@ class LayerNormalization(Module):
      
     ### Protected methods ###
     
-    def _forward(self, x: Tensor) -> Tensor:
+    def _forward(self, x: Tensor, *args, **kwargs) -> Tensor:
         """
         Forward pass of the layer normalization layer.
         
@@ -49,7 +49,7 @@ class LayerNormalization(Module):
         return self.gamma * ((x - layer_mean) * (1 / (layer_var + self.epsilon).sqrt())) + self.beta
 
     
-    def _lazy_init(self, x: Tensor) -> None:
+    def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
         """
         Method to initialize the parameters of the layer
         

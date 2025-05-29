@@ -142,7 +142,7 @@ class CrossMultiHeadAttention(Module):
             CrossSingleHeadAttention(
                 head_size = head_size, 
                 dropout = dropout,
-                causal_atention = causal_attention
+                causal_attention = causal_attention
             ) 
             for _ in range(n_heads)
         ])

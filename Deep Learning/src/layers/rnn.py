@@ -58,7 +58,7 @@ class RNN(Module):
     
     ### Protected methods ###
     
-    def _forward(self, x: Tensor, h_prev: Optional[List[Tensor]] = None) -> Tensor:
+    def _forward(self, x: Tensor, h_prev: Optional[List[Tensor]] = None, *args, **kwargs) -> Tensor:
         """
         Forward pass of the RNN layer
         

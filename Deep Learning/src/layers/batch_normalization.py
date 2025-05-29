@@ -34,7 +34,7 @@ class BatchNormalization(Module):
      
     ### Protected methods ###
     
-    def _forward(self, x: Tensor) -> Tensor:
+    def _forward(self, x: Tensor, *args, **kwargs) -> Tensor:
         """
         Forward pass of the batch normalization layer.
         
@@ -67,7 +67,7 @@ class BatchNormalization(Module):
             return self.gamma * ((x - self.running_mean) * (1 / (self.running_var + self.epsilon).sqrt())) + self.beta
     
     
-    def _lazy_init(self, x: Tensor) -> None:
+    def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
         """
         Method to initialize the parameters of the layer
         

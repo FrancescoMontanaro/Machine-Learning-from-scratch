@@ -5,7 +5,7 @@ class Input(Module):
     
     ### Protected methods ###
     
-    def _forward(self, x: Tensor) -> Tensor:
+    def _forward(self, x: Tensor, *args, **kwargs) -> Tensor:
         """
         Function to compute the forward pass of the Input layer.
         

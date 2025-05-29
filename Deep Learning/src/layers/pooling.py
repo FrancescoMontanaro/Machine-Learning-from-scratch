@@ -28,7 +28,7 @@ class MaxPool2D(Module):
 
     ### Protected methods ###
     
-    def _forward(self, x: Tensor) -> Tensor:
+    def _forward(self, x: Tensor, *args, **kwargs) -> Tensor:
         """
         Method to perform the forward pass through the MaxPool2D layer
         
@@ -71,7 +71,7 @@ class MaxPool2D(Module):
         return out
         
     
-    def _lazy_init(self, x: Tensor) -> None:
+    def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
         """
         Method to initialize the parameters of the layer
         

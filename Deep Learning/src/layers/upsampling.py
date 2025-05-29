@@ -33,7 +33,7 @@ class UpSampling2D(Module):
 
     ### Protected methods ###
         
-    def _forward(self, x: Tensor) -> Tensor:
+    def _forward(self, x: Tensor, *args, **kwargs) -> Tensor:
         """
         Function to compute the forward pass of the UpSampling2D layer.
         
@@ -54,7 +54,7 @@ class UpSampling2D(Module):
         return x.repeat(scale_height, axis=1).repeat(scale_width, axis=2)
     
     
-    def _lazy_init(self, x: Tensor) -> None:
+    def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
         """
         Method to initialize the module
         

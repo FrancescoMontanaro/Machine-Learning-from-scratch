@@ -7,7 +7,7 @@ class Flatten(Module):
         
     ### Protected methods ###
     
-    def _forward(self, x: Tensor) -> Tensor:
+    def _forward(self, x: Tensor, *args, **kwargs) -> Tensor:
         """
         Forward pass through the Flatten layer
         
