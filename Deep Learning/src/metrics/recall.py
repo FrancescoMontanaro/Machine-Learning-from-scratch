@@ -16,8 +16,8 @@ def recall(y_true: Tensor, y_pred: Tensor) -> Tensor:
     """
     
     # Compute the recall
-    tp = np.sum((y_true.data == 1) & (y_pred.data == 1))
-    fn = np.sum((y_true.data == 1) & (y_pred.data == 0))
+    tp = np.sum((y_true.to_numpy() == 1) & (y_pred.to_numpy() == 1))
+    fn = np.sum((y_true.to_numpy() == 1) & (y_pred.to_numpy() == 0))
     
     # Compute and return the recall as a tensor
     return Tensor((tp / (tp + fn)), requires_grad=False)

@@ -16,4 +16,4 @@ def mean_absolute_error(y_true: Tensor, y_pred: Tensor) -> Tensor:
     """
     
     # Compute and return the mean absolute error as a tensor
-    return Tensor(float(np.mean(np.abs(y_true.data - y_pred.data))), requires_grad=False)
+    return Tensor(float(np.mean(np.abs(y_true.to_numpy() - y_pred.to_numpy()))), requires_grad=False)

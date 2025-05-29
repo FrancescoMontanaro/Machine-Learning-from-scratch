@@ -48,7 +48,8 @@ class AutoRegressive(Sequential):
         concat_axis: int = 1, 
         stream: bool = False,
         preprocess_fn: Optional[Callable[[Tensor], Tensor]] = None,
-        postprocess_fn: Optional[Callable[[Tensor], Tensor]] = None
+        postprocess_fn: Optional[Callable[[Tensor], Tensor]] = None,
+        *args, **kwargs
     ) -> Union[Tensor, Generator[Tensor, None, None]]:
         """
         Autoregressive generation function to generate data.
@@ -125,7 +126,8 @@ class AutoRegressive(Sequential):
         num_steps: int, 
         concat_axis: int = 1,
         preprocess_fn: Optional[Callable[[Tensor], Tensor]] = None,
-        postprocess_fn: Optional[Callable[[Tensor], Tensor]] = None
+        postprocess_fn: Optional[Callable[[Tensor], Tensor]] = None,
+        *args, **kwargs
     ) -> Generator[Tensor, None, None]:
         """
         Autoregressive step loop to generate data.

@@ -16,14 +16,19 @@ def accuracy(y_true: Tensor, y_pred: Tensor) -> Tensor:
     """
     
     # Ensure the data is in numpy format
-    y_true_data = y_true.data.copy()
-    y_pred_data = y_pred.data.copy()
+    y_true_data = y_true.to_numpy().copy()
+    y_pred_data = y_pred.to_numpy().copy()
     
     # If the array is multi-dimensional, take the argmax
-    if y_true_data.ndim > 1:
-        y_true_data = np.argmax(y_true_data, axis=-1)
     if y_pred_data.ndim > 1:
         y_pred_data = np.argmax(y_pred_data, axis=-1)
+        
+    if y_true.to_numpy().ndim == y_pred.to_numpy().ndim:
+        y_true_data = np.argmax(y_true_data, axis=-1)
+        
+    # Ensure the arrays are 1D
+    y_true_flat = y_true_data.ravel()
+    y_pred_flat = y_pred_data.ravel()
     
     # Compute and return the accuracy as a tensor
-    return Tensor(np.mean(y_true_data == y_pred_data, axis=-1), requires_grad=False)
+    return Tensor(np.mean(y_true_flat == y_pred_flat), requires_grad=False)

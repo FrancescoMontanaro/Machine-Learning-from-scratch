@@ -17,8 +17,8 @@ def confusion_matrix(num_classes: int, y_true: Tensor, y_pred: Tensor) -> Tensor
     """
     
     # Extract the data
-    y_true_data = y_true.data.copy()
-    y_pred_data = y_pred.data.copy()
+    y_true_data = y_true.to_numpy().copy()
+    y_pred_data = y_pred.to_numpy().copy()
     
     # Arrays must be 1D
     if y_true_data.ndim > 1:

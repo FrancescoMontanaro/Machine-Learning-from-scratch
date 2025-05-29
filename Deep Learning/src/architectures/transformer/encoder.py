@@ -1,12 +1,12 @@
 import numpy as np
-from typing import Optional, Literal
+from typing import Literal
 
 from .block import Block
 from ...core import Tensor, Module, ModuleList
 from ...layers import Dense, Embedding, LayerNormalization
 
 
-class Decoder(Module):
+class Encoder(Module):
     
     ### Magic methods ###
     
@@ -16,28 +16,24 @@ class Decoder(Module):
         n_embed: int, 
         n_attention_heads: int, 
         sequence_length: int, 
-        n_decoder_blocks: int = 4, 
+        n_encoder_blocks: int = 4, 
         dropout: float = 0.1,
-        output_dim: Optional[int] = None,
         input_type: Literal["discrete", "continuous"] = "discrete",
-        causal_attention: bool = True,
-        use_cross_attention: bool = False,
+        causal_attention: bool = False,
         return_sequence: bool = False,
         *args, **kwargs) -> None:
         """
-        Initialize the transformer's decoder.
+        Initialize the transformer's encoder.
         
         Parameters:
         - input_dim (int): The input dimension. It is the vocabulary size for text data or the number of features for other types of data.
         - n_embed (int): The embedding size.
         - n_attention_heads (int): The number of attention heads.
         - sequence_length (int): The sequence length of the input data.
-        - n_decoder_blocks (int): The number of transformer blocks.
+        - n_encoder_blocks (int): The number of transformer blocks.
         - dropout (float): The dropout rate.
-        - output_dim (Optional[int]): The output dimension. If None, it will be set to the input dimension.
         - input_type (Literal["discrete", "continuous"]): The type of input data. It can be "discrete" for text data or "continuous" for other types of data.
-        - causal_attention (bool): Whether to use causal attention (default: True).
-        - use_cross_attention (bool): Whether to use cross-attention (default: False).
+        - causal_attention (bool): Whether to use causal attention (default: False).
         - return_sequence (bool): Whether to return the sequence or just the last output. Default is False.
         """
         
@@ -46,14 +42,12 @@ class Decoder(Module):
         
         # Store the parameters
         self.input_dim = input_dim
-        self.output_dim = output_dim if output_dim is not None else input_dim
         self.n_embed = n_embed
         self.n_attention_heads = n_attention_heads
         self.sequence_length = sequence_length
-        self.n_decoder_blocks = n_decoder_blocks
+        self.n_encoder_blocks = n_encoder_blocks
         self.dropout = dropout
         self.causal_attention = causal_attention
-        self.use_cross_attention = use_cross_attention
         self.return_sequence = return_sequence
         
         # Define the input projection layer
@@ -65,50 +59,37 @@ class Decoder(Module):
         # Define the positional embedding layer
         self.positional_embedding: Embedding = Embedding(sequence_length, n_embed) # (S) -> (S, E)
         
-        # Instantiate the decoder blocks
-        self.decoder_blocks: ModuleList[Block] = ModuleList([ # (B, S, E) -> (B, S, E)
+        # Instantiate the encoder blocks
+        self.encoder_blocks: ModuleList[Block] = ModuleList([ # (B, S, E) -> (B, S, E)
             Block(
                 n_heads = n_attention_heads, 
                 dropout = dropout,
-                use_cross_attention = use_cross_attention,
-                causal_attention = causal_attention # Causal attention is usually used in the decoder
+                causal_attention = causal_attention, # Causal attention is usually not used in the encoder
             ) 
-            for _ in range(n_decoder_blocks)
+            for _ in range(n_encoder_blocks)
         ])
         
         # Layer normalization
         self.layer_norm: LayerNormalization = LayerNormalization() # (B, S, E) -> (B, S, E)
         
-        # Define the output layer
-        self.output_layer: Dense = Dense(self.output_dim) # (B, S, E) -> (B, S, O)
-        
         
     ### Protected methods ###
     
-    def _forward(self, x: Tensor, encoder_output: Optional[Tensor] = None) -> Tensor:
+    def _forward(self, x: Tensor) -> Tensor:
         """
-        Forward pass of the transformer's decoder.
+        Forward pass of the transformer's encoder.
         
         Parameters:
         - x (Tensor): The input x.
         
         Returns:
-        - Tensor: The output logits.
-        
-        Raises:
-        - ValueError: If cross-attention is used but encoder_output is not provided.
+        - Tensor: The encoded representations.
         """
-        
-        # Check if encoder output is provided when cross-attention is used
-        if self.use_cross_attention and encoder_output is None:
-            # If cross-attention is used and encoder_output is not provided, raise an error
-            raise ValueError("encoder_output must be provided when use_cross_attention=True")
         
         # Dimensions are:
         # - B: batch size
         # - S: sequence length
         # - E: embedding size (the dimension of the embedding space)
-        # - O: output dimension (the dimension of the output space, e.g., vocabulary size for text data)
         
         # Unpack the shape of the input data for better readability
         _, S, *_ = x.shape() # (B, S)
@@ -122,16 +103,16 @@ class Decoder(Module):
         # Embed the input data and add the positional encoding
         embeddings = embeddings + positions # (B, S, E) + (S, E) -> (B, S, E)
         
-        # Apply the decoder blocks
-        for block in self.decoder_blocks:
-            embeddings = block(embeddings, encoder_output) # (B, S, E) -> (B, S, E)
+        # Apply the encoder blocks
+        for block in self.encoder_blocks:
+            embeddings = block(embeddings) # (B, S, E) -> (B, S, E)
             
-        # Apply the output layer to get the logits
-        out = self.output_layer(self.layer_norm(embeddings)) # (B, S, E) -> (B, S, O)
+        # Apply layer normalization and return the encoded representations
+        out = self.layer_norm(embeddings) # (B, S, E) -> (B, S, E)
         
         # If the model is set to return the full sequence, return the output
         if self.return_sequence:
             return out
         
         # If the model is not set to return the full sequence, return only the last output
-        return out[:, -1:, ...] # (B, S, O) -> (B, 1, O)
+        return out[:, -1:, ...] # (B, S, E) -> (B, 1, E)

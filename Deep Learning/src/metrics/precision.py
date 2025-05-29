@@ -16,8 +16,8 @@ def precision(y_true: Tensor, y_pred: Tensor) -> Tensor:
     """
     
     # Compute the precision
-    tp = np.sum((y_true.data == 1) & (y_pred.data == 1))
-    fp = np.sum((y_true.data == 0) & (y_pred.data == 1))
+    tp = np.sum((y_true.to_numpy() == 1) & (y_pred.to_numpy() == 1))
+    fp = np.sum((y_true.to_numpy() == 0) & (y_pred.to_numpy() == 1))
     
     # Compute and return the precision as a tensor
     return Tensor((tp / (tp + fp)), requires_grad=False)
