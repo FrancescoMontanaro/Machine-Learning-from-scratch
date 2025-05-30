@@ -5,39 +5,39 @@ from ..tensor import Tensor
 from .constants import EPSILON
 
 
-def shuffle_data(data: Union[Tensor, Tuple[Tensor, Tensor]]) -> Tuple[Union[Tensor, Tuple[Tensor, ...]], np.ndarray]:
+def shuffle_data(data: Union[Tensor, Tuple[Tensor, ...]]) -> Tuple[Union[Tensor, Tuple[Tensor, ...]], np.ndarray]:
     """
     Method to shuffle the dataset
     
     Parameters:
-    - data (Union[Tensor, Tuple[Tensor, Tensor]]): Dataset to shuffle
+    - data (Union[Tensor, Tuple[Tensor, ...]]): Dataset to shuffle. Can be a single tensor or a tuple of tensors.
     
     Returns:
-    - Tuple[Union[Tensor, Tuple[Tensor, Tensor]], np.ndarray]: Shuffled dataset and the indices used for shuffling
+    - Tuple[Union[Tensor, Tuple[Tensor, ...]], np.ndarray]: Shuffled dataset and the indices used for shuffling
     
     Raises:
-    - ValueError: If the data is not a tensor or a tuple
+    - ValueError: If the data is not a tensor or a tuple of tensors
+    - ValueError: If tensors in the tuple have different batch sizes
     """
     
-    # Check if the data is a tensor or a tuple of tensors
-    if isinstance(data, tuple) and len(data) == 2:
-        # Unpack the data
-        X, y = data
-    
-        # Get the number of samples
-        n_samples = X.shape()[0]
+    # Check if the data is a tuple of tensors
+    if isinstance(data, tuple) and len(data) >= 2:
+        # Validate that all tensors have the same batch size
+        n_samples = data[0].shape()[0]
+        for i, tensor in enumerate(data[1:], 1):
+            if tensor.shape()[0] != n_samples:
+                raise ValueError(f"All tensors must have the same batch size. Tensor 0 has {n_samples} samples, tensor {i} has {tensor.shape()[0]} samples")
         
         # Generate random indices
         indices = np.random.permutation(n_samples)
         
-        # Shuffle the dataset
-        X_shuffled = X[indices]
-        y_shuffled = y[indices]
-    
+        # Shuffle all tensors using the same indices
+        shuffled_tensors = tuple(tensor[indices] for tensor in data)
+        
         # Return the shuffled dataset
-        return (X_shuffled, y_shuffled), indices
+        return shuffled_tensors, indices
     
-    # Check if the data is a tensor
+    # Check if the data is a single tensor
     elif isinstance(data, Tensor):
         # Get the number of samples
         n_samples = data.shape()[0]
@@ -53,7 +53,7 @@ def shuffle_data(data: Union[Tensor, Tuple[Tensor, Tensor]]) -> Tuple[Union[Tens
     
     else:
         # Raise a ValueError if the data is not a tensor or a tuple of tensors
-        raise ValueError("data must be a tensor or a tuple of two tensors")
+        raise ValueError("data must be a tensor or a tuple of tensors")
 
 
 def split_data(data: Union[Tensor, Tuple[Tensor, ...]], split_pct: float = 0.1, shuffle: bool = False) -> Tuple[Tuple[Tensor, ...], Optional[np.ndarray]]:

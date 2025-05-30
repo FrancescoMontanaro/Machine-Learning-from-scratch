@@ -131,21 +131,61 @@ class ModuleList(Module, Generic[T]):
 
     ### Protected Methods ###
     
-    def _forward(self, x: Tensor, *args, **kwargs) -> Tensor:
+    def _forward(self, *args, **kwargs) -> Tensor:
         """
-        Forward pass of the ModuleList.
-        
-        Parameters:
-        - x (Tensor): The input tensor.
-        
-        Returns:
-        - Tensor: The output tensor.
+        Forward pass through all modules in sequence
         """
         
-        # Iterate over the modules
-        for module in self._modules.values():
-            # Perform the forward pass
-            x = module.forward(x, *args, **kwargs)
+        # Determine input method
+        use_named_inputs = bool(kwargs and any(isinstance(v, Tensor) for v in kwargs.values()))
+        
+        # If using named inputs, ensure all inputs are tensors
+        if use_named_inputs:
+            # Named inputs - separate tensor inputs from other params
+            other_params = {k: v for k, v in kwargs.items() if not isinstance(v, Tensor)}
             
-        # Return the output tensor
-        return x
+            # Create a list of tensor inputs
+            current_output = None
+            
+            # Iterate through the modules
+            for i, module in enumerate(self._modules.values()):
+                if i == 0:
+                    # First module gets all named inputs
+                    current_output = module.forward(**kwargs)
+                else:
+                    # Subsequent modules get single tensor output + other params
+                    # Assuming the output key name doesn't matter for subsequent modules
+                    current_output = module.forward(current_output, **other_params)
+                
+                # Ensure the output is a Tensor
+                if not isinstance(current_output, Tensor):
+                    # If the output is not a Tensor, raise an error
+                    raise ValueError(f"Module {i} must return a Tensor, got {type(current_output)}")
+        
+        else:
+            # Positional inputs - same as before
+            other_params = [arg for arg in args if not isinstance(arg, Tensor)]
+            
+            # Create a list of tensor inputs
+            current_output = None
+            
+            # Iterate through the modules
+            for i, module in enumerate(self._modules.values()):
+                if i == 0:
+                    # First module gets all original inputs
+                    current_output = module.forward(*args)
+                else:
+                    # Subsequent modules get single tensor output + other params
+                    module_args = [current_output] + other_params
+                    current_output = module.forward(*module_args)
+                
+                # Ensure the output is a Tensor
+                if not isinstance(current_output, Tensor):
+                    raise ValueError(f"Module {i} must return a Tensor, got {type(current_output)}")
+                
+        # Return the final output after processing through all modules
+        if not isinstance(current_output, Tensor):
+            raise ValueError("Final output must be a Tensor.")
+        
+        # Return the final output tensor
+        return current_output

@@ -27,7 +27,6 @@ class Module:
         self.name: str = name or self.__class__.__name__ # Name of the module
         self.training: bool = True # Flag to check if the module is in training mode
         self._output_shape: Optional[tuple] = None # Output shape of the module
-        self._input_shape: Optional[tuple] = None # Input shape of the module
         
         # Initialize the dictionaries for the parameters and sub-modules
         self._parameters: dict[str, Tensor] = {} # Dictionary for the parameters of the module
@@ -76,7 +75,7 @@ class Module:
         super().__setattr__(name, value)
 
 
-    def __call__(self, x: Tensor, *args, **kwargs) -> Tensor:
+    def __call__(self, *args, **kwargs) -> Tensor:
         """
         Method to call the forward method of the module
         
@@ -88,7 +87,7 @@ class Module:
         """
         
         # Call the forward method
-        return self.forward(x, *args, **kwargs)
+        return self.forward(*args, **kwargs)
 
 
     ######################
@@ -179,12 +178,9 @@ class Module:
         return total
     
 
-    def forward(self, x: Tensor, *args, **kwargs) -> Tensor:
+    def forward(self, *args, **kwargs) -> Tensor:
         """
         Abstract method to define the forward pass of the module
-        
-        Parameters:
-        - x (Tensor): Input tensor
         
         Returns:
         - Tensor: Output of the module after the forward pass
@@ -195,21 +191,32 @@ class Module:
         # Check if the module is initialized
         if not self._output_shape:
             # Initialize the parameters of the module
-            self._lazy_init(x, *args, **kwargs)
+            self._lazy_init(*args, **kwargs)
         
         ### Step 2: Forward pass, to be implemented in the child class ###
         
         # Call the forward method of the module
-        out = self._forward(x, *args, **kwargs)
+        out = self._forward(*args, **kwargs)
         
         ### Step 3: Update the output shape ###
         
         # Save the input and  output shape of the module
         self._output_shape = out.shape()
-        self._input_shape = x.shape()
         
         # Return the output tensor
         return out
+    
+    
+    def is_initialized(self) -> bool:
+        """
+        Method to check if the module is initialized
+        
+        Returns:
+        - bool: True if the module is initialized, False otherwise
+        """
+        
+        # Check if the output shape of the module is set
+        return self._output_shape is not None
     
     
     def output_shape(self) -> Optional[tuple]:
@@ -510,7 +517,7 @@ class Module:
         return params, buffers
 
 
-    def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
+    def _lazy_init(self, *args, **kwargs) -> None:
         """
         Abstract Method to lazily initialize the parameters of the module
         
@@ -522,7 +529,7 @@ class Module:
         pass
     
     
-    def _forward(self, x: Tensor, *args, **kwargs) -> Tensor:
+    def _forward(self, *args, **kwargs) -> Tensor:
         """
         Abstract method to define the forward pass of the module
         This method should be implemented in the child classes
