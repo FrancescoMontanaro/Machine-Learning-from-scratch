@@ -3,7 +3,7 @@ from typing import Optional, Literal
 
 from .block import Block
 from ...core import Tensor, Module, ModuleList
-from ...layers import Dense, Embedding, LayerNormalization
+from ...layers import Dense, Embedding, LayerNormalization, PositionalEncoding
 
 
 class Decoder(Module):
@@ -23,6 +23,7 @@ class Decoder(Module):
         causal_attention: bool = True,
         use_cross_attention: bool = False,
         return_sequence: bool = False,
+        positional_encoding_type: Literal["fixed", "learned"] = "learned",
         *args, **kwargs) -> None:
         """
         Initialize the transformer's decoder.
@@ -39,6 +40,7 @@ class Decoder(Module):
         - causal_attention (bool): Whether to use causal attention (default: True).
         - use_cross_attention (bool): Whether to use cross-attention (default: False).
         - return_sequence (bool): Whether to return the sequence or just the last output. Default is False.
+        - positional_encoding_type (Literal["fixed", "learned"]): The type of positional encoding to use. It can be "fixed" for fixed positional encoding or "learned" for trainable positional embeddings.
         """
         
         # Initialize the superclass
@@ -63,7 +65,7 @@ class Decoder(Module):
             self.input_proj = Dense(n_embed) # (B, S, F) -> (B, S, E)
         
         # Define the positional embedding layer
-        self.positional_embedding: Embedding = Embedding(sequence_length, n_embed) # (S) -> (S, E)
+        self.positional_encoding = Embedding(sequence_length, n_embed) if positional_encoding_type == "learned" else PositionalEncoding(sequence_length) # (B, S) -> (B, S, E)
         
         # Instantiate the decoder blocks
         self.decoder_blocks: ModuleList[Block] = ModuleList([ # (B, S, E) -> (B, S, E)
@@ -111,16 +113,22 @@ class Decoder(Module):
         # - O: output dimension (the dimension of the output space, e.g., vocabulary size for text data)
         
         # Unpack the shape of the input data for better readability
-        _, S, *_ = x.shape() # (B, S)
+        _, S, *_ = x.shape() # (B, S) or (B, S, F)
             
         # Project the input data to the embedding space
         embeddings = self.input_proj(x) # (B, S) -> (B, S, E)
         
         # Add positional encoding
-        positions = self.positional_embedding(Tensor(np.arange(S))) # (S) -> (1, S) -> (1, S, E)
-        
-        # Embed the input data and add the positional encoding
-        embeddings = embeddings + positions # (B, S, E) + (S, E) -> (B, S, E)
+        if isinstance(self.positional_encoding, PositionalEncoding):
+            # Use sinusoidal positional encoding (adds directly to embeddings)
+            embeddings = self.positional_encoding(embeddings) # (B, S, E) -> (B, S, E)
+        else:
+            # Use trainable positional embeddings
+            positions = Tensor(np.arange(S)) # Create position indices (S,)
+            pos_embeddings = self.positional_encoding(positions) # (S,) -> (S, E)
+            
+            # Add positional embeddings to input embeddings
+            embeddings = embeddings + pos_embeddings # (B, S, E) + (S, E) -> (B, S, E)
         
         # Apply the decoder blocks
         for block in self.decoder_blocks:

@@ -24,6 +24,7 @@ class EncoderTransformer(AutoRegressive):
         dropout: float = 0.1,
         return_sequence: bool = False,
         data_type: Literal["discrete", "continuous"] = "discrete",
+        positional_encoding_type: Literal["fixed", "learned"] = "learned",
         causal_attention: bool = False,
         do_sample: bool = True,
         *args, **kwargs
@@ -40,6 +41,7 @@ class EncoderTransformer(AutoRegressive):
         - dropout (float): The dropout rate
         - return_sequence (bool): Whether to return the sequence or just the last output
         - data_type (Literal["discrete", "continuous"]): The type of input data, either "discrete" for text or "continuous" for other types
+        - positional_encoding_type (Literal["fixed", "learned"]): The type of positional encoding to use. Default is "learned".
         - causal_attention (bool): Whether to use causal attention in the encoder. Default is False.
         - do_sample (bool): Whether to sample from the distribution or take the argmax. Default is True.
         """
@@ -54,7 +56,8 @@ class EncoderTransformer(AutoRegressive):
             dropout = dropout,
             input_type = data_type,
             causal_attention = causal_attention,
-            return_sequence = return_sequence
+            return_sequence = return_sequence,
+            positional_encoding_type = positional_encoding_type
         )
         
         # Initialize the superclass
@@ -83,6 +86,7 @@ class DecoderTransformer(AutoRegressive):
         dropout: float = 0.1,
         return_sequence: bool = False,
         data_type: Literal["discrete", "continuous"] = "discrete",
+        positional_encoding_type: Literal["fixed", "learned"] = "learned",
         causal_attention: bool = True,
         do_sample: bool = True,
         *args, **kwargs
@@ -99,6 +103,7 @@ class DecoderTransformer(AutoRegressive):
         - dropout (float): The dropout rate
         - return_sequence (bool): Whether to return the sequence or just the last output
         - data_type (Literal["discrete", "continuous"]): The type of input data, either "discrete" for text or "continuous" for other types
+        - positional_encoding_type (Literal["fixed", "learned"]): The type of positional encoding to use. Default is "learned".
         - causal_attention (bool): Whether to use causal attention in the decoder. Default is True.
         - do_sample (bool): Whether to sample from the distribution or take the argmax. Default is True.
         """
@@ -113,7 +118,8 @@ class DecoderTransformer(AutoRegressive):
             dropout = dropout,
             input_type = data_type,
             causal_attention = causal_attention,
-            return_sequence = return_sequence
+            return_sequence = return_sequence,
+            positional_encoding_type = positional_encoding_type
         )
         
         # Initialize the superclass
@@ -148,6 +154,7 @@ class EncoderDecoderTransformer(AutoRegressive):
         n_embed: int,
         n_attention_heads: int,
         dropout: float = 0.1,
+        positional_encoding_type: Literal["fixed", "learned"] = "learned",
         
         # Output parameters
         return_sequence: bool = False,
@@ -181,6 +188,7 @@ class EncoderDecoderTransformer(AutoRegressive):
         - n_embed (int): The embedding size for both encoder and decoder
         - n_attention_heads (int): The number of attention heads for both encoder and decoder
         - dropout (float): The dropout rate for both encoder and decoder
+        - positional_encoding_type (Literal["fixed", "learned"]): The type of positional encoding to use. If "fixed", it uses a fixed positional encoding. If "learned", it uses trainable positional embeddings.
         
         # Output parameters
         - return_sequence (bool): Whether to return the sequence or just the last output. Default is False.
@@ -204,7 +212,8 @@ class EncoderDecoderTransformer(AutoRegressive):
             output_dim = output_dim,
             data_type = data_type,
             encoder_causal_attention = encoder_causal_attention,
-            decoder_causal_attention = decoder_causal_attention
+            decoder_causal_attention = decoder_causal_attention,
+            positional_encoding_type = positional_encoding_type
         )
         
         # Initialize the superclass

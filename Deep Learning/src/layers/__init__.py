@@ -8,6 +8,7 @@ from .input import Input
 from .lstm import LSTM
 from .layer_normalization import LayerNormalization
 from .pooling import MaxPool2D
+from .positional_encoding import PositionalEncoding
 from .reshape import Reshape
 from .rnn import RNN
 from .upsampling import UpSampling2D

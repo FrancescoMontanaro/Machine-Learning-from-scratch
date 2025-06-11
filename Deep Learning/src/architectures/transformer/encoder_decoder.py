@@ -23,6 +23,7 @@ class EncoderDecoder(Module):
         n_embed: int,
         n_attention_heads: int,
         dropout: float = 0.1,
+        positional_encoding_type: Literal["fixed", "learned"] = "learned",
         # Output parameters
         return_sequence: bool = False,
         output_dim: Optional[int] = None,
@@ -53,6 +54,7 @@ class EncoderDecoder(Module):
         - n_embed (int): The embedding size for both encoder and decoder
         - n_attention_heads (int): The number of attention heads for both encoder and decoder
         - dropout (float): The dropout rate for both encoder and decoder
+        - positional_encoding_type (Literal["fixed", "learned"]): The type of positional encoding to use. If "fixed", it uses a fixed positional encoding. If "learned", it uses trainable positional embeddings.
         
         # Output parameters
         - return_sequence (bool): Whether to return the sequence or just the last output. Default is False.
@@ -76,6 +78,7 @@ class EncoderDecoder(Module):
             dropout = dropout,
             input_type = data_type,
             causal_attention = encoder_causal_attention,
+            positional_encoding_type = positional_encoding_type,
             return_sequence = True, # Always return the full sequence from the encoder since it is used for cross-attention in the decoder
         )
         
@@ -91,6 +94,7 @@ class EncoderDecoder(Module):
             input_type = data_type,
             causal_attention = decoder_causal_attention,
             return_sequence = return_sequence,
+            positional_encoding_type = positional_encoding_type,
             use_cross_attention = True # Enable cross-attention in the decoder to attend to the encoder's output
         )
     

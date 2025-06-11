@@ -172,7 +172,7 @@ class Module:
         # Iterate over the parameters of the module
         for param in self.parameters():
             # Add the number of parameters in the current parameter
-            total += param.data.size
+            total += param.data.size if param.is_parameter else 0
             
         # Return the total number of parameters
         return total
