@@ -8,18 +8,25 @@ from ..core.utils.constants import *
 
 class CrossEntropy(LossFn):
     
-    def __init__(self, reduction: Optional[Literal["mean", "sum"]] = "mean", label_smoothing: float = 0.0) -> None:
+    def __init__(
+        self, 
+        reduction: Optional[Literal["mean", "sum"]] = "mean", 
+        label_smoothing: float = 0.0,
+        from_sequence: bool = False
+    ) -> None:
         """
         Class constructor for CrossEntropy loss function.
         
         Parameters:
         - reduction (str): Specifies the reduction to apply to the output. Default is "mean".
         - label_smoothing (float): If greater than 0, applies label smoothing. Default is 0.0.
+        - from_sequence (bool): If True, the loss function is applied to sequences. Default is False.
         """
         
         # Store the attributes
         self.reduction = reduction
         self.label_smoothing = label_smoothing
+        self.from_sequence = from_sequence
 
 
     def __call__(self, y_true: Tensor, y_pred: Tensor) -> Tensor:
@@ -29,6 +36,17 @@ class CrossEntropy(LossFn):
         Parameters:
         - input (Tensor): The input tensor (predictions).
         """
+        
+        # If from_sequence is True, reshape the tensors for sequence-to-sequence loss
+        if self.from_sequence:
+            # Get the features size from the predictions
+            features_size = y_pred.shape()[-1]
+            
+            # Reshape predictions from (B, S, F) to (B*S, F)
+            y_pred = y_pred.reshape((-1, features_size))
+            
+            # Reshape targets from (B, S) to (B*S,)
+            y_true = y_true.reshape((-1,))
         
         # Convert target to one-hot if needed
         if len(y_true.shape()) == len(y_pred.shape()):
