@@ -3,6 +3,7 @@ from .convolutional import Conv2D
 from .dense import Dense
 from .dropout import Dropout
 from .embedding import Embedding
+from .gru import GRU
 from .flatten import Flatten
 from .input import Input
 from .lstm import LSTM
