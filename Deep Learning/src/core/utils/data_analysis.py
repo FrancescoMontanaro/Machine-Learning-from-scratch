@@ -49,13 +49,13 @@ def plot_data(datasets: list[dict], title: str, xlabel: str, ylabel: str) -> Non
     plt.show()
 
 
-def plot_history(train_loss: list[Tensor], valid_loss: Optional[list[Tensor]], title: str, xlabel: str, ylabel: str) -> None:
+def plot_history(train_loss: list[float], valid_loss: Optional[list[float]], title: str, xlabel: str, ylabel: str) -> None:
     """
     Method to plot the training and validation loss
     
     Parameters:
-    - train_loss (list[Tensor]): Training losses
-    - valid_loss (Optional[list[Tensor]]): Validation losses
+    - train_loss (list[float]): Training losses
+    - valid_loss (Optional[list[float]]): Validation losses
     - title (str): Title of the plot
     - xlabel (str): Label of the x-axis
     - ylabel (str): Label of the y-axis
@@ -65,8 +65,8 @@ def plot_history(train_loss: list[Tensor], valid_loss: Optional[list[Tensor]], t
     plt.figure(figsize=(8, 4))
     
     # Plot the training and validation loss
-    plt.plot(np.array([item.to_numpy() for item in train_loss]), label="Training loss", color="blue")
-    if valid_loss: plt.plot(np.array([item.to_numpy() for item in valid_loss]), label="Validation loss", color="orange")
+    plt.plot(np.array([item for item in train_loss]), label="Training loss", color="blue")
+    if valid_loss: plt.plot(np.array([item for item in valid_loss]), label="Validation loss", color="orange")
     
     # Set the title and labels
     plt.title(title)

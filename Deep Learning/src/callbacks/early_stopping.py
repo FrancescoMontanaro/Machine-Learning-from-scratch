@@ -2,7 +2,7 @@ import numpy as np
 from typing import Literal, List
 
 from .base import Callback
-from ..core import Module, Tensor
+from ..core import Module
 
 
 class EarlyStopping(Callback):
@@ -54,14 +54,14 @@ class EarlyStopping(Callback):
             raise ValueError("History not found in the module.")
         
         # Get the target value
-        target: List[Tensor] = history.get(self.monitor)
+        target: List[float] = history.get(self.monitor)
         
         # Check if the target value is None
         if target is None:
             raise ValueError(f"Target value '{self.monitor}' not found in the history.")
         
         # Get the current value
-        value = target[-1].detach().to_numpy()
+        value = target[-1]
         
         # Check if the value is better
         if self.mode == "min":
@@ -73,7 +73,7 @@ class EarlyStopping(Callback):
             
         # Update the best value
         if is_better:
-            self.best_value = value.item()
+            self.best_value = value
             self.counter = 0
         else:
             self.counter += 1

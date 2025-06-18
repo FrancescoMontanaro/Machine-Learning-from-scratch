@@ -46,7 +46,7 @@ class Sequential(Architecture):
         X_valid: Optional[Union[Tensor, Dict[str, Tensor]]] = None,
         y_valid: Optional[Tensor] = None,
         forward_params: Optional[Dict[str, Any]] = {}
-    ) -> Dict[str, list[Tensor]]:
+    ) -> Dict[str, list[float]]:
         """
         Method to train the model
         
@@ -66,7 +66,7 @@ class Sequential(Architecture):
         - forward_params (Optional[Dict[str, Any]]): Additional parameters for the forward pass (default: {})
         
         Returns:
-        - Dict[str, list[Tensor]]: History of the training with losses and metrics
+        - Dict[str, list[float]]: History of the training with losses and metrics
         """
         
         #############################
@@ -233,8 +233,8 @@ class Sequential(Architecture):
             
             # Initialize the step variables
             elapsed_time = 0.0
-            training_epoch_loss = Tensor(0.0, requires_grad=False)
-            train_metrics = {metric.__name__: Tensor(0.0, requires_grad=False) for metric in metrics}
+            training_epoch_loss = 0.0
+            train_metrics = {metric.__name__: 0.0 for metric in metrics}
             
             # Iterate over the training steps
             for training_step in range(n_training_steps):
@@ -269,11 +269,11 @@ class Sequential(Architecture):
                     optimizer.zero_grad()
                     
                 # Update the epoch loss
-                training_epoch_loss += training_loss.detach()
+                training_epoch_loss += training_loss.detach().to_numpy().item()
                 
                 # Compute the metrics
                 for metric in metrics:
-                    train_metrics[metric.__name__] += metric(y_training_batch.detach(), training_batch_output.detach())
+                    train_metrics[metric.__name__] += metric(y_training_batch.detach(), training_batch_output.detach()).detach().to_numpy().item()
                         
                 # Compute the statistics
                 end_time = time.time()
@@ -282,7 +282,7 @@ class Sequential(Architecture):
                 tensors_in_memory = self.count_tensors_in_memory()
                 
                 # Display epoch progress
-                print(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {tensors_in_memory} tensors in memory | {round(ms_per_step, 2)} ms/step --> loss: {training_loss.to_numpy():.5g}", end="")
+                self._progress_printer.print_progress(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {tensors_in_memory} tensors in memory | {round(ms_per_step, 2)} ms/step --> loss: {training_loss.to_numpy():.5g}")
             
             # Store the loss in the history
             self.history["loss"].append(training_epoch_loss / n_training_steps)
@@ -303,8 +303,8 @@ class Sequential(Architecture):
                     self.eval()
                     
                     # Define the validation variables
-                    valid_epoch_loss = Tensor(0.0, requires_grad=False)
-                    valid_metrics = {metric.__name__: Tensor(0.0, requires_grad=False) for metric in metrics}
+                    valid_epoch_loss = 0.0
+                    valid_metrics = {metric.__name__: 0.0 for metric in metrics}
                     
                     # Iterate over the validation steps
                     for valid_step in range(n_valid_steps):
@@ -323,11 +323,11 @@ class Sequential(Architecture):
                             valid_batch_output = self.forward(*valid_forward_args)
                             
                         # Update the validation loss
-                        valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output).detach()
+                        valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output).detach().to_numpy().item()
                         
                         # Compute the metrics for the validation batch
                         for metric in metrics:
-                            valid_metrics[metric.__name__] += metric(y_valid_batch, valid_batch_output).detach()
+                            valid_metrics[metric.__name__] += metric(y_valid_batch.detach(), valid_batch_output.detach()).detach().to_numpy().item()
                 
                 # Store the validation losses in the history
                 self.history["val_loss"].append(valid_epoch_loss / n_valid_steps)
@@ -341,17 +341,17 @@ class Sequential(Architecture):
             #############################
             
             # Print the progress of the epoch
-            print(
+            self._progress_printer.print_final(
                 f"\rEpoch {self.epoch + 1}/{epochs} --> "
-                f"loss: {self.history['loss'][-1].to_numpy().item():.5g}"
+                f"loss: {self.history['loss'][-1]:.5g}"
                 + "".join(
-                    [f" - {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__][-1].to_numpy().item():.5g}" for metric in metrics]
+                    [f" - {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__][-1]:.5g}" for metric in metrics]
                 ) +
                 (
-                    f" | Valid loss: {self.history['val_loss'][-1].to_numpy().item():.5g}"
+                    f" | Valid loss: {self.history['val_loss'][-1]:.5g}"
                     + "".join(
-                        [f" - Valid {metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'][-1].to_numpy().item():.5g}" for metric in metrics]
-                    ).ljust(50)   
+                        [f" - Valid {metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'][-1]:.5g}" for metric in metrics]
+                    ).ljust(50)
                 ) if valid_inputs is not None and y_valid is not None else "".ljust(50)
             )
             

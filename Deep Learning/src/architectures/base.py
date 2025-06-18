@@ -2,6 +2,7 @@ import gc
 from typing import Callable, Dict
 
 from ..core import Module, Tensor
+from ..core.utils.progress_printer import ProgressPrinter
 
 
 class Architecture(Module):
@@ -17,7 +18,10 @@ class Architecture(Module):
         super().__init__(*args, **kwargs)
         
         # Initialize the history of the model
-        self.history: Dict[str, list[Tensor]] = {}
+        self.history: Dict[str, list[float]] = {}
+        
+        # Initialize the progress printer
+        self._progress_printer = ProgressPrinter()
         
         
     ### Public methods ###
@@ -39,12 +43,12 @@ class Architecture(Module):
         }
     
     
-    def fit(self, *args, **kwargs) -> Dict[str, list[Tensor]]:
+    def fit(self, *args, **kwargs) -> Dict[str, list[float]]:
         """
         Method to fit the model.
         
         Returns:
-        - Dict[str, list[Tensor]]: Dictionary containing the history of the model
+        - Dict[str, list[float]]: Dictionary containing the history of the model
         """
         
         # Raise an error if the method is not implemented
