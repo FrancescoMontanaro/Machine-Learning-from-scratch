@@ -1,5 +1,9 @@
+import warnings
 import numpy as np
 from numba import njit, prange
+
+# Disable warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
             
 
 def matmul_forward(a_data: np.ndarray, b_data: np.ndarray) -> np.ndarray:
