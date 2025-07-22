@@ -6,5 +6,6 @@ numba
 matplotlib
 
 # Used only for downloading datasets
-keras
+torch
+tensorflow
 scikit-learn
