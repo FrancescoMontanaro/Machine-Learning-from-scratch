@@ -8,6 +8,7 @@ from .flatten import Flatten
 from .input import Input
 from .lstm import LSTM
 from .layer_normalization import LayerNormalization
+from .local_response_normalization import LocalResponseNormalization
 from .pooling import MaxPool2D
 from .positional_encoding import PositionalEncoding
 from .reshape import Reshape

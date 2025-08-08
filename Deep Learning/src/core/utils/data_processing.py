@@ -152,7 +152,7 @@ def one_hot_encoding(y: Tensor, n_classes: int) -> Tensor:
     one_hot = np.zeros((y.shape()[0], n_classes))
     
     # Set the appropriate index to 1
-    one_hot[np.arange(y.shape()[0]), y.data.astype(int)] = 1
+    one_hot[np.arange(y.shape()[0]), y.data.flatten().astype(int)] = 1
     
     # Return the one-hot encoded target variable
     return Tensor(one_hot, requires_grad=False, dtype=np.int8)
