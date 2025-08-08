@@ -17,6 +17,7 @@ class Tensor:
     
     # Class variable to keep track of live tensors
     _live_tensors = weakref.WeakSet()
+    __slots__ = ("data", "is_parameter", "requires_grad", "grad", "_backward", "_prev", "__weakref__")
     
     
     ###########################
