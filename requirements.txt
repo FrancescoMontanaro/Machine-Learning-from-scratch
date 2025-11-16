@@ -3,6 +3,7 @@ dill
 numpy
 regex
 numba
+scipy
 ipykernel
 matplotlib
 
