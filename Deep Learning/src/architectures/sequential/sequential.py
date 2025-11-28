@@ -279,10 +279,9 @@ class Sequential(Architecture):
                 end_time = time.time()
                 elapsed_time += (end_time - start_time)
                 ms_per_step = elapsed_time / (training_step + 1) * 1000
-                tensors_in_memory = self.count_tensors_in_memory()
                 
                 # Display epoch progress
-                self._progress_printer.print_progress(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {tensors_in_memory} tensors in memory | {round(ms_per_step, 2)} ms/step --> loss: {training_loss.to_numpy():.5g}")
+                self._progress_printer.print_progress(f"\rEpoch {self.epoch + 1}/{epochs} ({round((((training_step + 1)/n_training_steps)*100), 2)}%) | {self.tensors_in_memory} tensors in memory | {round(ms_per_step, 2)} ms/step --> loss: {training_loss.to_numpy():.5g}")
             
             # Store the loss in the history
             self.history["loss"].append(training_epoch_loss / n_training_steps)

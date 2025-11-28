@@ -23,6 +23,20 @@ class Architecture(Module):
         # Initialize the progress printer
         self._progress_printer = ProgressPrinter()
         
+    ### Properties ###    
+    
+    @property
+    def tensors_in_memory(self) -> int:
+        """
+        Method to get the tensors in memory.
+        
+        Returns:
+        - int: Number of tensors in memory
+        """
+        
+        # Count the number of tensors in memory using the garbage collector
+        return Tensor.count_live()
+        
         
     ### Public methods ###
     
@@ -62,15 +76,3 @@ class Architecture(Module):
         
         # Clear the cache of the model by calling the garbage collector
         gc.collect()
-        
-        
-    def count_tensors_in_memory(self) -> int:
-        """
-        Method to get the tensors in memory.
-        
-        Returns:
-        - int: Number of tensors in memory
-        """
-        
-        # Count the number of tensors in memory using the garbage collector
-        return Tensor.count_live()
