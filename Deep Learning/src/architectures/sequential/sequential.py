@@ -103,8 +103,8 @@ class Sequential(Architecture):
         num_samples_check = self._validate_input_consistency(*train_inputs)
         
         # Validate y_train number of samples
-        if y_train.shape()[0] != num_samples_check:
-            raise ValueError(f"Target tensor has {y_train.shape()[0]} samples, but input tensors have {num_samples_check} samples")
+        if y_train.shape[0] != num_samples_check:
+            raise ValueError(f"Target tensor has {y_train.shape[0]} samples, but input tensors have {num_samples_check} samples")
     
         ###############################
         ### Process validation data ###
@@ -163,8 +163,8 @@ class Sequential(Architecture):
             # Validate validation input consistency
             valid_num_samples = self._validate_input_consistency(*valid_inputs)
             
-            if y_valid.shape()[0] != valid_num_samples:
-                raise ValueError(f"Validation target has {y_valid.shape()[0]} samples, but validation inputs have {valid_num_samples} samples")
+            if y_valid.shape[0] != valid_num_samples:
+                raise ValueError(f"Validation target has {y_valid.shape[0]} samples, but validation inputs have {valid_num_samples} samples")
         
         # Validate the forward parameters
         if forward_params is None:
@@ -179,18 +179,18 @@ class Sequential(Architecture):
         
         # Initialize the control variables
         self.epoch, self.stop_training = 0, False
-        n_training_steps = max(1, math.ceil(train_inputs[0].shape()[0] / batch_size))
-        n_valid_steps = max(1, math.ceil(valid_inputs[0].shape()[0] / batch_size)) if valid_inputs is not None else 0
+        n_training_steps = max(1, math.ceil(train_inputs[0].shape[0] / batch_size))
+        n_valid_steps = max(1, math.ceil(valid_inputs[0].shape[0] / batch_size)) if valid_inputs is not None else 0
         
         # If the module is not initialized, initialize it by executing the lazy initialization through a first forward pass
-        if not self.is_initialized():
+        if not self.is_initialized:
             # Execute a first forward pass to initialize the module
             with no_grad():
                 # Set the model to evaluation mode
                 self.eval()
                 
                 # Slice the inputs to match the batch size
-                sample_size = min(batch_size, train_inputs[0].shape()[0])
+                sample_size = min(batch_size, train_inputs[0].shape[0])
                 sample_inputs = self._slice_inputs(0, sample_size, *train_inputs)
                 
                 # Create args for forward pass
@@ -200,7 +200,7 @@ class Sequential(Architecture):
                 self(*forward_args)
         
         # Set the parameters of the optimizer
-        optimizer.set_parameters(self.parameters())
+        optimizer.set_parameters(self.parameters)
             
         ################################
         ### Start main training loop ###
@@ -528,14 +528,14 @@ class Sequential(Architecture):
             raise ValueError("At least one input tensor must be provided")
         
         # Check if all inputs have the same number of samples
-        num_samples = inputs[0].shape()[0]
+        num_samples = inputs[0].shape[0]
         
         # Iterate over the remaining inputs to check their number of samples
         for i, tensor in enumerate(inputs[1:], 1):
             # Get the batch size of the current tensor
-            if tensor.shape()[0] != num_samples:
+            if tensor.shape[0] != num_samples:
                 # If the batch size is inconsistent, raise an error
-                raise ValueError(f"Inconsistent number of samples: input 0 has {num_samples} samples, input {i} has {tensor.shape()[0]} samples")
+                raise ValueError(f"Inconsistent number of samples: input 0 has {num_samples} samples, input {i} has {tensor.shape[0]} samples")
         
         # Return the number of samples (batch size)
         return num_samples

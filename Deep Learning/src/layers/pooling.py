@@ -42,7 +42,7 @@ class MaxPool2D(Module):
         # Apply padding to the input data
         if self.padding == "same":
             # Extract the input shape, pooling window size and stride
-            _, input_height, input_width, _ = x.shape()
+            _, input_height, input_width, _ = x.shape
             pool_width, pool_height = self.size
             stride_height, stride_width = self.stride
             
@@ -83,4 +83,4 @@ class MaxPool2D(Module):
         """
         
         # Check if the input shape is valid
-        assert len(x.shape()) == 4, f"Input must be a 4D array. The shape must be (Batch size, Height, Width, Channels). Got shape: {x.shape()}"
+        assert len(x.shape) == 4, f"Input must be a 4D array. The shape must be (Batch size, Height, Width, Channels). Got shape: {x.shape}"

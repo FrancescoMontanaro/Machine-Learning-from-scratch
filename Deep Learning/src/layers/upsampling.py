@@ -66,4 +66,4 @@ class UpSampling2D(Module):
         """
         
         # Check if the input shape has a valid shape
-        assert len(x.shape()) == 4, f"Invalid input shape. Input must be a 4D array with shape (Batch size, Height, Width, Channels). Got shape: {x.shape()}"
+        assert len(x.shape) == 4, f"Invalid input shape. Input must be a 4D array with shape (Batch size, Height, Width, Channels). Got shape: {x.shape}"

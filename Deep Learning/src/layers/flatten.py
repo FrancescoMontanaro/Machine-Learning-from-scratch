@@ -19,7 +19,7 @@ class Flatten(Module):
         """
         
         # Extract the dimensions of the input data
-        input_shape = x.shape()
+        input_shape = x.shape
         
         # Extract the batch size and number of features
         batch_size = input_shape[0]

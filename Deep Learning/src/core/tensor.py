@@ -475,11 +475,12 @@ class Tensor:
             tensor_cls = Tensor
         )
     
-
-    ###########################
-    ##### Public methods ######
-    ###########################
     
+    ########################
+    ###### Properties ######
+    ########################
+    
+    @property
     def shape(self) -> tuple:
         """
         Method to return the shape of the tensor
@@ -490,6 +491,11 @@ class Tensor:
         
         # Return the shape of the tensor
         return self.data.shape
+
+
+    ###########################
+    ##### Public methods ######
+    ###########################
     
 
     def zero_grad(self) -> None:

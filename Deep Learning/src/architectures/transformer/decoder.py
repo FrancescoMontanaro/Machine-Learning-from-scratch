@@ -113,7 +113,7 @@ class Decoder(Module):
         # - O: output dimension (the dimension of the output space, e.g., vocabulary size for text data)
         
         # Unpack the shape of the input data for better readability
-        _, S, *_ = x.shape() # (B, S) or (B, S, F)
+        _, S, *_ = x.shape # (B, S) or (B, S, F)
             
         # Project the input data to the embedding space
         embeddings = self.input_proj(x) # (B, S) -> (B, S, E)

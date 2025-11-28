@@ -73,7 +73,7 @@ class GRU(Module):
         """
         
         # Unpack the input shape
-        batch_size, seq_length, _ = x.shape()
+        batch_size, seq_length, _ = x.shape
         
         # If h_prev is None, initialize the hidden states for all layers to zeros
         if h_prev is None:
@@ -175,7 +175,7 @@ class GRU(Module):
         """
         
         # Check if the input shape is valid
-        assert len(x.shape()) >= 2, f"Invalid input shape. Input must be at least a 2D array. Got shape: {x.shape()}"
+        assert len(x.shape) >= 2, f"Invalid input shape. Input must be at least a 2D array. Got shape: {x.shape}"
             
         ### Initialize the parameters for all the layers ###
         
@@ -183,7 +183,7 @@ class GRU(Module):
         for idx in range(self.num_layers):
             # Extract the number of features from the current layer 
             # and compute the standard deviation for weight initialization
-            num_features = self.num_units if idx > 0 else x.shape()[-1]
+            num_features = self.num_units if idx > 0 else x.shape[-1]
             std_dev = np.sqrt(1 / self.num_units) if idx > 0 else np.sqrt(1 / num_features)
             
             # Initialize the weights (3 gates for GRU: reset, update, and new)

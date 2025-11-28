@@ -65,10 +65,10 @@ class MLP(Module):
         """
         
         # Check if the input shape is valid
-        assert len(x.shape()) == 3, f"Invalid input shape. Input must be a 3D array. The shape must be (Batch size, sequence length, embedding size). Got shape: {x.shape()}"
+        assert len(x.shape) == 3, f"Invalid input shape. Input must be a 3D array. The shape must be (Batch size, sequence length, embedding size). Got shape: {x.shape}"
         
         # Unpack the shape of the input data
-        _, _, E = x.shape() # (B, S, E)  
+        _, _, E = x.shape # (B, S, E)  
         
         # Initialize the dense layers
         self.input_dense = Dense(4 * E, activation=ReLU()) # (B, S, E) -> (B, S, 4 * E)

@@ -72,7 +72,7 @@ class SelfSingleHeadAttention(Module):
         # If causal attention is enabled, we need to apply the attention mask
         if self.causal_attention:
             # Unpack the shape of the input data for better readability
-            _, S, _ = x.shape() # (B, S, E)
+            _, S, _ = x.shape # (B, S, E)
             
             # Apply the attention mask to the scores
             scores = scores.masked_fill(self.attention_mask.data[:S, :S] == 0, float('-inf'))
@@ -102,12 +102,12 @@ class SelfSingleHeadAttention(Module):
         """
         
         # Check if the input shape is valid
-        assert len(x.shape()) == 3, f"Invalid input shape. Input must be a 3D array. The shape must be (Batch size, sequence length, embedding size). Got shape: {x.shape()}"
+        assert len(x.shape) == 3, f"Invalid input shape. Input must be a 3D array. The shape must be (Batch size, sequence length, embedding size). Got shape: {x.shape}"
         
         # If causal attention is enabled, we need to create the attention mask
         if self.causal_attention:
             # Unpack the shape of the input data
-            _, S, _ = x.shape() # (B, S, E)
+            _, S, _ = x.shape # (B, S, E)
             
             # Initialize the attention mask as a lower triangular matrix for causal attention
             self.register_buffer("attention_mask", Tensor(np.tril(np.ones((S, S))))) # (S, S) -> (S, S)
@@ -188,10 +188,10 @@ class SelfMultiHeadAttention(Module):
         """
         
         # Check if the input shape is valid
-        assert len(x.shape()) == 3, f"Invalid input shape. Input must be a 3D array. The shape must be (Batch size, sequence length, embedding size). Got shape: {x.shape()}"
+        assert len(x.shape) == 3, f"Invalid input shape. Input must be a 3D array. The shape must be (Batch size, sequence length, embedding size). Got shape: {x.shape}"
         
         # Unpack the shape of the input data
-        _, _, E = x.shape() # (B, S, E)
+        _, _, E = x.shape # (B, S, E)
         
         # Initialize the output linear layer
         self.output_linear = Dense(E) # (B, S, H * n_heads) -> (B, S, E)

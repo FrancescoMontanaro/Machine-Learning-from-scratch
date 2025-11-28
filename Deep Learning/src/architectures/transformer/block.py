@@ -107,10 +107,10 @@ class Block(Module):
         """
         
         # Check if the input shape is valid
-        assert len(x.shape()) == 3, f"Invalid input shape. Input must be a 3D array. The shape must be (Batch size, sequence length, embedding size). Got shape: {x.shape()}"
+        assert len(x.shape) == 3, f"Invalid input shape. Input must be a 3D array. The shape must be (Batch size, sequence length, embedding size). Got shape: {x.shape}"
         
         # Store the input shape of the layer
-        _, _, E = x.shape() # (B, S, E)
+        _, _, E = x.shape # (B, S, E)
         
         # Check if the embedding size is divisible by the number of heads
         assert E % self.n_heads == 0, f"Embedding size {E} must be divisible by the number of heads {self.n_heads}."

@@ -34,7 +34,7 @@ class Reshape(Module):
         """
         
         # Extract the batch size
-        batch = x.shape()[0]
+        batch = x.shape[0]
         
         # Reshape the input data to the target shape
         # The batch size is kept the same

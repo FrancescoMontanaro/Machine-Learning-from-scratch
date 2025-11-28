@@ -38,7 +38,7 @@ class Dropout(Module):
         if self.training:
             # Generate a random mask
             mask = Tensor(
-                data = np.random.rand(*x.shape()) > self.rate, 
+                data = np.random.rand(*x.shape) > self.rate, 
                 requires_grad = False, 
                 is_parameter = False
             )

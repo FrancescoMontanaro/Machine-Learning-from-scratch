@@ -41,7 +41,7 @@ class Embedding(Module):
         """
         
         # If the input is 1D, reshape it to 2D
-        if len(x.shape()) == 1:
+        if len(x.shape) == 1:
             # reshape the input to 2D
             x = x.reshape((1, -1))
             
@@ -67,7 +67,7 @@ class Embedding(Module):
         """
         
         # Check if the input shape is valid
-        assert len(x.shape()) <= 2, f"Invalid input shape. Input must be at maximum a 2D array. Got shape: {x.shape()}"
+        assert len(x.shape) <= 2, f"Invalid input shape. Input must be at maximum a 2D array. Got shape: {x.shape}"
         
         # Initialize the embedding matrix
         self.embedding = Tensor(

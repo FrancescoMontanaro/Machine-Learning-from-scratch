@@ -94,7 +94,7 @@ class Encoder(Module):
         # - E: embedding size (the dimension of the embedding space)
         
         # Unpack the shape of the input data for better readability
-        _, S, *_ = x.shape() # (B, S)
+        _, S, *_ = x.shape # (B, S)
             
         # Project the input data to the embedding space
         embeddings = self.input_proj(x) # (B, S) -> (B, S, E)

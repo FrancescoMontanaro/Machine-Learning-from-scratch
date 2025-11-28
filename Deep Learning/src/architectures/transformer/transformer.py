@@ -350,8 +350,8 @@ class EncoderDecoderTransformer(AutoRegressive):
                 if self.do_sample:
                     # Sample the next item from the distribution
                     next_token = np.array([
-                        np.random.choice(out.shape()[-1], p=out.data[i, -1])
-                        for i in range(out.shape()[0])
+                        np.random.choice(out.shape[-1], p=out.data[i, -1])
+                        for i in range(out.shape[0])
                     ]).reshape(-1, 1)
                     
                 # If not sampling, take the argmax

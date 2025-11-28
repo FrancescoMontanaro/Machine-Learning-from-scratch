@@ -74,8 +74,8 @@ class CrossSingleHeadAttention(Module):
         # If causal attention is enabled, we need to apply the attention mask
         if self.causal_attention:
             # Unpack the shape of the input data for better readability
-            _, S_dec, _ = decoder_x.shape() # (B, S_dec, E)
-            _, S_enc, _ = encoder_output.shape() # (B, S_enc, E)
+            _, S_dec, _ = decoder_x.shape # (B, S_dec, E)
+            _, S_enc, _ = encoder_output.shape # (B, S_enc, E)
             
             # Apply the attention mask to the scores
             scores = scores.masked_fill(self.attention_mask.data[:S_dec, :S_enc] == 0, float('-inf'))
@@ -106,14 +106,14 @@ class CrossSingleHeadAttention(Module):
         """
         
         # Check if the input shapes are valid
-        assert len(decoder_x.shape()) == 3, f"Invalid decoder input shape. Input must be a 3D array. Got shape: {decoder_x.shape()}"
-        assert len(encoder_output.shape()) == 3, f"Invalid encoder output shape. Input must be a 3D array. Got shape: {encoder_output.shape()}"
+        assert len(decoder_x.shape) == 3, f"Invalid decoder input shape. Input must be a 3D array. Got shape: {decoder_x.shape}"
+        assert len(encoder_output.shape) == 3, f"Invalid encoder output shape. Input must be a 3D array. Got shape: {encoder_output.shape}"
         
         # If causal attention is enabled, we need to create the attention mask
         if self.causal_attention:
             # Unpack the shape of the input data
-            _, S_dec, _ = decoder_x.shape() # (B, S_dec, E)
-            _, S_enc, _ = encoder_output.shape() # (B, S_enc, E)
+            _, S_dec, _ = decoder_x.shape # (B, S_dec, E)
+            _, S_enc, _ = encoder_output.shape # (B, S_enc, E)
             
             # Initialize the attention mask as a lower triangular matrix for causal attention
             self.register_buffer("attention_mask", Tensor(np.tril(np.ones((S_enc, S_dec))))) # (S, S) -> (S, S)
@@ -188,11 +188,11 @@ class CrossMultiHeadAttention(Module):
         """
         
         # Check if the input shapes are valid
-        assert len(decoder_x.shape()) == 3, f"Invalid decoder input shape. Got shape: {decoder_x.shape()}"
-        assert len(encoder_output.shape()) == 3, f"Invalid encoder output shape. Got shape: {encoder_output.shape()}"
+        assert len(decoder_x.shape) == 3, f"Invalid decoder input shape. Got shape: {decoder_x.shape}"
+        assert len(encoder_output.shape) == 3, f"Invalid encoder output shape. Got shape: {encoder_output.shape}"
         
         # Unpack the shape of the decoder input data
-        _, _, E = decoder_x.shape() # (B, S_dec, E)
+        _, _, E = decoder_x.shape # (B, S_dec, E)
         
         # Initialize the output linear layer
         self.output_linear = Dense(E) # (B, S_dec, H * n_heads) -> (B, S_dec, E)

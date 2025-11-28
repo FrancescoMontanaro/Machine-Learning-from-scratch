@@ -91,9 +91,75 @@ class Module:
 
 
     ######################
-    ### Public methods ###
+    ##### Properties #####
     ######################
     
+    @property
+    def parameters(self) -> list[Tensor]:
+        """
+        Property to get the parameters of the module
+        
+        Returns:
+        - dict: Dictionary with the parameters of the module
+        """
+        
+        # Get the parameters of the module and its sub-modules
+        params, _ = self._collect_state_tensors()
+        
+        # Return the parameters of the module
+        return list(params.values())
+    
+    
+    @property
+    def params_count(self) -> int:
+        """
+        Property to get the number of parameters in the module
+        
+        Returns:
+        - int: Number of parameters in the module
+        """
+        
+        # Initialize the counter for the number of parameters
+        total = 0
+        
+        # Iterate over the parameters of the module
+        for param in self.parameters:
+            # Add the number of parameters in the current parameter
+            total += param.data.size if param.is_parameter else 0
+            
+        # Return the total number of parameters
+        return total
+
+
+    @property
+    def is_initialized(self) -> bool:
+        """
+        Property to check if the module is initialized
+        
+        Returns:
+        - bool: True if the module is initialized, False otherwise
+        """
+        
+        # Check if the output shape of the module is set
+        return self._output_shape is not None
+    
+    
+    @property
+    def output_shape(self) -> Optional[tuple]:
+        """
+        Abstract method to return the output shape of the module
+        
+        Returns:
+        - tuple: The shape of the output of the module if the module is initialized, None otherwise
+        """
+        
+        # Return the output shape of the module
+        return self._output_shape
+    
+
+    ######################
+    ### Public methods ###
+    ######################
     
     def register_buffer(self, name: str, tensor: Tensor) -> None:
         """
@@ -113,22 +179,7 @@ class Module:
         
         # Set the attribute of the module
         setattr(self, name, tensor)
-
-
-    def parameters(self) -> list[Tensor]:
-        """
-        Method to collect the parameters of the module
         
-        Returns:
-        - dict: Dictionary with the parameters of the module
-        """
-        
-        # Get the parameters of the module and its sub-modules
-        params, _ = self._collect_state_tensors()
-        
-        # Return the parameters of the module
-        return list(params.values())
-
 
     def train(self) -> None:
         """
@@ -158,26 +209,6 @@ class Module:
             module.eval()
 
 
-    def count_params(self) -> int:
-        """
-        Function to count the number of parameters in the module
-        
-        Returns:
-        - int: Number of parameters in the module
-        """
-        
-        # Initialize the counter for the number of parameters
-        total = 0
-        
-        # Iterate over the parameters of the module
-        for param in self.parameters():
-            # Add the number of parameters in the current parameter
-            total += param.data.size if param.is_parameter else 0
-            
-        # Return the total number of parameters
-        return total
-    
-
     def forward(self, *args, **kwargs) -> Tensor:
         """
         Abstract method to define the forward pass of the module
@@ -201,34 +232,10 @@ class Module:
         ### Step 3: Update the output shape ###
         
         # Save the input and  output shape of the module
-        self._output_shape = out.shape()
+        self._output_shape = out.shape
         
         # Return the output tensor
         return out
-    
-    
-    def is_initialized(self) -> bool:
-        """
-        Method to check if the module is initialized
-        
-        Returns:
-        - bool: True if the module is initialized, False otherwise
-        """
-        
-        # Check if the output shape of the module is set
-        return self._output_shape is not None
-    
-    
-    def output_shape(self) -> Optional[tuple]:
-        """
-        Abstract method to return the output shape of the module
-        
-        Returns:
-        - tuple: The shape of the output of the module if the module is initialized, None otherwise
-        """
-        
-        # Return the output shape of the module
-        return self._output_shape
             
     
     def summary(self, recursive: bool = False, is_root: bool = True, prefix: str = "") -> None:
@@ -258,12 +265,12 @@ class Module:
                 module_name = format_summary_output(module_name, 50) + " " * 5
                 
                 # Extract the output shape and format it
-                output_shape = module.output_shape()
+                output_shape = module.output_shape
                 output_shape = f"({', '.join(str(dim) for dim in output_shape)})" if isinstance(output_shape, tuple) else "?"
                 output_shape = format_summary_output(output_shape, 20)
 
                 # Extract the number of parameters and format it
-                num_params = module.count_params()
+                num_params = module.params_count
                 num_params = format_summary_output(str(num_params), 20)
 
                 # Display the module information
@@ -277,7 +284,7 @@ class Module:
             # Display the footer 
             header = f"{'Module (type)':<55}{'Output Shape':<20}{'Trainable params #':<20}"
             print(f"{'=' * len(header)}")
-            print(f"Total trainable parameters: {self.count_params()}")
+            print(f"Total trainable parameters: {self.params_count}")
             print(f"{'-' * len(header)}")
 
         # If recursive, print the summary in tree format
@@ -285,11 +292,11 @@ class Module:
             # For the root module, print its name/class (and optional shape/params)
             if is_root:
                 # Extract the shape of the module and format it
-                shape = self.output_shape()
+                shape = self.output_shape
                 shape_str = f"({', '.join(str(dim) for dim in shape)})" if isinstance(shape, tuple) else "?"
                 
                 # Extract the number of parameters
-                num_params = self.count_params()
+                num_params = self.params_count
                 
                 # Print the top-level module
                 print(f"{self.name} ({self.__class__.__name__}) " f"[output_shape={shape_str}, params={str(num_params)}]")
@@ -302,11 +309,11 @@ class Module:
                 branch_symbol = "└──" if is_last else "├──"
 
                 # Try to get shape
-                shape = module.output_shape()
+                shape = module.output_shape
                 shape_str = f"({', '.join(str(dim) for dim in shape)})" if isinstance(shape, tuple) else "?"
 
                 # Try to get number of parameters
-                num_params = module.count_params()
+                num_params = module.params_count
 
                 # Print this module line
                 print(f"{prefix}{branch_symbol} {module.name} ({module.__class__.__name__}) " f"[output_shape={shape_str}, params={str(num_params)}]")
@@ -385,6 +392,7 @@ class Module:
         # Save the state of the module to a file
         np.savez(
             file = path,
+            allow_pickle = True,
             **{f"parameters.{p_name}": p.data for p_name, p in params.items()},
             **{f"buffers.{b_name}": b.data for b_name, b in buffers.items()}
         )

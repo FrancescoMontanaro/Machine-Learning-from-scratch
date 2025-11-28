@@ -49,7 +49,7 @@ class Dense(Module):
         """
         
         # Store the input shape
-        input_shape = x.shape()
+        input_shape = x.shape
         
         # The input data is 2D
         if len(input_shape) == 2:
@@ -100,10 +100,10 @@ class Dense(Module):
         """
         
         # Check if the input shape is valid
-        assert len(x.shape()) >= 2, f"Invalid input shape. Input must be at least a 2D array. Got shape: {x.shape()}"
+        assert len(x.shape) >= 2, f"Invalid input shape. Input must be at least a 2D array. Got shape: {x.shape}"
         
         # Extract the number of features from the input data
-        num_features = x.shape()[-1]
+        num_features = x.shape[-1]
         
         # Initialize the weights with random values
         self.weights = Tensor(

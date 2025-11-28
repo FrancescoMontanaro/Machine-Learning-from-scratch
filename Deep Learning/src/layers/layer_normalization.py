@@ -58,7 +58,7 @@ class LayerNormalization(Module):
         """
         
         # Extract the shape of the parameters: all except the batch dimension
-        feature_shape = (x.shape()[-1],)
+        feature_shape = (x.shape[-1],)
         
         # Initialize the scale parameter
         self.gamma = Tensor(

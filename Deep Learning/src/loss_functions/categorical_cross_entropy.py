@@ -44,7 +44,7 @@ class CategoricalCrossEntropy(LossFn):
         # If from_sequence is True, reshape the tensors for sequence-to-sequence loss
         if self.from_sequence:
             # Get the features size from the predictions
-            features_size = y_pred.shape()[-1]
+            features_size = y_pred.shape[-1]
             
             # Reshape predictions from (B, S, F) to (B*S, F)
             y_pred = y_pred.reshape((-1, features_size))

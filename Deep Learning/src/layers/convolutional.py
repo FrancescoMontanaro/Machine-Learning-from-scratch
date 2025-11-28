@@ -67,7 +67,7 @@ class Conv2D(Module):
         # Apply padding to the input data
         if self.padding == "same":
             # Extract the dimensions of the input data, kernel, and stride
-            _, input_height, input_width, _ = x.shape()
+            _, input_height, input_width, _ = x.shape
             kernel_height, kernel_width = self.kernel_size
             stride_height, stride_width = self.stride
             
@@ -119,11 +119,11 @@ class Conv2D(Module):
         """
         
         # Check if the input shape has a valid shape
-        assert len(x.shape()) == 4, "Input must be a 4D array. The shape must be (Batch size, Height, Width, Channels). Got shape: {x.shape()}"
+        assert len(x.shape) == 4, f"Input must be a 4D array. The shape must be (Batch size, Height, Width, Channels). Got shape: {x.shape}"
         
         # Extract the dimensions of the kernel
         kernel_height, kernel_width = self.kernel_size
-        num_channels = x.shape()[-1]
+        num_channels = x.shape[-1]
         
         # Initialize the filters with random values
         self.filters = Tensor(

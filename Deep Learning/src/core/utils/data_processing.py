@@ -23,11 +23,11 @@ def shuffle_data(data: Union[Tensor, Tuple[Tensor, ...]]) -> Tuple[Union[Tensor,
     # Check if the data is a tuple of tensors
     if isinstance(data, tuple) and len(data) >= 2:
         # Validate that all tensors have the same batch size
-        n_samples = data[0].shape()[0]
+        n_samples = data[0].shape[0]
         for i, tensor in enumerate(data[1:], 1):
-            if tensor.shape()[0] != n_samples:
-                raise ValueError(f"All tensors must have the same batch size. Tensor 0 has {n_samples} samples, tensor {i} has {tensor.shape()[0]} samples")
-        
+            if tensor.shape[0] != n_samples:
+                raise ValueError(f"All tensors must have the same batch size. Tensor 0 has {n_samples} samples, tensor {i} has {tensor.shape[0]} samples")
+
         # Generate random indices
         indices = np.random.permutation(n_samples)
         
@@ -40,7 +40,7 @@ def shuffle_data(data: Union[Tensor, Tuple[Tensor, ...]]) -> Tuple[Union[Tensor,
     # Check if the data is a single tensor
     elif isinstance(data, Tensor):
         # Get the number of samples
-        n_samples = data.shape()[0]
+        n_samples = data.shape[0]
         
         # Generate random indices
         indices = np.random.permutation(n_samples)
@@ -93,7 +93,7 @@ def split_data(data: Union[Tensor, Tuple[Tensor, ...]], split_pct: float = 0.1, 
             (X, y), indices = shuffle_data((X, y))
             
         # Get the number of samples
-        n_samples = X.shape()[0]
+        n_samples = X.shape[0]
         
         # Compute the test size
         test_size = max(1, int(n_samples * split_pct))
@@ -120,7 +120,7 @@ def split_data(data: Union[Tensor, Tuple[Tensor, ...]], split_pct: float = 0.1, 
             raise ValueError("data must be a tensor or a tuple of two tensors")
             
         # Get the number of samples
-        n_samples = data.shape()[0]
+        n_samples = data.shape[0]
         
         # Compute the test size
         test_size = max(1, int(n_samples * split_pct))
@@ -149,10 +149,10 @@ def one_hot_encoding(y: Tensor, n_classes: int) -> Tensor:
     """
     
     # Initialize the one-hot encoded target variable
-    one_hot = np.zeros((y.shape()[0], n_classes))
+    one_hot = np.zeros((y.shape[0], n_classes))
     
     # Set the appropriate index to 1
-    one_hot[np.arange(y.shape()[0]), y.data.flatten().astype(int)] = 1
+    one_hot[np.arange(y.shape[0]), y.data.flatten().astype(int)] = 1
     
     # Return the one-hot encoded target variable
     return Tensor(one_hot, requires_grad=False, dtype=np.int8)

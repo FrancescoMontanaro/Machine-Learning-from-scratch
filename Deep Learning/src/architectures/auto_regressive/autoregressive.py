@@ -178,8 +178,8 @@ class AutoRegressive(Sequential):
                     # Sample the next item from the distribution
                     out = Tensor(
                         np.array([
-                            np.random.choice(out.shape()[-1], p=out.data[i, -1])
-                            for i in range(out.shape()[0])
+                            np.random.choice(out.shape[-1], p=out.data[i, -1])
+                            for i in range(out.shape[0])
                         ]).reshape(-1, 1),
                         requires_grad = out.requires_grad,
                         dtype = np.int32

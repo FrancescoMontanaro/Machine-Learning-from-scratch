@@ -47,7 +47,7 @@ class LocalResponseNormalization(Module):
         """
         
         # Extract the number of channels from the input tensor
-        _, _, _, C = x.shape()
+        _, _, _, C = x.shape
 
         # Compute the squared values of the input tensor
         x2 = x * x 

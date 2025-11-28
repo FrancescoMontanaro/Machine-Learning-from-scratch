@@ -40,7 +40,7 @@ class CrossEntropy(LossFn):
         # If from_sequence is True, reshape the tensors for sequence-to-sequence loss
         if self.from_sequence:
             # Get the features size from the predictions
-            features_size = y_pred.shape()[-1]
+            features_size = y_pred.shape[-1]
             
             # Reshape predictions from (B, S, F) to (B*S, F)
             y_pred = y_pred.reshape((-1, features_size))
@@ -49,12 +49,12 @@ class CrossEntropy(LossFn):
             y_true = y_true.reshape((-1,))
         
         # Convert target to one-hot if needed
-        if len(y_true.shape()) == len(y_pred.shape()):
+        if len(y_true.shape) == len(y_pred.shape):
             # Target is already one-hot
             target_one_hot = y_true
         else:
             # Extract the number of classes
-            num_classes = y_pred.shape()[-1]
+            num_classes = y_pred.shape[-1]
             
             # Convert target to one-hot encoding
             target_one_hot = Tensor(np.eye(num_classes)[y_true.data.astype(int)], requires_grad=False)
@@ -62,7 +62,7 @@ class CrossEntropy(LossFn):
         # Apply label smoothing
         if self.label_smoothing > 0:
             # Smooth the labels
-            smoothing_value = self.label_smoothing / (y_pred.shape()[-1] - 1)
+            smoothing_value = self.label_smoothing / (y_pred.shape[-1] - 1)
             
             # Apply label smoothing
             target_one_hot = target_one_hot * (1 - self.label_smoothing - smoothing_value) + smoothing_value

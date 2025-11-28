@@ -43,7 +43,7 @@ class PositionalEncoding(Module):
         """
         
         # Store the input shape
-        input_shape = x.shape()
+        input_shape = x.shape
         
         # Check if the input is 3D (batch_size, sequence_length, features)
         assert len(input_shape) == 3, f"Invalid input shape. Expected 3D tensor (batch_size, seq_len, features). Got shape: {input_shape}"
@@ -75,10 +75,10 @@ class PositionalEncoding(Module):
         """
         
         # Check if the input shape is valid
-        assert len(x.shape()) == 3, f"Invalid input shape. Expected 3D tensor (batch_size, seq_len, features). Got shape: {x.shape()}"
+        assert len(x.shape) == 3, f"Invalid input shape. Expected 3D tensor (batch_size, seq_len, features). Got shape: {x.shape}"
         
         # Extract dimensions
-        _, _, d_model = x.shape()
+        _, _, d_model = x.shape
         
         # Create positional encoding matrix
         pos_encoding = np.zeros((self.max_len, d_model))

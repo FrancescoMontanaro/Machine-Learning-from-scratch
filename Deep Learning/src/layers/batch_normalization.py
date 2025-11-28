@@ -48,7 +48,7 @@ class BatchNormalization(Module):
         # The layer is in training phase
         if self.training:
             # Determine axes to compute mean and variance: all except the last dimension (features)
-            axes = tuple(range(len(x.shape()) - 1))
+            axes = tuple(range(len(x.shape) - 1))
             
             # Calculate batch mean and variance
             mean = x.mean(axis=axes, keepdims=True)
@@ -76,7 +76,7 @@ class BatchNormalization(Module):
         """
         
         # Extract the shape of the parameters
-        num_features = x.shape()[-1]
+        num_features = x.shape[-1]
         
         # Initialize the scale parameter
         self.gamma = Tensor(
