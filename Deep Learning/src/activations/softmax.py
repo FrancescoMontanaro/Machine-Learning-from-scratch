@@ -17,4 +17,5 @@ class Softmax(Activation):
         - Tensor: Output of the activation function
         """
         
+        # Compute the softmax
         return x.softmax()

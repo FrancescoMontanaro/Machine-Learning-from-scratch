@@ -16,5 +16,6 @@ class LogSoftmax(Activation):
         Returns:
         - Tensor: Output of the activation function
         """
-        
+
+        # Compute the log softmax
         return x.log_softmax()
