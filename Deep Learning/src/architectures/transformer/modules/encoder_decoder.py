@@ -2,7 +2,7 @@ from typing import Optional, Literal
 
 from .decoder import Decoder
 from .encoder import Encoder
-from ...core import Tensor, Module
+from ....core import Tensor, Module
 
 
 class EncoderDecoder(Module):

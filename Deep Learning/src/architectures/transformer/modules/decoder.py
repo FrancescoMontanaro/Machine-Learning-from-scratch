@@ -2,8 +2,8 @@ import numpy as np
 from typing import Optional, Literal
 
 from .block import Block
-from ...core import Tensor, Module, ModuleList
-from ...layers import Dense, Embedding, LayerNormalization, PositionalEncoding
+from ....core import Tensor, Module, ModuleList
+from ....layers import Dense, Embedding, LayerNormalization, PositionalEncoding
 
 
 class Decoder(Module):

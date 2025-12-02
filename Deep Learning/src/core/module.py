@@ -236,6 +236,35 @@ class Module:
         
         # Return the output tensor
         return out
+    
+    
+    def forward_with_multi_outputs(self, *args, **kwargs) -> tuple[Tensor, ...]:
+        """
+        Method to define the forward pass of the module with multiple outputs
+        
+        Returns:
+        - tuple[Tensor, ...]: Outputs of the module after the forward pass
+        """
+        
+        ### Step 1: Lazy init ###
+        
+        # Check if the module is initialized
+        if not self._output_shape:
+            # Initialize the parameters of the module
+            self._lazy_init(*args, **kwargs)
+        
+        ### Step 2: Forward pass, to be implemented in the child class ###
+        
+        # Call the forward method of the module
+        out = self._forward_with_multi_outputs(*args, **kwargs)
+        
+        ### Step 3: Update the output shape ###
+        
+        # Save the input and  output shape of the module
+        self._output_shape = tuple(o.shape for o in out)
+        
+        # Return the output tensor
+        return out
             
     
     def summary(self, recursive: bool = False, is_root: bool = True, prefix: str = "") -> None:
@@ -547,6 +576,18 @@ class Module:
         """
         
         raise NotImplementedError("The forward method must be implemented in the child class.")
+    
+    
+    def _forward_with_multi_outputs(self, *args, **kwargs) -> tuple[Tensor, ...]:
+        """
+        Abstract method to define the forward pass of the module with multiple outputs
+        This method should be implemented in the child classes
+        
+        Parameters:
+        - x (Tensor): Input tensor
+        """
+        
+        raise NotImplementedError("The forward_with_multi_outputs method must be implemented in the child class.")
 
 
     def _clear_indexed_tensors(self, list_name: str) -> None:

@@ -2,12 +2,14 @@ import numpy as np
 from typing import Generator, Union, Optional, Callable, Literal
 
 from ...core import Tensor
-from .decoder import Decoder
-from .encoder import Encoder
-from .encoder_decoder import EncoderDecoder
 from ..auto_regressive import AutoRegressive
 from ...core.utils.data_processing import concat
 from ...core.utils.context_manager import no_grad
+
+# Import transformer modules
+from .modules.decoder import Decoder
+from .modules.encoder import Encoder
+from .modules.encoder_decoder import EncoderDecoder
 
 
 class EncoderTransformer(AutoRegressive):

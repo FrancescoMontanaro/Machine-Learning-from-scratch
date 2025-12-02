@@ -1,11 +1,18 @@
 import weakref
 import numpy as np
 from types import EllipsisType
-from typing import Optional, Union, Tuple, List, Callable, Any
+from typing import Optional, Union, Tuple, List, Callable, Any, Literal
 
 from .functional.kernel import *
 from .functional.tape import tape_push
-from .functional.base import tensor_unary_op, tensor_binary_op, tensor_nary_op, accumulate_gradient
+from .functional.base import (
+    tensor_unary_op, 
+    tensor_binary_op, 
+    tensor_nary_op, 
+    tensor_unary_op_multiple_outputs,
+    tensor_unary_op_binary_output,
+    accumulate_gradient
+)
 
 
 
@@ -653,11 +660,8 @@ class Tensor:
             # Compute the sigmoid function
             sigmoid_forward(self.data.ravel(), out_data.ravel(), self.data.size)
             
-            # Save the output data in the data tape
-            tape_idx = tape_push((out_data,))
-            
-            # Return the output data
-            return out_data, tape_idx
+            # Save the output data in the data tape and return it
+            return out_data, tape_push((out_data,))
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
@@ -681,6 +685,18 @@ class Tensor:
         )
     
     
+    def silu(self) -> 'Tensor':
+        """
+        Method to compute the SiLU (Sigmoid Linear Unit) of the tensor
+        
+        Returns:
+        - Tensor: Tensor containing the SiLU of the current tensor
+        """
+        
+        # Compute and return the SiLU of the tensor
+        return self * self.sigmoid()
+    
+    
     def relu(self) -> 'Tensor':
         """
         Method to compute the ReLU of the tensor
@@ -696,12 +712,9 @@ class Tensor:
             
             # Compute the sigmoid function
             relu_forward(self.data.ravel(), out_data.ravel(), self.data.size)
-            
-            # Save the output data in the data tape
-            tape_idx = tape_push((out_data,))
-            
-            # Return the output data
-            return out_data, tape_idx
+
+            # Save the output data in the data tape and return it
+            return out_data, tape_push((out_data,))
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
@@ -741,11 +754,8 @@ class Tensor:
             # Compute the sigmoid function
             tanh_forward(self.data.ravel(), out_data.ravel(), self.data.size)
             
-            # Save the output data in the data tape
-            tape_idx = tape_push((out_data,))
-            
-            # Return the output data
-            return out_data, tape_idx
+            # Save the output data in the data tape and return it
+            return out_data, tape_push((out_data,))
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
@@ -803,12 +813,9 @@ class Tensor:
             
                 # Compute the softmax function
                 softmax_forward(self.data.ravel(), out_data.ravel(), n, k)
-                
-            # Save the output data in the data tape
-            tape_idx = tape_push((out_data,))
-            
-            # Return the output data
-            return out_data, tape_idx
+
+            # Save the output data in the data tape and return it
+            return out_data, tape_push((out_data,))
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
@@ -876,13 +883,10 @@ class Tensor:
                 
                 # Compute the log softmax function
                 log_softmax_forward(self.data.ravel(), out_data.ravel(), n, k)
-                
-            # Save the output data in the data tape
-            tape_idx = tape_push((out_data,))
-                
-            # Return the output data
-            return out_data, tape_idx
-        
+
+            # Save the output data in the data tape and return it
+            return out_data, tape_push((out_data,))
+
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
             # Extract the output data from the saved data
@@ -1263,6 +1267,135 @@ class Tensor:
         )
 
 
+    def flatten(self, start_dim: int = 0, end_dim: int = -1) -> 'Tensor':
+        """
+        Flattens a contiguous range of dimensions in the tensor.
+        
+        Parameters:
+        - start_dim (int): First dimension to flatten (default: 0)
+        - end_dim (int): Last dimension to flatten (default: -1, meaning last dimension)
+        
+        Returns:
+        - Tensor: Flattened tensor
+        
+        Examples:
+        - tensor.flatten() flattens all dimensions
+        - tensor.flatten(1) flattens from dim 1 to the end (typical for batched data)
+        - tensor.flatten(1, 2) flattens only dims 1 and 2
+        """
+        
+        # Define the forward function
+        def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
+            # Perform the flatten operation
+            out_data, original_shape = flatten_forward(x_data, start_dim, end_dim)
+            
+            # Save the original shape in the data tape for the backward pass and return the output data
+            return out_data, tape_push((original_shape,))
+        
+        # Define the backward function
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
+            # Extract the original shape from the saved data
+            if saved_data is None:
+                raise ValueError("Original shape not found in the data tape")
+            
+            # Get the original shape
+            original_shape = saved_data[0]
+            
+            # Compute the gradient by reshaping back to original shape
+            flatten_backward(out_grad, out_buffer, original_shape)
+        
+        # Return the tensor operation with the specified forward and backward functions
+        return tensor_unary_op(
+            t = self,
+            forward_fn = forward,
+            backward_fn = backward,
+            tensor_cls = Tensor
+        )
+
+
+    def top_k(self, k: int, axis: int = -1, largest: bool = True, sorted: bool = True) -> Tuple['Tensor', 'Tensor']:
+        """
+        Method to compute the top k elements of the tensor along the specified axis
+        
+        Parameters:
+        - k (int): Number of top elements to select
+        - axis (int): Axis along which to select the top k elements
+        - largest (bool): Whether to select the largest or smallest elements
+        - sorted (bool): Whether to sort the selected elements
+        
+        Returns:
+        - Tensor: Tensor containing the top k elements along the specified axis
+        """
+        
+        # Define the forward function
+        def forward(x_data: np.ndarray) -> tuple[tuple[np.ndarray, np.ndarray], int]:
+            # Compute the top k values and their indices using numpy
+            values, indices = top_k_forward(x_data, k=k, dim=axis, largest=largest, sorted=sorted)
+
+            # Push the indices to the data tape for use in the backward pass and return the values and indices
+            return (values, indices), tape_push((indices,))
+
+        # Define the backward function for values
+        def backward_values(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
+            # Extract the indices from the saved data
+            if saved_data is None:
+                raise ValueError("Indices not found in the data tape")
+
+            # Get the indices
+            indices = saved_data[0]
+
+            # Compute the gradient by scattering it to the original positions
+            top_k_backward(out_grad, out_buffer, indices, dim=axis)
+            
+        # Define the backward function for indices (no gradient)
+        def backward_indices(*args, **kwargs) -> None:
+            # No gradient is computed for indices
+            pass
+
+        # Return the tensor operation with the specified forward and backward functions
+        return tensor_unary_op_binary_output(
+            t = self,
+            forward_fn = forward,
+            backward_fn_a = backward_values,
+            backward_fn_b = backward_indices,
+            tensor_cls = Tensor
+        )
+
+
+    def gather(self, axis: int, index: 'Tensor') -> 'Tensor':
+        """
+        Method to gather values from the tensor at specified indices along a given axis
+        
+        Parameters:
+        - axis (int): Axis along which to gather the values
+        - index (Tensor): Indices to gather the values from
+        
+        Returns:
+        - Tensor: Tensor containing the gathered values
+        """
+
+        # Define the forward function
+        def forward(x_data: np.ndarray, *args, **kwargs) -> tuple[np.ndarray, int]:
+            # Perform the gather operation
+            out_data = gather_forward(x_data, axis, index.data)
+
+            # Return the gathered tensor
+            return out_data, -1
+            
+        # Define the backward function
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
+            # Compute the gradient of the gather operation
+            gather_backward(out_grad, out_buffer, axis, index.data)
+
+        # Return the tensor operation with the specified forward and backward functions
+        return tensor_unary_op(
+            t = self,
+            forward_fn = forward,
+            backward_fn = backward,
+            tensor_cls = Tensor
+        )
+
+
     def masked_fill(self, mask: Union[np.ndarray, 'Tensor'], value: float) -> 'Tensor':
         """
         Method to fill the tensor with a value where the mask is True
@@ -1304,12 +1437,9 @@ class Tensor:
                 
                 # Perform the masked fill operation
                 masked_fill_forward(flat_data, mask_flat, fill_val, out_flat)
-                
-            # Save the mask in the data tape to use it in the backward pass
-            tape_idx = tape_push((mask_flat,))
         
-            # Return the output data
-            return out_data, tape_idx
+            # Save the mask in the data tape to use it in the backward pass and return the output data
+            return out_data, tape_push((mask_flat,))
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
@@ -1326,6 +1456,49 @@ class Tensor:
             t = self,
             forward_fn = forward,
             backward_fn = backward,
+            tensor_cls = Tensor
+        )
+
+
+    def scatter(self, axis: int, index: 'Tensor', src: 'Tensor', reduction: Optional[str] = None) -> 'Tensor':
+        """
+        Method to scatter values from the source tensor into the current tensor at specified indices
+        
+        Parameters:
+        - axis (int): Axis along which to scatter the values
+        - index (Tensor): Indices where the values need to be scattered
+        - src (Tensor): Source values to scatter
+        - reduction (Optional[str]): Optional reduction method to apply ('add', 'multiply')
+        
+        Returns:
+        - Tensor: Tensor with the scattered values
+        """
+
+        # Define the forward function
+        def forward(x_data: np.ndarray, *args, **kwargs) -> tuple[np.ndarray, int]:
+            # Perform the scatter operation
+            out_data = scatter_forward(x_data, axis, index.data, src.data, reduction)
+
+            # Return the scattered tensor
+            return out_data, -1
+            
+        # Define the backward function for tensor x
+        def backward_x(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
+            # Compute the gradient of the multiplication operation
+            scatter_backward_x(out_grad, out_buffer, axis, index.data, reduction)
+
+        # Define the backward function for tensor src
+        def backward_src(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
+            # Compute the gradient of the multiplication operation
+            scatter_backward_src(out_grad, out_buffer, axis, index.data, reduction)
+
+        # Return the tensor operation with the specified forward and backward functions
+        return tensor_binary_op(
+            t1 = self,
+            t2 = src,
+            forward_fn = forward,
+            backward_fn_a = backward_x,
+            backward_fn_b = backward_src,
             tensor_cls = Tensor
         )
 
@@ -1648,12 +1821,9 @@ class Tensor:
 
             # Perform the max pooling operation
             max_pool_2d_forward(self.data, kernel_height, kernel_width, stride_height, stride_width, out_data, arg_i, arg_j)
-            
-            # Save the indices in the data tape to use them in the backward pass
-            tape_idx = tape_push((arg_i, arg_j))
-            
-            # Return the output data
-            return out_data, tape_idx
+
+            # Save the indices in the data tape to use them in the backward pass and return the output data
+            return out_data, tape_push((arg_i, arg_j))
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
@@ -1694,12 +1864,9 @@ class Tensor:
         def forward(tensors_list: List[np.ndarray]) -> tuple[np.ndarray, int]:
             # Perform the concatenation operation
             out, offsets = concat_forward(tensors_list, axis)
-            
-            # Save the offsets in the data tape to use it in the backward pass
-            tape_idx = tape_push((offsets,))
                 
-            # Return the concatenated tensor
-            return out, tape_idx
+            # Save the offsets in the data tape to use it in the backward pass and return the output data
+            return out, tape_push((offsets,))
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, tensor_idx: int, saved_data: Optional[Tuple[Any, ...]]) -> None:
@@ -1748,6 +1915,94 @@ class Tensor:
         # Return the tensor operation with the specified forward and backward functions
         return tensor_nary_op(
             tensors = tensors,
+            forward_fn = forward,
+            backward_fn = backward,
+            tensor_cls = Tensor
+        )
+       
+     
+    @staticmethod
+    def split(tensor: 'Tensor', indices_or_sections: Union[int, List[int]], axis: int = 0) -> List['Tensor']:
+        """
+        Split a tensor into multiple sub-tensors along the specified axis.
+        
+        Parameters:
+        - tensor (Tensor): Input tensor to be split
+        - indices_or_sections (Union[int, List[int]]): Number of sections or list of indices to split at
+        - axis (int): Axis along which to split the tensor
+        
+        Returns:
+        - List[Tensor]: List of sub-tensors resulting from the split operation
+        """
+        
+        # Define the forward function
+        def forward(x_data: np.ndarray) -> tuple[List[np.ndarray], int]:
+            # Perform the split operation
+            out_tensors = split_forward(x_data, indices_or_sections, axis)
+                
+            # Return the list of sub-tensors
+            return out_tensors, -1
+        
+        # Define the backward function
+        def backward(out_grads: List[np.ndarray], out_buffer: np.ndarray, *args, **kwargs) -> None:
+            # Call the kernel function to compute the gradient of the split operation
+            split_backward(out_grads, out_buffer, axis)
+
+        # Return the tensor operation with the specified forward and backward functions
+        return tensor_unary_op_multiple_outputs(
+            t = tensor,
+            forward_fn = forward,
+            backward_fn = backward,
+            tensor_cls = Tensor
+        )
+        
+        
+    @staticmethod
+    def einsum(subscripts: str, *operands: 'Tensor') -> 'Tensor':
+        """
+        Perform Einstein summation on the given tensors.
+        
+        Parameters:
+        - subscripts (str): Einsum subscript string (e.g., 'ij,jk->ik' for matrix multiplication)
+        - operands (Tensor): Input tensors
+        
+        Returns:
+        - Tensor: Result of the einsum operation
+        
+        Examples:
+        - Matrix multiplication: Tensor.einsum('ij,jk->ik', A, B)
+        - Batch matrix multiplication: Tensor.einsum('bij,bjk->bik', A, B)
+        - Transpose: Tensor.einsum('ij->ji', A)
+        - Trace: Tensor.einsum('ii->', A)
+        - Outer product: Tensor.einsum('i,j->ij', a, b)
+        - Attention scores: Tensor.einsum('bhqd,bhkd->bhqk', Q, K)
+        """
+        
+        # Convert operands to list for tensor_nary_op
+        tensors_list = list(operands)
+        
+        # Store operand data for backward pass
+        operands_data = tuple(t.data for t in operands)
+
+        # Define the forward function
+        def forward(tensors_data: List[np.ndarray]) -> tuple[np.ndarray, int]:
+            # Perform the einsum operation
+            out = einsum_forward(subscripts, *tensors_data)
+            
+            # Return the result
+            return out, -1
+        
+        # Define the backward function
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, tensor_idx: int, *args, **kwargs) -> None:
+            # Compute the gradient for the specified operand
+            grad = einsum_backward(subscripts, out_grad, operands_data, tensor_idx)
+            
+            # Accumulate the gradient
+            out_buffer += grad
+
+        # Return the tensor operation with the specified forward and backward functions
+        return tensor_nary_op(
+            tensors = tensors_list,
             forward_fn = forward,
             backward_fn = backward,
             tensor_cls = Tensor

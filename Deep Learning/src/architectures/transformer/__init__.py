@@ -1,2 +1,2 @@
 from .tokenizer import Tokenizer
-from .transformer import EncoderTransformer, DecoderTransformer, EncoderDecoderTransformer
+from .base import EncoderTransformer, DecoderTransformer, EncoderDecoderTransformer

@@ -20,7 +20,12 @@ def accumulate_gradient(x: 'Tensor', grad: np.ndarray) -> None:
     x.grad = add_forward(x.grad, grad.astype(x.grad.dtype)) if x.grad is not None else grad
 
 
-def tensor_unary_op(t: 'Tensor', forward_fn: Callable[..., tuple[np.ndarray, int]], backward_fn: Callable[..., None], tensor_cls: type['Tensor']) -> 'Tensor':
+def tensor_unary_op(
+    t: 'Tensor', 
+    forward_fn: Callable[..., tuple[np.ndarray, int]], 
+    backward_fn: Callable[..., None], 
+    tensor_cls: type['Tensor']
+) -> 'Tensor':
     """
     Function to create a tensor operation with automatic differentiation.
     
@@ -72,7 +77,14 @@ def tensor_unary_op(t: 'Tensor', forward_fn: Callable[..., tuple[np.ndarray, int
     return out
 
 
-def tensor_binary_op(t1: 'Tensor', t2: 'Tensor', forward_fn: Callable[..., tuple[np.ndarray, int]], backward_fn_a: Callable[..., None], backward_fn_b: Callable[..., None], tensor_cls: type['Tensor']) -> 'Tensor':
+def tensor_binary_op(
+    t1: 'Tensor', 
+    t2: 'Tensor', 
+    forward_fn: Callable[..., tuple[np.ndarray, int]], 
+    backward_fn_a: Callable[..., None], 
+    backward_fn_b: Callable[..., None], 
+    tensor_cls: type['Tensor']
+) -> 'Tensor':
     """
     Function to create a tensor operation with automatic differentiation.
     
@@ -136,7 +148,12 @@ def tensor_binary_op(t1: 'Tensor', t2: 'Tensor', forward_fn: Callable[..., tuple
     return out
 
 
-def tensor_nary_op(tensors: List['Tensor'], forward_fn: Callable[..., tuple[np.ndarray, int]], backward_fn: Callable[..., None], tensor_cls: type['Tensor']) -> 'Tensor':
+def tensor_nary_op(
+    tensors: List['Tensor'], 
+    forward_fn: Callable[..., tuple[np.ndarray, int]], 
+    backward_fn: Callable[..., None], 
+    tensor_cls: type['Tensor']
+) -> 'Tensor':
     """
     Function to create a tensor operation with automatic differentiation.
     
@@ -190,3 +207,127 @@ def tensor_nary_op(tensors: List['Tensor'], forward_fn: Callable[..., tuple[np.n
     
     # Return the output tensor
     return out
+
+
+def tensor_unary_op_multiple_outputs(
+    t: 'Tensor', 
+    forward_fn: Callable[..., tuple[List[np.ndarray], int]], 
+    backward_fn: Callable[..., None], 
+    tensor_cls: type['Tensor']
+) -> List['Tensor']:
+    """
+    Function to create a tensor operation with multiple outputs and automatic differentiation.
+    
+    Parameters:
+    - t (Tensor): Input tensor for the operation.
+    - forward_fn (Callable[..., tuple[List[np.ndarray], int]]): Forward function that computes the outputs.
+    - backward_fn (Callable[..., None]): Backward function that computes the gradients.
+    - tensor_cls (type[Tensor]): The Tensor class to be used for creating the output tensors.
+    
+    Returns:
+    - List[Tensor]: List of output tensors with the computed gradients.
+    """
+    
+    # Call the forward function
+    out_data_list, tape_idx = forward_fn(t.data)
+    
+    # Check if the gradient is required
+    if _NO_GRAD or not t.requires_grad:
+        # If no gradients are required, return the output tensors without backward
+        return [tensor_cls(out_data, requires_grad=False) for out_data in out_data_list]
+    
+    # Create output tensors
+    out_list = [tensor_cls(out_data, requires_grad=True) for out_data in out_data_list]
+    
+    # Define the backward function
+    def _backward():
+        # If the output tensor is None, return
+        if any(out.grad is None for out in out_list):
+            return
+        
+        # Retrieve the saved data from the tape
+        saved_data = tape_pop(tape_idx)
+        
+        # If the tensor requires gradients, set its gradient to zero
+        if t.grad is None:
+            # Initialize the gradient to zero
+            t.grad = np.zeros_like(t.data, dtype=t.data.dtype)
+            
+        # Call the backward function with the output gradients
+        backward_fn(out_grads=[out.grad for out in out_list], out_buffer=t.grad, saved_data=saved_data)
+        
+    # Set the backward function to each output tensor
+    for out in out_list:
+        out._backward = _backward
+    
+    # Set the previous tensors
+    if t.requires_grad:
+        for out in out_list:
+            out._prev = {t}
+    
+    # Return the list of output tensors
+    return out_list
+
+
+def tensor_unary_op_binary_output(
+    t: 'Tensor', 
+    forward_fn: Callable[..., tuple[tuple[np.ndarray, np.ndarray], int]], 
+    backward_fn_a: Callable[..., None], 
+    backward_fn_b: Callable[..., None], 
+    tensor_cls: type['Tensor']
+) -> tuple['Tensor', 'Tensor']:
+    """
+    Function to create a tensor operation with two outputs and automatic differentiation.
+    
+    Parameters:
+    - t (Tensor): Input tensor for the operation.
+    - forward_fn (Callable[..., tuple[np.ndarray, np.ndarray, int]]): Forward function that computes the outputs.
+    - backward_fn_a (Callable[..., None]): Backward function for the first output tensor.
+    - backward_fn_b (Callable[..., None]): Backward function for the second output tensor.
+    - tensor_cls (type[Tensor]): The Tensor class to be used for creating the output tensors.
+    
+    Returns:
+    - Tuple[Tensor, Tensor]: Output tensors with the computed gradients.
+    """
+    
+    # Call the forward function
+    (out_data_a, out_data_b), tape_idx = forward_fn(t.data)
+    
+    # Check if the gradient is required
+    if _NO_GRAD or not t.requires_grad:
+        # If no gradients are required, return the output tensors without backward
+        return tensor_cls(out_data_a, requires_grad=False), tensor_cls(out_data_b, requires_grad=False)
+    
+    # Create output tensors
+    out_a = tensor_cls(out_data_a, requires_grad=True)
+    out_b = tensor_cls(out_data_b, requires_grad=True)
+    
+    # Define the backward function
+    def _backward():
+        # If either output tensor is None, return
+        if out_a.grad is None or out_b.grad is None:
+            return
+        
+        # Retrieve the saved data from the tape
+        saved_data = tape_pop(tape_idx)
+        
+        # If the tensor requires gradients, set its gradient to zero
+        if t.grad is None:
+            # Initialize the gradient to zero
+            t.grad = np.zeros_like(t.data, dtype=t.data.dtype)
+            
+        # Call the backward functions with the output gradients
+        backward_fn_a(out_grad=out_a.grad, out_buffer=t.grad, saved_data=saved_data)
+        backward_fn_b(out_grad=out_b.grad, out_buffer=t.grad, saved_data=saved_data)
+        
+    # Set the backward function to each output tensor
+    out_a._backward = _backward
+    out_b._backward = _backward
+    
+    # Set the previous tensors
+    if t.requires_grad:
+        out_a._prev = {t}
+        out_b._prev = {t}
+        
+    # Return the output tensors
+    return out_a, out_b

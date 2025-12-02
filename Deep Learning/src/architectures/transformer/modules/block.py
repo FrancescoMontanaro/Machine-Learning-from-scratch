@@ -1,8 +1,8 @@
 from typing import Optional
 
 from .mlp import MLP
-from ...core import Tensor, Module
-from ...layers import LayerNormalization
+from ....core import Tensor, Module
+from ....layers import LayerNormalization
 from .self_attention import SelfMultiHeadAttention
 from .cross_attention import CrossMultiHeadAttention
 

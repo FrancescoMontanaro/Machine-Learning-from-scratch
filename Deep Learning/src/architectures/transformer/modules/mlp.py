@@ -1,6 +1,6 @@
-from ...activations import ReLU
-from ...core import Tensor, Module
-from ...layers import Dense, Dropout
+from ....activations import ReLU
+from ....core import Tensor, Module
+from ....layers import Dense, Dropout
 
 
 class MLP(Module):

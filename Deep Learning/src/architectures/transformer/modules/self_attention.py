@@ -1,8 +1,8 @@
 import numpy as np
 
-from ...layers import Dense, Dropout
-from ...core import Tensor, Module, ModuleList
-from ...core.utils.data_processing import concat
+from ....layers import Dense, Dropout
+from ....core import Tensor, Module, ModuleList
+from ....core.utils.data_processing import concat
 
 
 class SelfSingleHeadAttention(Module):
