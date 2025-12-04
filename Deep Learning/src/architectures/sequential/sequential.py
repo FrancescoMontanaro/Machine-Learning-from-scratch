@@ -3,7 +3,7 @@ import time
 from typing import Optional, Dict, Tuple
 
 from ..base import Architecture
-from ..config import TrainingArguments
+from ...models import TrainingArguments
 from ...core import Tensor, Module, ModuleList
 from ...core.utils.context_manager import no_grad
 from ...core.utils.data_processing import shuffle_data, concat
@@ -45,11 +45,11 @@ class Sequential(Architecture):
         """
         
         # Extract data from train_args
-        train_data = train_args.train_data
-        y_train = train_args.y_train
-        valid_data = train_args.valid_data
-        y_valid = train_args.y_valid
-        
+        train_data = train_args.train_data.input
+        y_train = train_args.train_data.target
+        valid_data = train_args.valid_data.input if train_args.valid_data else None
+        y_valid = train_args.valid_data.target if train_args.valid_data else None
+
         # Extract and validate input data (validation already done in TrainingArguments)
         train_input_names = list(train_data.keys())
         train_inputs = tuple(train_data.values())
