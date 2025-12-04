@@ -1,3 +1,4 @@
+from ..config import MLPConfig
 from ....activations import ReLU
 from ....core import Tensor, Module
 from ....layers import Dense, Dropout
@@ -7,25 +8,32 @@ class MLP(Module):
     
     ### Magic methods ###
     
-    def __init__(self, dropout: float = 0.1, *args, **kwargs) -> None:
+    def __init__(
+        self,
+        config: MLPConfig,
+        *args, **kwargs
+    ) -> None:
         """
         Initialize the MLP layers of the transformer.
         
         Parameters:
-        - dropout (float): The dropout rate.
+        - config (MLPConfig): The configuration for the MLP layers.
         """
         
         # Initialize the superclass
         super().__init__(*args, **kwargs)
         
+        # Ensure hidden_dim is specified in the configuration
+        assert config.hidden_dim is not None, "hidden_dim must be specified in the configuration."
+        
         # Define the MLP layers
         # Define the dense layers
         # This will be lazily initialized in the forward pass, since we do not know the embedding size yet
-        self.input_dense: Dense # (B, S, E) -> (B, S, 4 * E)
-        self.output_dense: Dense # (B, S, 4 * E) -> (B, S, E)
+        self.input_dense = Dense(config.hidden_dim, activation=ReLU()) # (B, S, E) -> (B, S, hidden_dim)
+        self.output_dense: Dense  # (B, S, hidden_dim) -> (B, S, E)
         
         # Final dropout layer
-        self.dropout: Dropout = Dropout(dropout) # (B, S, E) -> (B, S, E)
+        self.dropout: Dropout = Dropout(config.dropout) # (B, S, E) -> (B, S, E)
        
        
     ### Protected methods ### 
@@ -70,6 +78,5 @@ class MLP(Module):
         # Unpack the shape of the input data
         _, _, E = x.shape # (B, S, E)  
         
-        # Initialize the dense layers
-        self.input_dense = Dense(4 * E, activation=ReLU()) # (B, S, E) -> (B, S, 4 * E)
-        self.output_dense = Dense(E) # (B, S, 4 * E) -> (B, S, E)
+        # Initialize the output dense layer
+        self.output_dense = Dense(E) # (B, S, hidden_dim) -> (B, S, E)

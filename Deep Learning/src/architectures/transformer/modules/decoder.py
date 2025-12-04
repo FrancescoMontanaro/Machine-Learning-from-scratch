@@ -1,7 +1,8 @@
 import numpy as np
-from typing import Optional, Literal
+from typing import Optional
 
 from .block import Block
+from ..config import TransformerConfig
 from ....core import Tensor, Module, ModuleList
 from ....layers import Dense, Embedding, LayerNormalization, PositionalEncoding
 
@@ -12,87 +13,65 @@ class Decoder(Module):
     
     def __init__(
         self, 
-        input_dim: int, 
-        n_embed: int, 
-        n_attention_heads: int, 
-        sequence_length: int, 
-        n_decoder_blocks: int = 4, 
-        dropout: float = 0.1,
-        output_dim: Optional[int] = None,
-        input_type: Literal["discrete", "continuous"] = "discrete",
-        causal_attention: bool = True,
-        use_cross_attention: bool = False,
-        return_sequence: bool = False,
-        positional_encoding_type: Literal["fixed", "learned"] = "learned",
-        *args, **kwargs) -> None:
+        config: TransformerConfig,
+        *args, **kwargs
+    ) -> None:
         """
         Initialize the transformer's decoder.
         
         Parameters:
-        - input_dim (int): The input dimension. It is the vocabulary size for text data or the number of features for other types of data.
-        - n_embed (int): The embedding size.
-        - n_attention_heads (int): The number of attention heads.
-        - sequence_length (int): The sequence length of the input data.
-        - n_decoder_blocks (int): The number of transformer blocks.
-        - dropout (float): The dropout rate.
-        - output_dim (Optional[int]): The output dimension. If None, it will be set to the input dimension.
-        - input_type (Literal["discrete", "continuous"]): The type of input data. It can be "discrete" for text data or "continuous" for other types of data.
-        - causal_attention (bool): Whether to use causal attention (default: True).
-        - use_cross_attention (bool): Whether to use cross-attention (default: False).
-        - return_sequence (bool): Whether to return the sequence or just the last output. Default is False.
-        - positional_encoding_type (Literal["fixed", "learned"]): The type of positional encoding to use. It can be "fixed" for fixed positional encoding or "learned" for trainable positional embeddings.
+        - config (TransformerConfig): The configuration for the decoder transformer model.
         """
         
         # Initialize the superclass
         super().__init__(*args, **kwargs)
         
         # Store the parameters
-        self.input_dim = input_dim
-        self.output_dim = output_dim if output_dim is not None else input_dim
-        self.n_embed = n_embed
-        self.n_attention_heads = n_attention_heads
-        self.sequence_length = sequence_length
-        self.n_decoder_blocks = n_decoder_blocks
-        self.dropout = dropout
-        self.causal_attention = causal_attention
-        self.use_cross_attention = use_cross_attention
-        self.return_sequence = return_sequence
+        self.return_sequence = config.return_sequence
         
         # Define the input projection layer
-        if input_type == "discrete":
-            self.input_proj = Embedding(input_dim, n_embed) # (B, S) -> (B, S, E)
+        if config.input_type == "discrete":
+            self.input_proj = Embedding(config.input_dim, config.embed_dim) # (B, S) -> (B, S, E)
         else:
-            self.input_proj = Dense(n_embed) # (B, S, F) -> (B, S, E)
-        
+            self.input_proj = Dense(config.embed_dim) # (B, S, F) -> (B, S, E)
+
         # Define the positional embedding layer
-        self.positional_encoding = Embedding(sequence_length, n_embed) if positional_encoding_type == "learned" else PositionalEncoding(sequence_length) # (B, S) -> (B, S, E)
+        if config.positional_encoding_type == "learned":
+            self.positional_encoding = Embedding(config.max_sequence_length, config.embed_dim) # (B, S) -> (B, S, E)
+        else:
+            self.positional_encoding = PositionalEncoding(config.max_sequence_length) # (B, S) -> (B, S, E)
         
         # Instantiate the decoder blocks
         self.decoder_blocks: ModuleList[Block] = ModuleList([ # (B, S, E) -> (B, S, E)
-            Block(
-                n_heads = n_attention_heads, 
-                dropout = dropout,
-                use_cross_attention = use_cross_attention,
-                causal_attention = causal_attention # Causal attention is usually used in the decoder
-            ) 
-            for _ in range(n_decoder_blocks)
+            Block(config=config.block_config)
+            for _ in range(config.num_blocks)
         ])
         
         # Layer normalization
         self.layer_norm: LayerNormalization = LayerNormalization() # (B, S, E) -> (B, S, E)
         
-        # Define the output layer
-        self.output_layer: Dense = Dense(self.output_dim) # (B, S, E) -> (B, S, O)
+        # Define the output layer 
+        # If output_dim is None, defaults to input_dim
+        assert config.output_dim is not None, "output_dim must be specified in the configuration."
+        self.output_layer: Dense = Dense(config.output_dim) # (B, S, E) -> (B, S, O)
         
         
     ### Protected methods ###
     
-    def _forward(self, x: Tensor, encoder_output: Optional[Tensor] = None) -> Tensor:
+    def _forward(
+        self, 
+        x: Tensor, 
+        encoder_output: Optional[Tensor] = None,
+        start_pos: int = 0
+    ) -> Tensor:
         """
         Forward pass of the transformer's decoder.
         
         Parameters:
         - x (Tensor): The input x.
+        - encoder_output (Optional[Tensor]): The output from the encoder (for cross-attention).
+        - start_pos (int): Starting position for attention caching (used in DeepSeek blocks).
+        - freq_cis (Optional[Tensor]): Precomputed RoPE frequencies (used in DeepSeek blocks).
         
         Returns:
         - Tensor: The output logits.
@@ -100,11 +79,6 @@ class Decoder(Module):
         Raises:
         - ValueError: If cross-attention is used but encoder_output is not provided.
         """
-        
-        # Check if encoder output is provided when cross-attention is used
-        if self.use_cross_attention and encoder_output is None:
-            # If cross-attention is used and encoder_output is not provided, raise an error
-            raise ValueError("encoder_output must be provided when use_cross_attention=True")
         
         # Dimensions are:
         # - B: batch size
@@ -124,7 +98,7 @@ class Decoder(Module):
             embeddings = self.positional_encoding(embeddings) # (B, S, E) -> (B, S, E)
         else:
             # Use trainable positional embeddings
-            positions = Tensor(np.arange(S)) # Create position indices (S,)
+            positions = Tensor(np.arange(start_pos, start_pos + S)) # Create position indices (S,)
             pos_embeddings = self.positional_encoding(positions) # (S,) -> (S, E)
             
             # Add positional embeddings to input embeddings
@@ -132,7 +106,11 @@ class Decoder(Module):
         
         # Apply the decoder blocks
         for block in self.decoder_blocks:
-            embeddings = block(embeddings, encoder_output) # (B, S, E) -> (B, S, E)
+            embeddings = block(  # (B, S, E) -> (B, S, E)
+                x = embeddings, 
+                start_pos = start_pos, 
+                encoder_output = encoder_output
+            )
             
         # Apply the output layer to get the logits
         out = self.output_layer(self.layer_norm(embeddings)) # (B, S, E) -> (B, S, O)

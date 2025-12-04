@@ -41,19 +41,13 @@ def stack_backward(out_grad: np.ndarray, out_buffer: np.ndarray, axis: int, idx:
         # Raise an error if dimensions do not match
         raise ValueError("Mismatch between out_grad and out_buffer dimensions.")
 
-    # Swap the first axis with the specified axis
-    if axis == 0:
-        grad0 = out_grad
-    else:
-        grad0 = np.swapaxes(out_grad, 0, axis)
-
-    # Slice the gradient for the specific tensor
-    src = grad0[idx]
+    # Use np.take to select the gradient for the specific tensor along the stack axis
+    src = np.take(out_grad, idx, axis=axis)
 
     # Check if the shape of the source matches the output buffer
     if src.shape != out_buffer.shape:
         # Raise an error if shapes do not match
-        raise ValueError("Shape mismatch after slicing.")
+        raise ValueError(f"Shape mismatch after slicing. src.shape={src.shape}, out_buffer.shape={out_buffer.shape}")
 
     # Copy the sliced gradient to the output buffer
     np.copyto(out_buffer, src)

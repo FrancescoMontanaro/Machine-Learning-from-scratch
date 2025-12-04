@@ -50,8 +50,8 @@ class Adam(Optimizer):
                 
                 # Check if the parameter has a gradient
                 if param.grad is None:
-                    # Raise an error if the gradient is missing
-                    raise ValueError(f"Impossible to update the parameters. Missing gradient for the parameter {param_id}")
+                    # Skip parameters without gradient (they might not have been used in the forward pass)
+                    continue
                 
                 # Check if state of the optimizer is initialized for the parameter
                 if param_id not in self.state or len(self.state[param_id]) == 0:

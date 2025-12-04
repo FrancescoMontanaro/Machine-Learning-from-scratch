@@ -1,5 +1,6 @@
 import numpy as np
 
+from ..config import AttentionConfig
 from ....layers import Dense, Dropout
 from ....core import Tensor, Module, ModuleList
 from ....core.utils.data_processing import concat
@@ -9,30 +10,35 @@ class CrossSingleHeadAttention(Module):
     
     ### Magic methods ###
     
-    def __init__(self, head_size: int, dropout: float = 0.1, causal_attention: bool = False, *args, **kwargs) -> None:
+    def __init__(
+        self,
+        config: AttentionConfig,
+        *args, **kwargs
+    ) -> None:
         """
-        Class constructor for CrossAttentionSingleHead layer.
+        Class constructor for CrossSingleHeadAttention layer.
         
         Parameters:
-        - head_size (int): size of the attention head. The dimension of the key, query and value matrices (H)
-        - dropout (float): dropout rate to be applied to the attention scores
-        - causal_attention (bool): whether to use causal attention (default: False)
+        - config (AttentionConfig): The configuration for the attention layer.
         """
         
         # Initialize the parent class
         super().__init__(*args, **kwargs)
         
+        # Ensure head_size is specified in the configuration
+        assert config.head_size is not None, "head_size must be specified in the configuration."
+        
         # Store the head size
-        self.head_size = head_size
-        self.causal_attention = causal_attention
+        self.head_size = config.head_size
+        self.causal_attention = False  # Cross-attention is not causal
         
         # Define the key, query and value matrices
-        self.key = Dense(head_size, add_bias=False) # (B, S_enc, E) -> (B, S_enc, H)
-        self.query = Dense(head_size, add_bias=False) # (B, S_dec, E) -> (B, S_dec, H)
-        self.value = Dense(head_size, add_bias=False) # (B, S_enc, E) -> (B, S_enc, H)
+        self.key = Dense(config.head_size, add_bias=False) # (B, S_enc, E) -> (B, S_enc, H)
+        self.query = Dense(config.head_size, add_bias=False) # (B, S_dec, E) -> (B, S_dec, H)
+        self.value = Dense(config.head_size, add_bias=False) # (B, S_enc, E) -> (B, S_enc, H)
         
         # Creating a dropout layer
-        self.dropout = Dropout(dropout) # (B, S_dec, H) -> (B, S_dec, H)
+        self.dropout = Dropout(config.dropout) # (B, S_dec, H) -> (B, S_dec, H)
         
         # Registering the attention mask as a buffer
         self.attention_mask: Tensor # (S_enc, S_dec) -> (S_enc, S_dec)
@@ -123,15 +129,16 @@ class CrossMultiHeadAttention(Module):
     
     ### Magic methods ###
     
-    def __init__(self, n_heads: int, head_size: int, dropout: float = 0.1, causal_attention: bool = False, *args, **kwargs) -> None:
+    def __init__(
+        self, 
+        config: AttentionConfig,
+        *args, **kwargs
+    ) -> None:
         """
         Initialize the CrossMultiHeadAttention module
         
         Parameters:
-        - n_heads (int): The number of attention heads.
-        - head_size (int): The size of each attention head (H).
-        - dropout (float): The dropout rate to apply to the attention scores.
-        - causal_attention (bool): Whether to use causal attention (default: False).
+        - config (AttentionConfig): The configuration for the attention layer.
         """
         
         # Initialize the parent class
@@ -139,19 +146,15 @@ class CrossMultiHeadAttention(Module):
         
         # Creating the cross-attention heads
         self.heads: ModuleList[CrossSingleHeadAttention] = ModuleList([
-            CrossSingleHeadAttention(
-                head_size = head_size, 
-                dropout = dropout,
-                causal_attention = causal_attention
-            ) 
-            for _ in range(n_heads)
+            CrossSingleHeadAttention(config=config) 
+            for _ in range(config.num_heads)
         ])
         
         # Create the output linear layer to project the embeddings back to the original size
         self.output_linear: Dense # (B, S_dec, H * n_heads) -> (B, S_dec, E)
         
         # Create the dropout layer
-        self.dropout: Dropout = Dropout(dropout) # (B, S_dec, E) -> (B, S_dec, E)
+        self.dropout: Dropout = Dropout(config.dropout) # (B, S_dec, E) -> (B, S_dec, E)
         
         
     ### Protected methods ###

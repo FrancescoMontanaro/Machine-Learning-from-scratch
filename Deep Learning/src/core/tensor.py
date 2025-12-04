@@ -1,7 +1,7 @@
 import weakref
 import numpy as np
 from types import EllipsisType
-from typing import Optional, Union, Tuple, List, Callable, Any, Literal
+from typing import Optional, Union, Tuple, List, Callable, Any
 
 from .functional.kernel import *
 from .functional.tape import tape_push
@@ -1373,11 +1373,14 @@ class Tensor:
         Returns:
         - Tensor: Tensor containing the gathered values
         """
+        
+        # Ensure index is integer type
+        index_data = index.data.astype(np.int64)
 
         # Define the forward function
         def forward(x_data: np.ndarray, *args, **kwargs) -> tuple[np.ndarray, int]:
             # Perform the gather operation
-            out_data = gather_forward(x_data, axis, index.data)
+            out_data = gather_forward(x_data, axis, index_data)
 
             # Return the gathered tensor
             return out_data, -1
@@ -1385,7 +1388,7 @@ class Tensor:
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
             # Compute the gradient of the gather operation
-            gather_backward(out_grad, out_buffer, axis, index.data)
+            gather_backward(out_grad, out_buffer, axis, index_data)
 
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -1692,6 +1695,49 @@ class Tensor:
                 
                 # Accumulate the gradient
                 accumulate_gradient(self, grad_unrepeated)
+        
+        # Return the tensor operation with the specified forward and backward functions
+        return tensor_unary_op(
+            t = self,
+            forward_fn = forward,
+            backward_fn = backward,
+            tensor_cls = Tensor
+        )
+    
+    
+    def expand(self, *sizes: int) -> 'Tensor':
+        """
+        Expands the tensor to a larger size. 
+        
+        Passing -1 as the size for a dimension means not changing the size of that dimension.
+        The tensor can only be expanded to a larger size along dimensions of size 1.
+        Expanding a tensor does not allocate new memory, but creates a new view on the existing tensor.
+        
+        Parameters:
+        - *sizes (int): The desired expanded size for each dimension
+        
+        Returns:
+        - Tensor: Expanded tensor
+        
+        Examples:
+        - tensor.expand(3, 4) expands a (1, 4) tensor to (3, 4)
+        - tensor.expand(-1, -1, 4) expands a (2, 3, 1) tensor to (2, 3, 4)
+        """
+        
+        # Convert sizes to tuple
+        target_shape = tuple(sizes)
+        original_shape = self.data.shape
+        
+        # Define the forward function
+        def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
+            # Expand the tensor to the target shape
+            expanded = expand_forward(x_data, target_shape)
+            return expanded, -1
+        
+        # Define the backward function
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
+            # Compute the gradient by reducing over expanded dimensions
+            expand_backward(out_grad, out_buffer, original_shape)
         
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(

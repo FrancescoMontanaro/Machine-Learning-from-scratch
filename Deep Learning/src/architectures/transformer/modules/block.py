@@ -1,10 +1,13 @@
-from typing import Optional
+from typing import Optional, Union
 
 from .mlp import MLP
+from .moe import MoE
 from ....core import Tensor, Module
-from ....layers import LayerNormalization
+from ....layers import LayerNormalization, RMSNorm
 from .self_attention import SelfMultiHeadAttention
 from .cross_attention import CrossMultiHeadAttention
+from .self_latent_attention import SelfMultiHeadLatentAttention
+from ..config import TransformerBlockConfig, DeepSeekTransformerBlockConfig, AttentionConfig
 
 
 class Block(Module):
@@ -13,57 +16,80 @@ class Block(Module):
     
     def __init__(
         self, 
-        n_heads: int, 
-        dropout: float = 0.1, 
-        causal_attention: bool = False,
-        use_cross_attention: bool = False,
+        config: Union[TransformerBlockConfig, DeepSeekTransformerBlockConfig],
         *args, **kwargs
     ) -> None:
         """
         Initialize the transformer's decoder block.
         
         Parameters:
-        - n_heads (int): The number of attention heads.
-        - dropout (float): The dropout rate.
-        - causal_attention (bool): Whether to use causal attention (default: False).
-        - use_cross_attention (bool): Whether to use cross-attention (default: False).
+        - config (Union[TransformerBlockConfig, DeepSeekTransformerBlockConfig]): The configuration for the transformer block.
         """
         
         # Initialize the superclass
         super().__init__(*args, **kwargs)
         
-        # Store the configuration parameters
-        self.n_heads = n_heads
-        self.dropout = dropout
-        self.causal_attention = causal_attention
-        self.use_cross_attention = use_cross_attention
-        
-        # Define the modules of the transformer's block
-        # Some of them will be lazily initialized in the forward pass, since we do not know the embedding size yet
-        
-        # Define the self-attention mechanism
-        self.layer_norm_1 = LayerNormalization() # (B, S, E) -> (B, S, E)
-        self.self_attention_heads: SelfMultiHeadAttention # (B, S, E) -> (B, S, E)
-        
-        # Cross-attention components (only for decoder blocks)
-        if use_cross_attention:
+        # Handle a Standard Transformer Block
+        if isinstance(config, TransformerBlockConfig):
+            # Store the configuration parameters
+            self.n_heads = config.attention_config.num_heads
+            self.attention_config = config.attention_config
+
+            # Define the self-attention mechanism
+            self.layer_norm_1 = LayerNormalization() # (B, S, E) -> (B, S, E)
+            self.self_attention_heads = SelfMultiHeadAttention(config=config.attention_config) # (B, S, E) -> (B, S, E)
+            
+            ### Start Optional cross-attention mechanism ###
+            
             # Define the cross-attention mechanism
-            self.layer_norm_cross = LayerNormalization() # (B, S, E) -> (B, S, E)
-            self.cross_attention_heads: CrossMultiHeadAttention # (B, S_dec, E) -> (B, S_dec, E)
+            self.layer_norm_cross: LayerNormalization # (B, S, E) -> (B, S, E)
+            self.cross_attention_heads: CrossMultiHeadAttention # (B, S, E) -> (B, S, E)
+
+            ### End Optional cross-attention mechanism ###
+                
+            # Define the MLP module
+            self.ffn: MLP = MLP(config=config.ffn_config) # (B, S, E) -> (B, S, E)
+            self.layer_norm_2 = LayerNormalization() # (B, S, E) -> (B, S, E)
+            
+            # Set the forward and lazy_init methods
+            self._forward = self._forward_vanilla_transformer_block
+            self._lazy_init = self._lazy_init_vanilla_transformer_block
+            
+        # Handle a DeepSeek Transformer Block
+        elif isinstance(config, DeepSeekTransformerBlockConfig):
+            # Initialize the self-latent attention mechanism
+            self.mla = SelfMultiHeadLatentAttention(config=config.attention_config)
+            
+            # Initialize the MoE feed-forward network
+            self.ffn_moe = MoE(config=config.ffn_config)
+            
+            # Initialize layer normalizations
+            self.attn_norm = RMSNorm()
+            self.ffn_norm = RMSNorm()
         
-        # Define the MLP module
-        self.mlp: MLP = MLP(dropout) # (B, S, E) -> (B, S, E)
-        self.layer_norm_2 = LayerNormalization() # (B, S, E) -> (B, S, E)
-      
+            # Set the forward and lazy_init methods
+            self._forward = self._forward_deepseek_transformer_block
+            self._lazy_init = self._lazy_init_deepseek_transformer_block
+        
+        else:
+            # Handle other types of transformer blocks
+            raise ValueError("Invalid config type. Must be either TransformerBlockConfig or DeepSeekTransformerBlockConfig.")
+         
+       
+    ### Protected methods ###
     
-    ### Protected methods ###  
-        
-    def _forward(self, x: Tensor, encoder_output: Optional[Tensor] = None) -> Tensor:
+    def _forward_vanilla_transformer_block(
+        self, 
+        x: Tensor,
+        encoder_output: Optional[Tensor] = None,
+        *args, **kwargs
+    ) -> Tensor:
         """
-        Forward pass of the transformer block.
+        Forward pass of the vanilla transformer block.
         
         Parameters:
         - x (Tensor): The input x.
+        - start_pos (int): Starting position (unused in vanilla, kept for API compatibility). Default is 0.
         - encoder_output (Optional[Tensor]): The output from the encoder (only for decoder blocks with cross-attention).
         
         Returns:
@@ -82,25 +108,57 @@ class Block(Module):
         out = x + self.self_attention_heads(self.layer_norm_1(x)) # (B, S, E) + (B, S, E) -> (B, S, E)
         
         # Check if cross-attention has to be applied
-        if self.use_cross_attention:
-            # Ensure that encoder_output is provided
-            if encoder_output is None:
-                # If cross-attention is used and encoder_output is not provided, raise an error
-                raise ValueError("encoder_output must be provided when use_cross_attention=True")
-            
+        if isinstance(encoder_output, Tensor):
             # Apply cross-attention with residual connection
             out = out + self.cross_attention_heads(self.layer_norm_cross(out), encoder_output) # (B, S, E) + (B, S, E) -> (B, S, E)
         
-        # Apply the MLP module with skip connections
-        return out + self.mlp(self.layer_norm_2(out)) # (B, S, E) + (B, S, E) -> (B, S, E)
+        # Apply the ffn module with skip connections
+        return out + self.ffn(self.layer_norm_2(out)) # (B, S, E) + (B, S, E) -> (B, S, E)
+    
+    
+    def _forward_deepseek_transformer_block(
+        self, 
+        x: Tensor,
+        start_pos: int = 0,
+        *args, **kwargs
+    ) -> Tensor:
+        """
+        Forward pass of the vanilla transformer block.
         
+        Parameters:
+        - x (Tensor): The input x.
+        - start_pos (int): The starting position for the latent attention. Default is 0.
+        - encoder_output (Optional[Tensor]): The output from the encoder (only for decoder blocks with cross-attention).
         
-    def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
+        Returns:
+        - Tensor: The output embeddings.
+        
+        Raises:
+        - ValueError: If cross-attention is used but encoder_output is not provided.
+        """
+        
+        # Dimensions are:
+        # - B: batch size
+        # - S: sequence length
+        # - E: embedding size (embedding dimension of the original data)
+        
+        # Apply the self multi-head latent attention with skip connections
+        x = x + self.mla(self.attn_norm(x), start_pos) # (B, S, E) + (B, S, E) -> (B, S, E)
+        
+        # Apply the MoE feed-forward network with skip connections
+        x = x + self.ffn_moe(self.ffn_norm(x)) # (B, S, E) + (B, S, E) -> (B, S, E)
+        
+        # Return the output
+        return x
+    
+    
+    def _lazy_init_vanilla_transformer_block(self, x: Tensor, encoder_output: Optional[Tensor] = None, *args, **kwargs) -> None:
         """
         Method to initialize the module
         
         Parameters:
         - x (Tensor): Input data. Shape: (Batch size, sequence length, embedding size)
+        - encoder_output (Optional[Tensor]): Encoder output data. Shape: (Batch size, encoder sequence length, embedding size)
         
         Raises:
         - AssertionError: If the shape of the input data is not valid
@@ -115,23 +173,35 @@ class Block(Module):
         # Check if the embedding size is divisible by the number of heads
         assert E % self.n_heads == 0, f"Embedding size {E} must be divisible by the number of heads {self.n_heads}."
         
-        # A good head size is the embedding size divided by the number of heads
-        head_size = E // self.n_heads
+        # Initialize the cross-attention mechanism if encoder_output is provided
+        if isinstance(encoder_output, Tensor):
+            # Create the cross-attention mechanism based on the attention_config type
+            assert isinstance(self.attention_config, AttentionConfig), "attention_config must be an instance of AttentionConfig."
+            
+            # Initialize the cross-attention mechanism
+            self.layer_norm_cross = LayerNormalization() # (B, S, E) -> (B, S, E)
+            self.cross_attention_heads = CrossMultiHeadAttention(config=self.attention_config) # (B, S, E) -> (B, S, E)
+
+
+    def _lazy_init_deepseek_transformer_block(self, x: Tensor, encoder_output: Optional[Tensor] = None, *args, **kwargs) -> None:
+        """
+        Method to initialize the module
         
-        # Initialize the multi-head attention mechanism
-        self.self_attention_heads = SelfMultiHeadAttention( # (B, S, E) -> (B, S, E)
-            n_heads = self.n_heads, 
-            head_size = head_size, 
-            dropout = self.dropout,
-            causal_attention = self.causal_attention
-        )
+        Parameters:
+        - x (Tensor): Input data. Shape: (Batch size, sequence length, embedding size)
+        - encoder_output (Optional[Tensor]): Encoder output data. Shape: (Batch size, encoder sequence length, embedding size)
         
-        # Initialize cross-attention if needed
-        if self.use_cross_attention:
-            # Create a non-causal cross-attention mechanism
-            self.cross_attention_heads = CrossMultiHeadAttention( # (B, S_dec, E) -> (B, S_dec, E)
-                n_heads = self.n_heads,
-                head_size = head_size,
-                dropout = self.dropout,
-                causal_attention = False  # Cross-attention is not causal
-            )
+        Raises:
+        - AssertionError: If the shape of the input data is not valid
+        """
+        
+        # Check if the input shape is valid
+        assert len(x.shape) == 3, f"Invalid input shape. Input must be a 3D array. The shape must be (Batch size, sequence length, embedding size). Got shape: {x.shape}"
+        
+        # Store the input shape of the layer
+        _, _, E = x.shape # (B, S, E)
+        
+        # Initialize the cross-attention mechanism if encoder_output is provided
+        if isinstance(encoder_output, Tensor):
+            # Raise not implemented error
+            raise NotImplementedError("Cross-attention in DeepSeek transformer block is not yet implemented.")

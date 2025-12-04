@@ -1,8 +1,8 @@
 import numpy as np
-from typing import Literal
 
-from ....layers import Dense
+from ..config import MOEConfig
 from ....activations import SiLU
+from ....layers import Dense, Dropout
 from ....core import Tensor, Module, ModuleList
 
 
@@ -15,37 +15,26 @@ class Gate(Module):
     
     def __init__(
         self,
-        n_experts: int,
-        n_groups: int,
-        top_k: int,
-        top_k_groups: int,
-        score_function: Literal["softmax", "sigmoid"],
-        route_scale: float,
+        config: MOEConfig,
         *args, **kwargs
     ) -> None:
         """
         Class constructor for the Gate module.
 
         Parameters:
-        - n_experts: The total number of experts to route to.
-        - n_groups: The number of groups to divide the experts into. 
-            This is used to hierarchically select experts, by first selecting a group and then selecting experts within it.
-        - top_k: The number of top experts to select.
-        - top_k_groups: The number of top groups to select.
-        - score_function: The scoring function to use for expert selection. Can be either "softmax" or "sigmoid".
-        - route_scale: The scaling factor for the routing scores.
+        - config: Configuration object for the Gate layer.
         """
         
         # Initialize the parent class
         super().__init__(*args, **kwargs)
         
         # Store parameters
-        self.n_groups = n_groups
-        self.n_experts = n_experts
-        self.top_k = top_k
-        self.top_k_groups = top_k_groups
-        self.score_function = score_function
-        self.route_scale = route_scale
+        self.n_groups = config.n_groups
+        self.n_routed_experts = config.n_routed_experts
+        self.top_k = config.top_k
+        self.top_k_groups = config.top_k_groups
+        self.score_function = config.score_function
+        self.route_scale = config.route_scale
         
         # Initialize the weights and biases for the gating mechanism
         self.weights: Tensor
@@ -135,24 +124,25 @@ class Gate(Module):
         - AssertionError: If the shape of the input data is not valid
         """
         
-        # Check if the input shape is valid
-        assert len(x.shape) >= 3, f"Invalid input shape. Input must be at least a 3D array. Got shape: {x.shape}"
+        # Check if the input shape is valid (can be 2D or 3D after reshape in MoE)
+        assert len(x.shape) >= 2, f"Invalid input shape. Input must be at least a 2D array. Got shape: {x.shape}"
         
         # Extract the embedding size from the input data
         E = x.shape[-1]
         
-        # Initialize the weights for the gating mechanism
+        # Initialize the weights for the gating mechanism using Xavier initialization
+        limit = np.sqrt(6.0 / (E + self.n_routed_experts))
         self.weights = Tensor(
-            data = np.empty((self.n_experts, E)),
+            data = np.random.uniform(-limit, limit, (E, self.n_routed_experts)).astype(np.float32),
             requires_grad = True,
             is_parameter = True
         )
         
-        # Initialize the bias
+        # Initialize the bias to zeros
         # This bias is used to penalize experts that are frequently selected during each training step
         # By adding this bias, the model is encouraged to explore other experts and prevent overfitting to a few experts
         self.bias = Tensor(
-            data = np.empty(self.n_experts),
+            data = np.zeros(self.n_routed_experts, dtype=np.float32),
             requires_grad = True,
             is_parameter = True
         )
@@ -169,6 +159,7 @@ class MLP(Module):
     def __init__(
         self,
         hidden_dim: int,
+        dropout: float = 0.1,
         *args, **kwargs
     ) -> None:
         """
@@ -176,6 +167,7 @@ class MLP(Module):
         
         Parameters:
         - hidden_dim: The number of hidden units in the MLP.
+        - dropout: Dropout rate for regularization.
         """
         
         # Initialize the parent class
@@ -188,6 +180,9 @@ class MLP(Module):
         self.w1: Dense # (B, S, E) -> (B, S, hidden_dim)
         self.w2: Dense # (B, S, hidden_dim) -> (B, S, E)
         self.w3: Dense # (B, S, hidden_dim) -> (B, S, E)
+        
+        # Initialize dropout layer
+        self.dropout = Dropout(rate=dropout)
 
 
     ### Protected methods ###
@@ -206,10 +201,13 @@ class MLP(Module):
         - AssertionError: If the shape of the input data is not valid
         """
         
-        # Compute and return the output of the MLP
-        return self.w2(self.w1(x)) * self.w3(x)
+        # Compute the output of the MLP (SwiGLU activation: w2(SiLU(w1(x)) * w3(x)))
+        out = self.w2(self.w1(x) * self.w3(x))
+        
+        # Apply dropout and return the output
+        return self.dropout(out)
     
-    
+
     def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
         """
         Method to initialize the module
@@ -222,15 +220,15 @@ class MLP(Module):
         """
         
         # Check if the input shape is valid
-        assert len(x.shape) >= 3, f"Invalid input shape. Input must be at least a 3D array. Got shape: {x.shape}"
+        assert len(x.shape) >= 2, f"Invalid input shape. Input must be at least a 2D array. Got shape: {x.shape}"
         
         # Extract the embedding size from the input data
         E = x.shape[-1]
         
         # Initialize the dense layers
-        self.w1 = Dense(num_units=self.hidden_dim, activation=SiLU()) # (B, S, E) -> (B, S, hidden_dim)
-        self.w2 = Dense(num_units=E) # (B, S, hidden_dim) -> (B, S, E)
-        self.w3 = Dense(num_units=self.hidden_dim) # (B, S, hidden_dim) -> (B, S, E)
+        self.w1 = Dense(num_units=self.hidden_dim, activation=SiLU()) # (..., E) -> (..., hidden_dim)
+        self.w2 = Dense(num_units=E) # (..., hidden_dim) -> (..., E)
+        self.w3 = Dense(num_units=self.hidden_dim) # (..., hidden_dim) -> (..., E)
         
         
 
@@ -243,45 +241,43 @@ class MoE(Module):
     
     def __init__(
         self,
-        n_routed_experts: int,
-        n_shared_experts: int,
-        n_activated_experts: int,
-        mlp_hidden_dim: int,
+        config: MOEConfig,
         *args, **kwargs
     ) -> None:
         """
         Class constructor for the MoE module.
         
         Parameters:
-        - n_experts: The total number of experts in the MoE layer.
-        - n_activated_experts: The number of experts to activate for each input sample.
+        - config: Configuration object for the MoE layer.
         """
         
         # Initialize the parent class
         super().__init__(*args, **kwargs)
         
         # Store parameters
-        self.n_routed_experts = n_routed_experts
-        self.n_shared_experts = n_shared_experts
-        self.n_activated_experts = n_activated_experts
-        self.mlp_hidden_dim = mlp_hidden_dim
+        self.n_routed_experts = config.n_routed_experts
         
         # Initialize the gate
-        self.gate = Gate(
-            n_experts = n_routed_experts,
-            n_groups = 1,
-            top_k = n_activated_experts,
-            top_k_groups = 1,
-            score_function = "softmax",
-            route_scale = 1.0
-        )
+        self.gate = Gate(config=config)
+        
+        # Ensure that the MLP hidden dimension is specified
+        assert config.mlp_config.hidden_dim is not None, "MLP hidden dimension must be specified in the configuration."
         
         # Initialize the routed experts
-        self.routed_experts = ModuleList([MLP(hidden_dim=mlp_hidden_dim) for _ in range(n_routed_experts)]) 
-        
+        self.routed_experts = ModuleList([
+            MLP(
+                hidden_dim = config.mlp_config.hidden_dim,
+                dropout = config.mlp_config.dropout
+            ) 
+            for _ in range(config.n_routed_experts)
+        ]) 
+
         # Initialize the shared experts
         # In this case, we use a single MLP with output dimension equal to n_shared_experts * mlp_hidden_dim
-        self.shared_experts = MLP(hidden_dim=self.n_shared_experts * mlp_hidden_dim)
+        self.shared_experts = MLP(
+            hidden_dim = config.n_shared_experts * config.mlp_config.hidden_dim,
+            dropout = config.mlp_config.dropout
+        )
         
         
     ### Protected methods ###
@@ -306,11 +302,14 @@ class MoE(Module):
         # Compute the gating weights and selected expert indices
         weights, indices = self.gate.forward_with_multi_outputs(x) # (B * S, top_k), (B * S, top_k)
         
+        # Convert indices to integer for numpy operations
+        indices_np = indices.flatten().to_numpy().astype(np.int64)
+        
         # Compute the output of the routed experts
-        counts: list[int] = np.bincount(indices.flatten().to_numpy(), minlength=self.n_routed_experts).tolist()
+        counts: list[int] = np.bincount(indices_np, minlength=self.n_routed_experts).tolist()
         
         # Initialize the output tensor
-        routed_experts_out = Tensor(np.zeros_like((x.shape))) # (B * S, E)
+        routed_experts_out = Tensor(np.zeros_like(x.data)) # (B * S, E)
         
         # Iterate over each expert and compute its output if it was selected
         for i in range(self.n_routed_experts):
@@ -322,7 +321,7 @@ class MoE(Module):
             expert = self.routed_experts[i]
             
             # Get the positions where this expert was selected
-            idx, top = np.where(indices.to_numpy() == i)
+            idx, top = np.where(indices.to_numpy().astype(np.int64) == i)
             
             # Scatter the expert's output to the final output tensor
             routed_experts_out[idx] += expert(x[idx]) * weights[idx, top].unsqueeze(-1)

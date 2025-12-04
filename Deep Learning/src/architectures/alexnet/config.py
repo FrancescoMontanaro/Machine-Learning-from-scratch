@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Tuple, List, Literal, Optional
 
+from ..config import ModelConfig
 from ...activations import Activation, ReLU
 
 
@@ -73,7 +74,7 @@ class MaxPoolConfig:
 
 
 @dataclass
-class AlexNetConfig:
+class AlexNetConfig(ModelConfig):
     """
     Configuration for the AlexNet architecture.
     

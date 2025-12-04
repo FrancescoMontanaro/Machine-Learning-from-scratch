@@ -1,6 +1,6 @@
 import math
 import time
-from typing import Callable, Optional, Dict, Any, Union
+from typing import Callable, Optional, Dict
 
 from ..base import Architecture
 from ...optimizers import Optimizer
@@ -33,7 +33,8 @@ class Sequential(Architecture):
 
     def fit(
         self,
-        X_train: Union[Tensor, Dict[str, Tensor]],
+        *,
+        train_data: Dict[str, Tensor],
         y_train: Tensor,
         optimizer: Optimizer,
         loss_fn: LossFn,
@@ -43,15 +44,14 @@ class Sequential(Architecture):
         metrics: list[Callable[..., Tensor]] = [],
         callbacks: list[Callable] = [],
         shuffle_between_epochs: bool = True,
-        X_valid: Optional[Union[Tensor, Dict[str, Tensor]]] = None,
-        y_valid: Optional[Tensor] = None,
-        forward_params: Optional[Dict[str, Any]] = {}
+        valid_data: Optional[Dict[str, Tensor]] = None,
+        y_valid: Optional[Tensor] = None
     ) -> Dict[str, list[float]]:
         """
         Method to train the model
         
         Parameters:
-        - X_train (Union[Tensor, Dict[str, Tensor]]): Single tensor or dictionary of input tensors for training
+        - train_data (Dict[str, Tensor]): Dictionary of named input tensors for training (e.g., {'x': tensor} or {'encoder_input': t1, 'decoder_input': t2})
         - y_train (Tensor): Target tensor for training
         - optimizer (Optimizer): Optimizer to use for training
         - loss_fn (LossFn): Loss function to use for training
@@ -61,43 +61,33 @@ class Sequential(Architecture):
         - metrics (list[Callable[..., Tensor]]): List of metrics to compute during training (default: [])
         - callbacks (list[Callable]): List of callbacks to execute during training (default: [])
         - shuffle_between_epochs (bool): Whether to shuffle the training data between epochs (default: True)
-        - X_valid (Optional[Union[Tensor, Dict[str, Tensor]]]): Single tensor or dictionary of input tensors for validation (default: None)
+        - valid_data (Optional[Dict[str, Tensor]]): Dictionary of named input tensors for validation (default: None)
         - y_valid (Optional[Tensor]): Target tensor for validation (default: None)
-        - forward_params (Optional[Dict[str, Any]]): Additional parameters for the forward pass (default: {})
         
         Returns:
         - Dict[str, list[float]]: History of the training with losses and metrics
+        
+        Note:
+        - All arguments must be passed as keyword arguments
+        - Input tensors are passed as a dictionary where keys are the names expected by the model's forward method
         """
         
         #############################
         ### Process training data ###
         #############################
         
-        # Determine if we're using named inputs (dictionary) or positional inputs (single tensor)
-        use_named_inputs = isinstance(X_train, dict)
+        # Validate train_data
+        if not isinstance(train_data, dict) or len(train_data) == 0:
+            raise ValueError("train_data must be a non-empty dictionary of Tensors")
         
-        if isinstance(X_train, Tensor):
-            # Single tensor case - use positional arguments
-            train_inputs = (X_train,)
-            train_input_names = None
-            
-        elif isinstance(X_train, dict):
-            # Dictionary case - use named arguments
-            if len(X_train) == 0:
-                raise ValueError("Training data dictionary cannot be empty")
-            
-            # Validate that all values are Tensors
-            for key, value in X_train.items():
-                if not isinstance(value, Tensor):
-                    raise ValueError(f"All values in X_train must be Tensors. Got {type(value)} for key '{key}'")
-            
-            # Extract tensors and names
-            train_input_names = list(X_train.keys())
-            train_inputs = tuple(X_train.values())
-            
-        else:
-            # If X_train is neither a Tensor nor a dictionary, raise an error
-            raise ValueError("X_train must be a Tensor or a dictionary of Tensors")
+        # Validate that all values are Tensors
+        for key, value in train_data.items():
+            if not isinstance(value, Tensor):
+                raise ValueError(f"All values in train_data must be Tensors. Got {type(value)} for key '{key}'")
+        
+        # Extract tensors and names
+        train_input_names = list(train_data.keys())
+        train_inputs = tuple(train_data.values())
         
         # Validate training input consistency
         num_samples_check = self._validate_input_consistency(*train_inputs)
@@ -110,65 +100,35 @@ class Sequential(Architecture):
         ### Process validation data ###
         ###############################
         
-        # Initialize validation inputs and names
-        valid_inputs, valid_input_names, use_named_inputs_valid = None, None, False
+        # Initialize validation inputs
+        valid_inputs = None
         
-        if X_valid is not None:
-            # Determine validation input type
-            use_named_inputs_valid = isinstance(X_valid, dict)
+        if valid_data is not None:
+            # Validate valid_data
+            if not isinstance(valid_data, dict) or len(valid_data) == 0:
+                raise ValueError("valid_data must be a non-empty dictionary of Tensors")
             
-            # Validate consistency between training and validation input types
-            if use_named_inputs != use_named_inputs_valid:
-                raise ValueError(
-                    f"Training and validation data must use the same input format. "
-                    f"Training uses {'dictionary' if use_named_inputs else 'single tensor'}, "
-                    f"validation uses {'dictionary' if use_named_inputs_valid else 'single tensor'}"
-                )
+            # Validate that all values are Tensors
+            for key, value in valid_data.items():
+                if not isinstance(value, Tensor):
+                    raise ValueError(f"All values in valid_data must be Tensors. Got {type(value)} for key '{key}'")
             
-            if isinstance(X_valid, Tensor):
-                # Single tensor case
-                valid_inputs = (X_valid,)
-                valid_input_names = None
-                
-            elif isinstance(X_valid, dict):
-                # Dictionary case
-                if len(X_valid) == 0:
-                    raise ValueError("Validation data dictionary cannot be empty")
-                
-                # Validate that all values are Tensors
-                for key, value in X_valid.items():
-                    if not isinstance(value, Tensor):
-                        raise ValueError(f"All values in X_valid must be Tensors. Got {type(value)} for key '{key}'")
-                
-                # Extract tensors and names
-                valid_input_names = list(X_valid.keys())
-                valid_inputs = tuple(X_valid.values())
-                
-                # Check consistency with training data structure
-                if train_input_names is not None:
-                    if set(valid_input_names) != set(train_input_names):
-                        raise ValueError(f"Validation data input names {valid_input_names} must match training data input names {train_input_names}")
-                    # Ensure same order as training data
-                    valid_input_names = train_input_names
-                    valid_inputs = tuple(X_valid[name] for name in train_input_names)
-                    
-            else:
-                # If X_valid is neither a Tensor nor a dictionary, raise an error
-                raise ValueError("X_valid must be a Tensor or a dictionary of Tensors")
+            # Check consistency with training data structure
+            if set(valid_data.keys()) != set(train_input_names):
+                raise ValueError(f"Validation data input names {list(valid_data.keys())} must match training data input names {train_input_names}")
+            
+            # Ensure same order as training data
+            valid_inputs = tuple(valid_data[name] for name in train_input_names)
             
             # If validation data is provided, then y_valid must also be provided
             if y_valid is None:
-                raise ValueError("If X_valid is provided, y_valid must also be provided")
+                raise ValueError("If valid_data is provided, y_valid must also be provided")
             
             # Validate validation input consistency
             valid_num_samples = self._validate_input_consistency(*valid_inputs)
             
             if y_valid.shape[0] != valid_num_samples:
                 raise ValueError(f"Validation target has {y_valid.shape[0]} samples, but validation inputs have {valid_num_samples} samples")
-        
-        # Validate the forward parameters
-        if forward_params is None:
-            forward_params = {}
         
         #######################
         ### Initializations ###
@@ -193,11 +153,11 @@ class Sequential(Architecture):
                 sample_size = min(batch_size, train_inputs[0].shape[0])
                 sample_inputs = self._slice_inputs(0, sample_size, *train_inputs)
                 
-                # Create args for forward pass
-                forward_args = list(sample_inputs) + list(forward_params.values())
+                # Create kwargs for forward pass using named arguments
+                forward_kwargs = {name: tensor for name, tensor in zip(train_input_names, sample_inputs)}
                 
                 # Execute the lazy initialization
-                self(*forward_args)
+                self(**forward_kwargs)
         
         # Set the parameters of the optimizer
         optimizer.set_parameters(self.parameters)
@@ -244,15 +204,11 @@ class Sequential(Architecture):
                 x_training_batch = self._slice_inputs(training_step * batch_size, (training_step + 1) * batch_size, *train_inputs_shuffled)
                 y_training_batch = y_train_shuffled[training_step * batch_size:(training_step + 1) * batch_size]
                 
-                # Forward pass: Choose method based on input type
-                if use_named_inputs and train_input_names is not None:
-                    # Dictionary case: pass tensors as named arguments
-                    batch_input_dict = {name: tensor for name, tensor in zip(train_input_names, x_training_batch)}
-                    training_batch_output = self.forward(**batch_input_dict, **forward_params)
-                else:
-                    # Single tensor case: pass as positional arguments
-                    forward_args = list(x_training_batch) + list(forward_params.values())
-                    training_batch_output = self.forward(*forward_args)
+                # Build kwargs for forward pass
+                batch_input_dict = {name: tensor for name, tensor in zip(train_input_names, x_training_batch)}
+                
+                # Execute forward pass with named arguments only
+                training_batch_output = self.forward(**batch_input_dict)
                 
                 # Compute the loss of the model
                 training_loss = loss_fn(y_training_batch, training_batch_output)
@@ -311,15 +267,11 @@ class Sequential(Architecture):
                         x_valid_batch = self._slice_inputs(valid_step * batch_size, (valid_step + 1) * batch_size, *valid_inputs)
                         y_valid_batch = y_valid[valid_step * batch_size:(valid_step + 1) * batch_size]
                     
-                        # Forward pass: Choose method based on input type (same as training)
-                        if use_named_inputs_valid and valid_input_names is not None:
-                            # Dictionary case: pass tensors as named arguments
-                            valid_batch_input_dict = {name: tensor for name, tensor in zip(valid_input_names, x_valid_batch)}
-                            valid_batch_output = self.forward(**valid_batch_input_dict, **forward_params)
-                        else:
-                            # Single tensor case: pass as positional arguments
-                            valid_forward_args = list(x_valid_batch) + list(forward_params.values())
-                            valid_batch_output = self.forward(*valid_forward_args)
+                        # Build kwargs for forward pass (use train_input_names since they are validated to be the same)
+                        valid_batch_input_dict = {name: tensor for name, tensor in zip(train_input_names, x_valid_batch)}
+                        
+                        # Execute forward pass with named arguments only
+                        valid_batch_output = self.forward(**valid_batch_input_dict)
                             
                         # Update the validation loss
                         valid_epoch_loss += loss_fn(y_valid_batch, valid_batch_output).detach().to_numpy().item()
@@ -375,117 +327,103 @@ class Sequential(Architecture):
 
     ### Protected methods ###
 
-    def _forward(self, *args, batch_size: Optional[int] = None, verbose: bool = False, **kwargs) -> Tensor:
+    def _forward(
+        self, 
+        *, 
+        batch_size: Optional[int] = None, 
+        tensors_to_batch: Optional[list[str]] = None,
+        verbose: bool = False, 
+        **kwargs
+    ) -> Tensor:
         """
         Forward pass of the model
         
         Parameters:
-        - *args: Positional input tensors and additional parameters (for single tensor input)
         - batch_size (Optional[int]): Number of samples to use for each batch
+        - tensors_to_batch (Optional[list[str]]): List of tensor names to batch. If None, all tensors are batched.
         - verbose (bool): Flag to display the progress
-        - **kwargs: Named input tensors and additional parameters (for dictionary input)
+        - **kwargs: Named input tensors and additional parameters
         
         Returns:
         - Tensor: Output of the neural network
+        
+        Note:
+        - All arguments must be passed as keyword arguments (no positional arguments allowed)
+        - Only tensors whose names are in tensors_to_batch will be sliced during batching
         """
         
-        # Determine if we're using named inputs (kwargs) or positional inputs (args)
-        use_named_inputs = bool(kwargs and any(isinstance(v, Tensor) for v in kwargs.values()))
+        # Extract tensor inputs from kwargs
+        tensor_inputs = {k: v for k, v in kwargs.items() if isinstance(v, Tensor)}
         
-        # If using named inputs, ensure all inputs are tensors
-        if use_named_inputs:
-            # Named inputs case (dictionary input)
-            tensor_inputs = {k: v for k, v in kwargs.items() if isinstance(v, Tensor)}
+        # Ensure at least one tensor input is provided
+        if not tensor_inputs:
+            raise ValueError("At least one input tensor must be provided in kwargs")
+        
+        # Determine which tensors should be batched
+        if tensors_to_batch is not None:
+            # Validate that all specified tensor names exist in kwargs
+            for name in tensors_to_batch:
+                if name not in tensor_inputs:
+                    raise ValueError(f"Tensor '{name}' specified in tensors_to_batch not found in inputs. Available tensors: {list(tensor_inputs.keys())}")
             
-            # Ensure at least one tensor input is provided
-            if not tensor_inputs:
-                raise ValueError("At least one input tensor must be provided in kwargs")
+            # Get tensors to batch for validation
+            tensors_for_batching = {k: v for k, v in tensor_inputs.items() if k in tensors_to_batch}
+        else:
+            # If no tensors_to_batch specified, batch all tensors
+            tensors_for_batching = tensor_inputs
+        
+        # Validate tensor consistency (only for tensors that will be batched)
+        if tensors_for_batching:
+            total_samples = self._validate_input_consistency(*tensors_for_batching.values())
+        else:
+            # If no tensors to batch, no batching is needed
+            total_samples = 1
+            batch_size = None
+        
+        # Compute batching
+        num_steps = max(1, math.ceil(total_samples / batch_size)) if batch_size else 1
+        outputs = []
+        elapsed_time = 0.0
+        
+        # Process in batches
+        for step in range(num_steps):
+            # Start timing for the batch processing
+            start = time.time()
             
-            # Validate tensor consistency
-            total_samples = self._validate_input_consistency(*tensor_inputs.values())
-            
-            # Compute batching
-            num_steps = max(1, math.ceil(total_samples / batch_size)) if batch_size else 1
-            outputs = []
-            elapsed_time = 0.0
-            
-            # Process in batches
-            for step in range(num_steps):
-                start = time.time()
-                
-                if batch_size:
-                    # Create batch kwargs - slice tensors, keep others as-is
-                    batch_kwargs = {}
-                    for key, value in kwargs.items():
-                        if isinstance(value, Tensor):
+            # Build batch kwargs
+            if batch_size:
+                # Create batch kwargs - slice only tensors in tensors_to_batch
+                batch_kwargs = {}
+                for key, value in kwargs.items():
+                    if isinstance(value, Tensor):
+                        # Only slice if tensor is in tensors_to_batch (or if tensors_to_batch is None, slice all)
+                        if tensors_to_batch is None or key in tensors_to_batch:
                             batch_kwargs[key] = value[step * batch_size:(step + 1) * batch_size]
                         else:
+                            # Tensor not in tensors_to_batch, pass as-is
                             batch_kwargs[key] = value
-                else:
-                    batch_kwargs = kwargs
-                
-                # Forward pass: Pass named arguments to modules.forward
-                batch_out = self.modules.forward(**batch_kwargs)
-                outputs.append(batch_out)
-                
-                # Measure elapsed time for the batch processing
-                end = time.time()
-                elapsed_time += (end - start)
-                
-                # If verbose, print the processing time per step
-                if verbose and num_steps > 1:
-                    # Calculate milliseconds per step
-                    ms_per_step = elapsed_time / (step + 1) * 1000
-                    
-                    # Print the progress
-                    print(f"\rProcessing batch {step + 1}/{num_steps} - {round(ms_per_step, 2)} ms/step", end="")
-        
-        else:
-            # Positional inputs case (single tensor input)
-            tensor_inputs = [arg for arg in args if isinstance(arg, Tensor)]
+                    else:
+                        # Non-tensor values are passed as-is
+                        batch_kwargs[key] = value
+            else:
+                # No batching, pass all kwargs as-is
+                batch_kwargs = kwargs
             
-            # Ensure at least one tensor input is provided
-            if not tensor_inputs:
-                raise ValueError("At least one input tensor must be provided")
+            # Forward pass: Pass named arguments to modules.forward
+            batch_out = self.modules.forward(**batch_kwargs)
+            outputs.append(batch_out)
             
-            # Validate tensor consistency
-            total_samples = self._validate_input_consistency(*tensor_inputs)
+            # Measure elapsed time for the batch processing
+            end = time.time()
+            elapsed_time += (end - start)
             
-            # Compute batching
-            num_steps = max(1, math.ceil(total_samples / batch_size)) if batch_size else 1
-            outputs = []
-            elapsed_time = 0.0
-            
-            # Process in batches
-            for step in range(num_steps):
-                start = time.time()
+            # If verbose, print the processing time per step
+            if verbose and num_steps > 1:
+                # Calculate milliseconds per step
+                ms_per_step = elapsed_time / (step + 1) * 1000
                 
-                if batch_size:
-                    # Slice tensors, keep non-tensors as-is
-                    batch_args = []
-                    for arg in args:
-                        if isinstance(arg, Tensor):
-                            batch_args.append(arg[step * batch_size:(step + 1) * batch_size])
-                        else:
-                            batch_args.append(arg)
-                else:
-                    batch_args = args
-                
-                # Forward pass: Pass positional arguments to modules.forward
-                batch_out = self.modules.forward(*batch_args)
-                outputs.append(batch_out)
-                
-                # Measure elapsed time for the batch processing
-                end = time.time()
-                elapsed_time += (end - start)
-                
-                # If verbose, print the processing time per step
-                if verbose and num_steps > 1:
-                    # Calculate milliseconds per step
-                    ms_per_step = elapsed_time / (step + 1) * 1000
-                    
-                    # Print the progress
-                    print(f"\rProcessing batch {step + 1}/{num_steps} - {round(ms_per_step, 2)} ms/step", end="")
+                # Print the progress
+                print(f"\rProcessing batch {step + 1}/{num_steps} - {round(ms_per_step, 2)} ms/step", end="")
         
         # Concatenate outputs and return the result
         return concat(outputs, axis=0)

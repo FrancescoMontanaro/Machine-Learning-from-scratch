@@ -14,4 +14,5 @@ from .positional_encoding import PositionalEncoding
 from .reshape import Reshape
 from .rms_normalization import RMSNorm
 from .rnn import RNN
+from .rope import RoPE
 from .upsampling import UpSampling2D

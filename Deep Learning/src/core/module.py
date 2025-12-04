@@ -86,6 +86,22 @@ class Module:
         - Tensor: Output of the module after the forward pass
         """
         
+        # Check if more than one positional argument is provided
+        if len(args) > 1:
+            raise ValueError("Only one positional argument is allowed, and it will be treated as the 'x' input tensor.")
+        
+        # If only one positional argument is provided and it's a Tensor, treat it as 'x'
+        if len(args) == 1:
+            # Validate that the positional argument is a Tensor and 'x' is not already in kwargs
+            if not (isinstance(args[0], Tensor) and 'x' not in kwargs):
+                # Raise an error if the validation fails
+                raise ValueError("The single positional argument must be a Tensor and 'x' must not be in keyword arguments.")
+            
+            # Convert the positional argument to a keyword argument 
+            # and clear the positional arguments
+            kwargs = {'x': args[0]}
+            args = ()
+        
         # Call the forward method
         return self.forward(*args, **kwargs)
 
@@ -207,6 +223,19 @@ class Module:
         for module in self._modules.values():
             # Set the sub-module to evaluation mode
             module.eval()
+
+
+    def reset_cache(self) -> None:
+        """
+        Method to reset the cache of the module
+        """
+        
+        # Iterate over the sub-modules of the module
+        for module in self._modules.values():
+            # Check if the sub-module has a reset_cache method
+            if hasattr(module, "reset_cache") and callable(getattr(module, "reset_cache")):
+                # Call the reset_cache method of the sub-module
+                module.reset_cache()
 
 
     def forward(self, *args, **kwargs) -> Tensor:
