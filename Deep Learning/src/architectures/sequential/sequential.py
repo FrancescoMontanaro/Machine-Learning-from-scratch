@@ -244,7 +244,7 @@ class Sequential(Architecture):
             elapsed_time += time.time() - start_time
             ms_per_step = elapsed_time / (step + 1) * 1000
             self._progress_printer.print_progress(
-                f"\rEpoch {self.epoch + 1}/{train_args.num_epochs} ({round((step + 1) / n_steps * 100, 2)}%) | "
+                f"\rEpoch {self.epoch + 1}/{train_args.num_epochs} - Training ({round((step + 1) / n_steps * 100, 2)}%) | "
                 f"{self.tensors_in_memory} tensors | {round(ms_per_step, 2)} ms/step --> loss: {loss.to_numpy():.5g}"
             )
         
@@ -283,11 +283,18 @@ class Sequential(Architecture):
             eval_batch_size = train_args.eval_batch_size
             
             # Initialize epoch tracking variables
+            elapsed_time = 0.0
             epoch_loss = 0.0
             epoch_metrics = {metric.__name__: 0.0 for metric in train_args.metrics}
             
+            # Move to a new line for validation progress
+            print()
+            
             # Iterate over validation steps
             for step in range(n_steps):
+                # Start timing for the step
+                start_time = time.time()
+                
                 # Get batch of validation data and targets
                 x_batch = self._slice_inputs(
                     step * eval_batch_size,
@@ -300,10 +307,21 @@ class Sequential(Architecture):
                 batch_kwargs = dict(zip(input_names, x_batch))
                 output = self.forward(**batch_kwargs)
                 
+                # Compute loss for this batch
+                batch_loss = train_args.loss_fn(y_batch, output).detach().to_numpy().item()
+                
                 # Accumulate metrics
-                epoch_loss += train_args.loss_fn(y_batch, output).detach().to_numpy().item()
+                epoch_loss += batch_loss
                 for metric in train_args.metrics:
                     epoch_metrics[metric.__name__] += metric(y_batch.detach(), output.detach()).detach().to_numpy().item()
+                
+                # Progress display for validation
+                elapsed_time += time.time() - start_time
+                ms_per_step = elapsed_time / (step + 1) * 1000
+                self._progress_printer.print_progress(
+                    f"\r    Epoch {self.epoch + 1}/{train_args.num_epochs} - Validation ({round((step + 1) / n_steps * 100, 2)}%) | "
+                    f"{round(ms_per_step, 2)} ms/step --> val_loss: {batch_loss:.5g}"
+                )
             
             # Store validation results
             self.history["val_loss"].append(epoch_loss / n_steps)
@@ -324,6 +342,10 @@ class Sequential(Architecture):
         - has_validation (bool): Whether validation was performed
         """
         
+        # If validation was performed, move cursor up one line and clear it
+        if has_validation:
+            print("\033[A\033[K", end="")
+        
         # Build progress message
         msg = f"\rEpoch {self.epoch + 1}/{train_args.num_epochs} --> loss: {self.history['loss'][-1]:.5g}"
         
@@ -333,12 +355,12 @@ class Sequential(Architecture):
         
         # Add validation results if available
         if has_validation:
-            msg += f" | Val loss: {self.history['val_loss'][-1]:.5g}"
+            msg += f" | val_loss: {self.history['val_loss'][-1]:.5g}"
             for metric in train_args.metrics:
-                msg += f" - Val {metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'][-1]:.5g}"
+                msg += f" - val_{metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'][-1]:.5g}"
         
         # Print final epoch results
-        self._progress_printer.print_final(msg.ljust(120))
+        self._progress_printer.print_final(msg.ljust(150))
         
         # Increment epoch and execute callbacks
         self.epoch += 1
