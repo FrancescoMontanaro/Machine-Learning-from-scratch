@@ -131,57 +131,40 @@ class ModuleList(Module, Generic[T]):
 
     ### Protected Methods ###
     
-    def _forward(self, *args, **kwargs) -> Tensor:
+    def _forward(self, **kwargs) -> Tensor:
         """
-        Forward pass through all modules in sequence
+        Forward pass through all modules in sequence.
+        
+        Parameters:
+        - **kwargs: Named input tensors and additional parameters
+        
+        Returns:
+        - Tensor: Output of the last module in the sequence
+        
+        Note:
+        - All arguments must be passed as keyword arguments
+        - The first module receives all kwargs
+        - Subsequent modules receive the output of the previous module as 'x' plus any non-tensor kwargs
         """
         
-        # Determine input method
-        use_named_inputs = bool(kwargs and any(isinstance(v, Tensor) for v in kwargs.values()))
+        # Separate tensor inputs from other params (non-tensor params are passed to all modules)
+        other_params = {k: v for k, v in kwargs.items() if not isinstance(v, Tensor)}
         
-        # If using named inputs, ensure all inputs are tensors
-        if use_named_inputs:
-            # Named inputs - separate tensor inputs from other params
-            other_params = {k: v for k, v in kwargs.items() if not isinstance(v, Tensor)}
-            
-            # Create a list of tensor inputs
-            current_output = None
-            
-            # Iterate through the modules
-            for i, module in enumerate(self._modules.values()):
-                if i == 0:
-                    # First module gets all named inputs
-                    current_output = module.forward(**kwargs)
-                else:
-                    # Subsequent modules get single tensor output + other params
-                    # Assuming the output key name doesn't matter for subsequent modules
-                    current_output = module.forward(current_output, **other_params)
-                
-                # Ensure the output is a Tensor
-                if not isinstance(current_output, Tensor):
-                    # If the output is not a Tensor, raise an error
-                    raise ValueError(f"Module {i} must return a Tensor, got {type(current_output)}")
+        # Initialize the current output
+        current_output = None
         
-        else:
-            # Positional inputs - same as before
-            other_params = [arg for arg in args if not isinstance(arg, Tensor)]
+        # Iterate through the modules
+        for i, module in enumerate(self._modules.values()):
+            if i == 0:
+                # First module gets all named inputs
+                current_output = module.forward(**kwargs)
+            else:
+                # Subsequent modules get single tensor output as 'x' + other params
+                current_output = module.forward(x=current_output, **other_params)
             
-            # Create a list of tensor inputs
-            current_output = None
-            
-            # Iterate through the modules
-            for i, module in enumerate(self._modules.values()):
-                if i == 0:
-                    # First module gets all original inputs
-                    current_output = module.forward(*args)
-                else:
-                    # Subsequent modules get single tensor output + other params
-                    module_args = [current_output] + other_params
-                    current_output = module.forward(*module_args)
-                
-                # Ensure the output is a Tensor
-                if not isinstance(current_output, Tensor):
-                    raise ValueError(f"Module {i} must return a Tensor, got {type(current_output)}")
+            # Ensure the output is a Tensor
+            if not isinstance(current_output, Tensor):
+                raise ValueError(f"Module {i} must return a Tensor, got {type(current_output)}")
                 
         # Return the final output after processing through all modules
         if not isinstance(current_output, Tensor):

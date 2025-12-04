@@ -90,20 +90,21 @@ class Module:
         if len(args) > 1:
             raise ValueError("Only one positional argument is allowed, and it will be treated as the 'x' input tensor.")
         
-        # If only one positional argument is provided and it's a Tensor, treat it as 'x'
+        # If only one positional argument is provided, treat it as 'x'
         if len(args) == 1:
             # Validate that the positional argument is a Tensor and 'x' is not already in kwargs
-            if not (isinstance(args[0], Tensor) and 'x' not in kwargs):
-                # Raise an error if the validation fails
-                raise ValueError("The single positional argument must be a Tensor and 'x' must not be in keyword arguments.")
+            if not isinstance(args[0], Tensor):
+                raise ValueError("The single positional argument must be a Tensor.")
             
-            # Convert the positional argument to a keyword argument 
-            # and clear the positional arguments
-            kwargs = {'x': args[0]}
-            args = ()
+            # If 'x' is already in kwargs, raise an error
+            if 'x' in kwargs:
+                raise ValueError("Cannot provide 'x' both as positional and keyword argument.")
+            
+            # Convert the positional argument to a keyword argument
+            kwargs['x'] = args[0]
         
         # Call the forward method
-        return self.forward(*args, **kwargs)
+        return self.forward(**kwargs)
 
 
     ######################

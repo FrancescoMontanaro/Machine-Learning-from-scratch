@@ -143,7 +143,7 @@ class Block(Module):
         # - E: embedding size (embedding dimension of the original data)
         
         # Apply the self multi-head latent attention with skip connections
-        x = x + self.mla(self.attn_norm(x), start_pos) # (B, S, E) + (B, S, E) -> (B, S, E)
+        x = x + self.mla(self.attn_norm(x), start_pos=start_pos) # (B, S, E) + (B, S, E) -> (B, S, E)
         
         # Apply the MoE feed-forward network with skip connections
         x = x + self.ffn_moe(self.ffn_norm(x)) # (B, S, E) + (B, S, E) -> (B, S, E)
