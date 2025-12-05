@@ -3,6 +3,7 @@ import numpy as np
 from types import EllipsisType
 from typing import Optional, Union, Tuple, List, Callable, Any
 
+from .utils import _noop
 from .functional.kernel import *
 from .functional.tape import tape_push, tape_clear
 from .functional.base import (
@@ -12,7 +13,6 @@ from .functional.base import (
     tensor_unary_op_multiple_outputs,
     tensor_unary_op_binary_output
 )
-
 
 
 class Tensor:
@@ -551,27 +551,38 @@ class Tensor:
             # Initialize the gradient with ones if not already computed
             self.grad = np.ones_like(self.data, dtype=self.data.dtype)
             
-        # Build the topological order of the tensors
-        visited = set()
-        
-        # Function to build the topological order
+        # Build the topological order using iterative DFS
+        visited: set[int] = set()
         topological_order: list['Tensor'] = []
-        def build_topo(t: 'Tensor') -> None:
-            # If the tensor is not visited, add it to the visited set and build the topological order
-            if t not in visited:
-                # Add the tensor to the visited set
-                visited.add(t)
+        
+        # Create a stack for iterative DFS
+        stack: list[tuple['Tensor', bool]] = [(self, False)]
+
+        # Perform DFS to build the topological order until all nodes are processed
+        while stack:
+            # Pop the next tensor to process
+            tensor, processed = stack.pop()
+            
+            # Get the unique id of the tensor for visited tracking
+            tensor_id = id(tensor)
+
+            # Check if the tensor has been processed
+            if processed:
+                # Second visit: all children processed, add to order
+                topological_order.append(tensor)
+
+            # Check if the tensor is already visited
+            elif tensor_id not in visited:
+                # First visit: mark as visited and schedule children
+                visited.add(tensor_id)
                 
-                # Recursively build the topological order for the children
-                for child in t._prev:
-                    # Build the topological order for the child
-                    build_topo(child)
+                # Push self again to be added after children
+                stack.append((tensor, True))
                 
-                # Append the tensor to the topological order
-                topological_order.append(t)
-                
-        # Build the topological order
-        build_topo(self)
+                # Push children (will be processed before self)
+                for child in tensor._prev:
+                    if id(child) not in visited:
+                        stack.append((child, False))
         
         # Backpropagate the gradient in the topological order (reverse order)
         for t in reversed(topological_order):
@@ -610,32 +621,38 @@ class Tensor:
     
     def clear_graph(self, visited: Optional[set] = None) -> None:
         """
-        Method to clear the computation graph
+        Method to clear the computation graph.
+        Handles circular references and avoids creating new objects.
         
         Parameters:
-        - visited (set): Set to store the visited tensors
+        - visited (set): Set to store the visited tensors (used internally)
         """
         
         # Track if this is the root call (not a recursive call)
         is_root_call = visited is None
         
         # Initialize the visited set
-        if visited is None:
+        if is_root_call:
             visited = set()
             
-        # Check if the tensor is not visited
-        if self not in visited:
-            # Add the tensor to the visited set
-            visited.add(self)
+        # Skip if already visited (handles circular references)
+        if id(self) in visited:
+            return
             
-        # Iterate over the children
-        for child in list(self._prev):
-            # Clear the graph for the child
-            child.clear_graph(visited)
-            
-        # Clear the graph for the current tensor and the backward function
-        self._backward = lambda: None
+        # Mark as visited using id() for faster lookup
+        visited.add(id(self))
+        
+        # Store children before clearing to avoid modifying set during iteration
+        children = list(self._prev)
+        
+        # Clear current tensor's graph references BEFORE recursing
+        # This breaks circular references early
+        self._backward = _noop  # Use static function, not lambda
         self._prev.clear()
+            
+        # Recursively clear children
+        for child in children:
+            child.clear_graph(visited)
 
         # Clear the data tape only once at the end (root call)
         if is_root_call:
