@@ -50,10 +50,10 @@ class Tensor:
         
         # Initialize gradient and graph metadata
         self.grad = None
-        self._backward: Callable = lambda: None
+        self._backward: Callable = _noop  # Use static function, not lambda
         self._prev: set['Tensor'] = set()
 
-        # Register live tensor
+        # Register live tensors
         Tensor._live_tensors.add(self)
 
 
@@ -619,44 +619,43 @@ class Tensor:
         return Tensor(data=self.data, requires_grad=False, is_parameter=self.is_parameter)
     
     
-    def clear_graph(self, visited: Optional[set] = None) -> None:
+    def clear_graph(self, _visited: Optional[set] = None) -> None:
         """
-        Method to clear the computation graph.
+        Method to clear the computation graph using iterative approach.
         Handles circular references and avoids creating new objects.
         
         Parameters:
-        - visited (set): Set to store the visited tensors (used internally)
+        - _visited: Internal parameter, do not use
         """
         
-        # Track if this is the root call (not a recursive call)
-        is_root_call = visited is None
+        # Use iterative approach to avoid recursion overhead and stack limits
+        visited: set[int] = set()
+        stack: list['Tensor'] = [self]
         
-        # Initialize the visited set
-        if is_root_call:
-            visited = set()
+        # Iterate until all nodes are processed
+        while stack:
+            # Pop the next tensor to process
+            tensor = stack.pop()
+            tensor_id = id(tensor)
             
-        # Skip if already visited (handles circular references)
-        if id(self) in visited:
-            return
+            # Skip if already visited
+            if tensor_id in visited:
+                continue
+                
+            # Mark as visited
+            visited.add(tensor_id)
             
-        # Mark as visited using id() for faster lookup
-        visited.add(id(self))
+            # Add children to stack before clearing
+            for child in tensor._prev:
+                if id(child) not in visited:
+                    stack.append(child)
+            
+            # Clear current tensor's graph references
+            tensor._backward = _noop
+            tensor._prev.clear()
         
-        # Store children before clearing to avoid modifying set during iteration
-        children = list(self._prev)
-        
-        # Clear current tensor's graph references BEFORE recursing
-        # This breaks circular references early
-        self._backward = _noop  # Use static function, not lambda
-        self._prev.clear()
-            
-        # Recursively clear children
-        for child in children:
-            child.clear_graph(visited)
-
-        # Clear the data tape only once at the end (root call)
-        if is_root_call:
-            tape_clear()
+        # Clear the data tape once at the end
+        tape_clear()
 
 
     def to_numpy(self) -> np.ndarray:
