@@ -4,7 +4,7 @@ from types import EllipsisType
 from typing import Optional, Union, Tuple, List, Callable, Any
 
 from .functional.kernel import *
-from .functional.tape import tape_push
+from .functional.tape import tape_push, tape_clear
 from .functional.base import (
     tensor_unary_op, 
     tensor_binary_op, 
@@ -613,9 +613,11 @@ class Tensor:
         Method to clear the computation graph
         
         Parameters:
-        - t (Tensor): Tensor to clear the graph
         - visited (set): Set to store the visited tensors
         """
+        
+        # Track if this is the root call (not a recursive call)
+        is_root_call = visited is None
         
         # Initialize the visited set
         if visited is None:
@@ -634,8 +636,12 @@ class Tensor:
         # Clear the graph for the current tensor and the backward function
         self._backward = lambda: None
         self._prev.clear()
-    
-    
+
+        # Clear the data tape only once at the end (root call)
+        if is_root_call:
+            tape_clear()
+
+
     def to_numpy(self) -> np.ndarray:
         """
         Method to convert the tensor to a numpy array
