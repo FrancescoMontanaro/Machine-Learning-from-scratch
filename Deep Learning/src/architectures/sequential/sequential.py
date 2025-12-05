@@ -217,7 +217,11 @@ class Sequential(Architecture):
                 (step + 1) * train_args.train_batch_size, 
                 *train_inputs
             )
-            y_batch = y_train[step * train_args.train_batch_size:(step + 1) * train_args.train_batch_size]
+            # Slice y_batch directly on .data to avoid computational graph overhead
+            y_batch = Tensor(
+                y_train.data[step * train_args.train_batch_size:(step + 1) * train_args.train_batch_size],
+                requires_grad=False
+            )
             
             # Forward pass
             batch_kwargs = dict(zip(input_names, x_batch))
@@ -301,7 +305,12 @@ class Sequential(Architecture):
                     (step + 1) * eval_batch_size,
                     *valid_inputs
                 )
-                y_batch = y_valid[step * eval_batch_size:(step + 1) * eval_batch_size]
+                
+                # Slice y_batch directly on .data to avoid computational graph overhead
+                y_batch = Tensor(
+                    y_valid.data[step * eval_batch_size:(step + 1) * eval_batch_size],
+                    requires_grad=False
+                )
                 
                 # Forward pass
                 batch_kwargs = dict(zip(input_names, x_batch))
@@ -526,7 +535,8 @@ class Sequential(Architecture):
     
     def _slice_inputs(self, start_idx: int, end_idx: int, *inputs) -> tuple:
         """
-        Slice all input tensors with the same indices
+        Slice all input tensors with the same indices.
+        Creates new tensors without computational graph to avoid memory overhead.
         
         Parameters:
         - start_idx (int): Start index for slicing
@@ -534,8 +544,12 @@ class Sequential(Architecture):
         - *inputs: Variable number of input tensors
         
         Returns:
-        - tuple: Sliced input tensors
+        - tuple: Sliced input tensors (without gradient tracking)
         """
         
-        # Return a tuple of sliced tensors
-        return tuple(tensor[start_idx:end_idx] for tensor in inputs)
+        # Slice directly on .data to avoid __getitem__ overhead
+        # Create new tensors without requires_grad to avoid building computational graph
+        return tuple(
+            Tensor(tensor.data[start_idx:end_idx], requires_grad=False) 
+            for tensor in inputs
+        )

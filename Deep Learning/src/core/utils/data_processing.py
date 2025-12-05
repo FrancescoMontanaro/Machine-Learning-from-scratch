@@ -7,7 +7,8 @@ from .constants import EPSILON
 
 def shuffle_data(data: Union[Tensor, Tuple[Tensor, ...]]) -> Tuple[Union[Tensor, Tuple[Tensor, ...]], np.ndarray]:
     """
-    Method to shuffle the dataset
+    Method to shuffle the dataset in-place on the underlying numpy data.
+    This avoids creating new tensors with computational graph overhead.
     
     Parameters:
     - data (Union[Tensor, Tuple[Tensor, ...]]): Dataset to shuffle. Can be a single tensor or a tuple of tensors.
@@ -31,8 +32,12 @@ def shuffle_data(data: Union[Tensor, Tuple[Tensor, ...]]) -> Tuple[Union[Tensor,
         # Generate random indices
         indices = np.random.permutation(n_samples)
         
-        # Shuffle all tensors using the same indices
-        shuffled_tensors = tuple(tensor[indices] for tensor in data)
+        # Shuffle all tensors by creating new tensors from shuffled numpy data
+        # This avoids __getitem__ which creates computational graph
+        shuffled_tensors = tuple(
+            Tensor(tensor.data[indices], requires_grad=False) 
+            for tensor in data
+        )
         
         # Return the shuffled dataset
         return shuffled_tensors, indices
@@ -45,8 +50,9 @@ def shuffle_data(data: Union[Tensor, Tuple[Tensor, ...]]) -> Tuple[Union[Tensor,
         # Generate random indices
         indices = np.random.permutation(n_samples)
         
-        # Shuffle the dataset
-        data_shuffled = data[indices]
+        # Shuffle by creating new tensor from shuffled numpy data
+        # This avoids __getitem__ which creates computational graph
+        data_shuffled = Tensor(data.data[indices], requires_grad=False)
         
         # Return the shuffled dataset
         return data_shuffled, indices
