@@ -10,8 +10,7 @@ from .functional.base import (
     tensor_binary_op, 
     tensor_nary_op, 
     tensor_unary_op_multiple_outputs,
-    tensor_unary_op_binary_output,
-    accumulate_gradient
+    tensor_unary_op_binary_output
 )
 
 
@@ -92,21 +91,25 @@ class Tensor:
                 data = np.array(other, dtype=self.data.dtype) if isinstance(other, (int, float)) else other, 
                 requires_grad = False
             )
+        
+        # Capture shapes locally to avoid closure over entire tensors
+        shape_a = self.data.shape
+        shape_b = other.data.shape
             
         # Define the forward function
         def forward(a_data: np.ndarray, b_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Compute the product of the two tensors
+            # Compute the sum of the two tensors (no need to save data for add backward)
             return add_forward(a_data, b_data), -1
         
         # Define the backward function for tensor a
         def backward_a(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the multiplication operation
-            add_backward(out_grad=out_grad, out_buffer=out_buffer, target_shape=self.data.shape)
+            # Compute the gradient of the addition operation using captured shape
+            add_backward(out_grad=out_grad, out_buffer=out_buffer, target_shape=shape_a)
             
         # Define the backward function for tensor b
         def backward_b(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the multiplication operation
-            add_backward(out_grad=out_grad, out_buffer=out_buffer, target_shape=other.data.shape)
+            # Compute the gradient of the addition operation using captured shape
+            add_backward(out_grad=out_grad, out_buffer=out_buffer, target_shape=shape_b)
                 
         # Return the tensor operation with the specified forward and backward functions
         return tensor_binary_op(
@@ -137,21 +140,25 @@ class Tensor:
                 data = np.array(other, dtype=self.data.dtype) if isinstance(other, (int, float)) else other, 
                 requires_grad = False
             )
+        
+        # Capture shapes locally to avoid closure over entire tensors
+        shape_a = self.data.shape
+        shape_b = other.data.shape
             
         # Define the forward function
         def forward(a_data: np.ndarray, b_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Compute the product of the two tensors
+            # Compute the difference of the two tensors (no need to save data for sub backward)
             return sub_forward(a_data, b_data), -1
         
         # Define the backward function for tensor a
         def backward_a(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the multiplication operation
-            sub_backward_a(out_grad=out_grad, out_buffer=out_buffer, target_shape=self.data.shape)
+            # Compute the gradient of the subtraction operation using captured shape
+            sub_backward_a(out_grad=out_grad, out_buffer=out_buffer, target_shape=shape_a)
             
         # Define the backward function for tensor b
         def backward_b(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the multiplication operation
-            sub_backward_b(out_grad=out_grad, out_buffer=out_buffer, target_shape=other.data.shape)
+            # Compute the gradient of the subtraction operation using captured shape
+            sub_backward_b(out_grad=out_grad, out_buffer=out_buffer, target_shape=shape_b)
                 
         # Return the tensor operation with the specified forward and backward functions
         return tensor_binary_op(
@@ -182,21 +189,29 @@ class Tensor:
                 data = np.array(other, dtype=self.data.dtype) if isinstance(other, (int, float)) else other, 
                 requires_grad = False
             )
+        
+        # Capture shapes locally to avoid closure over entire tensors
+        shape_a = self.data.shape
+        shape_b = other.data.shape
             
-        # Define the forward function
+        # Define the forward function - save input data in tape for backward
         def forward(a_data: np.ndarray, b_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Compute the product of the two tensors
-            return mul_forward(a_data, b_data), -1
+            # Compute the product and save both inputs for backward pass
+            return mul_forward(a_data, b_data), tape_push((a_data, b_data))
         
         # Define the backward function for tensor a
-        def backward_a(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the multiplication operation
-            mul_backward_a(out_grad=out_grad, out_buffer=out_buffer, target_shape=self.data.shape, b_data=other.data)
+        def backward_a(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve b_data from saved_data
+            _, b_data = saved_data if saved_data else (None, None)
+            if b_data is not None:
+                mul_backward_a(out_grad=out_grad, out_buffer=out_buffer, target_shape=shape_a, b_data=b_data)
             
         # Define the backward function for tensor b
-        def backward_b(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the multiplication operation
-            mul_backward_b(out_grad=out_grad, out_buffer=out_buffer, target_shape=other.data.shape, a_data=self.data)
+        def backward_b(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve a_data from saved_data
+            a_data, _ = saved_data if saved_data else (None, None)
+            if a_data is not None:
+                mul_backward_b(out_grad=out_grad, out_buffer=out_buffer, target_shape=shape_b, a_data=a_data)
                 
         # Return the tensor operation with the specified forward and backward functions
         return tensor_binary_op(
@@ -227,21 +242,28 @@ class Tensor:
                 data = np.array(other, dtype=self.data.dtype) if isinstance(other, (int, float)) else other, 
                 requires_grad = False
             )
+        
+        # Capture shapes locally to avoid closure over entire tensors
+        shape_a = self.data.shape
             
-        # Define the forward function
+        # Define the forward function - save input data in tape for backward
         def forward(a_data: np.ndarray, b_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Compute the product of the two tensors
-            return div_forward(a_data, b_data), -1
+            # Compute the division and save both inputs for backward pass
+            return div_forward(a_data, b_data), tape_push((a_data, b_data))
         
         # Define the backward function for tensor a
-        def backward_a(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the multiplication operation
-            div_backward_a(out_grad=out_grad, out_buffer=out_buffer, target_shape=self.data.shape, b_data=other.data)
+        def backward_a(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve b_data from saved_data
+            _, b_data = saved_data if saved_data else (None, None)
+            if b_data is not None:
+                div_backward_a(out_grad=out_grad, out_buffer=out_buffer, target_shape=shape_a, b_data=b_data)
             
         # Define the backward function for tensor b
-        def backward_b(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the multiplication operation
-            div_backward_b(out_grad=out_grad, out_buffer=out_buffer, a_data=self.data, b_data=other.data)
+        def backward_b(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve both a_data and b_data from saved_data
+            a_data, b_data = saved_data if saved_data else (None, None)
+            if a_data is not None and b_data is not None:
+                div_backward_b(out_grad=out_grad, out_buffer=out_buffer, a_data=a_data, b_data=b_data)
                 
         # Return the tensor operation with the specified forward and backward functions
         return tensor_binary_op(
@@ -268,20 +290,24 @@ class Tensor:
         - AssertionError: If the object to be multiplied is not a tensor
         """
             
-        # Define the forward function
+        # Define the forward function - save input data in tape for backward
         def forward(a_data: np.ndarray, b_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Compute the product of the two tensors
-            return matmul_forward(a_data, b_data), -1
+            # Compute the matrix multiplication and save both inputs for backward pass
+            return matmul_forward(a_data, b_data), tape_push((a_data, b_data))
         
         # Define the backward function for tensor a
-        def backward_a(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the multiplication operation
-            matmul_backward_a(out_grad=out_grad, out_buffer=out_buffer, b_data=other.data)
+        def backward_a(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve b_data from saved_data
+            _, b_data = saved_data if saved_data else (None, None)
+            if b_data is not None:
+                matmul_backward_a(out_grad=out_grad, out_buffer=out_buffer, b_data=b_data)
             
         # Define the backward function for tensor b
-        def backward_b(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the multiplication operation
-            matmul_backward_b(out_grad=out_grad, out_buffer=out_buffer, a_data=self.data)
+        def backward_b(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve a_data from saved_data
+            a_data, _ = saved_data if saved_data else (None, None)
+            if a_data is not None:
+                matmul_backward_b(out_grad=out_grad, out_buffer=out_buffer, a_data=a_data)
                 
         # Return the tensor operation with the specified forward and backward functions
         return tensor_binary_op(
@@ -380,18 +406,19 @@ class Tensor:
         # Ensure the power is a scalar
         assert isinstance(power, (int, float)), "The power must be an integer or a float"
         
-        # Define the forward function
+        # Define the forward function - save input data in tape for backward
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Compute the power of the tensor
-            return pow_forward(self.data, power), -1
+            # Compute the power and save input for backward pass
+            return pow_forward(x_data, power), tape_push((x_data,))
         
         # Define the backward function
-        def backward(out_grad: np.ndarray, *args, **kwargs) -> None:            
-            # Compute the gradient of the power function
-            grad = pow_gradient(out_grad, self.data, power)
-            
-            # Accumulate the gradient into self.grad.
-            accumulate_gradient(self, grad)
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve x_data from saved_data
+            x_data = saved_data[0] if saved_data else None
+            if x_data is not None:
+                # Compute the gradient of the power function and accumulate in-place
+                grad = pow_gradient(out_grad, x_data, power)
+                np.add(out_buffer, grad, out=out_buffer)
             
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -427,19 +454,13 @@ class Tensor:
         
         # Define the forward function
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Return the sliced data
-            return self.data[key], -1
+            # Return the sliced data (no need to save for backward, shape is captured)
+            return x_data[key], -1
         
         # Define the backward function
-        def backward(out_grad: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the slice operation
-            grad = np.zeros_like(self.data)
-            
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
             # Use direct assignment which handles slices correctly
-            np.add.at(grad, key, out_grad) # type: ignore
-                    
-            # Accumulate the gradient into self.grad.
-            accumulate_gradient(self, grad)
+            np.add.at(out_buffer, key, out_grad)  # type: ignore
             
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -459,20 +480,20 @@ class Tensor:
         - value (Union[int, float, np.ndarray, Tensor]): Value to set at the specified key
         """
         
+        # Extract value data to avoid closure over Tensor object
+        value_data = value.data if isinstance(value, Tensor) else value
+        
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Set the value at the specified key
-            self.data[key] = value.data if isinstance(value, Tensor) else value
+            # Set the value at the specified key (modifies in place)
+            x_data[key] = value_data
             
-            # Return the sliced data
-            return self.data, -1
+            # Return the modified data
+            return x_data, -1
             
         # Define the backward function
-        def backward(out_grad: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the slice operation
-            grad = np.zeros_like(self.data)
-            
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
             # Use direct assignment which handles slices correctly
-            np.add.at(grad, key, out_grad) # type: ignore
+            np.add.at(out_buffer, key, out_grad)  # type: ignore
         
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -652,16 +673,20 @@ class Tensor:
         - Tensor: Tensor containing the sigmoid of the current tensor
         """
         
+        # Extract input data size before defining closures
+        input_data = self.data
+        data_size = input_data.size
+        
         # Define the forward function
         def forward(*args, **kwargs) -> tuple[np.ndarray, int]:
             # Create an empty array to store the output data
-            out_data = np.empty_like(self.data)
+            out_data = np.empty_like(input_data)
             
             # Compute the sigmoid function
-            sigmoid_forward(self.data.ravel(), out_data.ravel(), self.data.size)
+            sigmoid_forward(input_data.ravel(), out_data.ravel(), data_size)
             
-            # Save the output data in the data tape and return it
-            return out_data, tape_push((out_data,))
+            # Save the output data and size in the data tape and return it
+            return out_data, tape_push((out_data, data_size))
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
@@ -670,11 +695,12 @@ class Tensor:
                 # If the output data is not found, raise an error
                 raise ValueError("Output data not found in the data tape")
             
-            # Extract the output data from the saved data
+            # Extract the output data and size from the saved data
             out_data = saved_data[0]
+            saved_size = saved_data[1]
             
             # Compute the gradient of the sigmoid function
-            sigmoid_gradient(out_data.ravel(), out_grad.ravel(), out_buffer.ravel(), self.data.size)
+            sigmoid_gradient(out_data.ravel(), out_grad.ravel(), out_buffer.ravel(), saved_size)
         
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -705,16 +731,20 @@ class Tensor:
         - Tensor: Tensor containing the ReLU of the current tensor
         """
         
+        # Extract input data size before defining closures
+        input_data = self.data
+        data_size = input_data.size
+        
         # Define the forward function
         def forward(*args, **kwargs) -> tuple[np.ndarray, int]:
             # Create an empty array to store the output data
-            out_data = np.empty_like(self.data)
+            out_data = np.empty_like(input_data)
             
-            # Compute the sigmoid function
-            relu_forward(self.data.ravel(), out_data.ravel(), self.data.size)
+            # Compute the ReLU function
+            relu_forward(input_data.ravel(), out_data.ravel(), data_size)
 
-            # Save the output data in the data tape and return it
-            return out_data, tape_push((out_data,))
+            # Save the output data and size in the data tape and return it
+            return out_data, tape_push((out_data, data_size))
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
@@ -723,11 +753,12 @@ class Tensor:
                 # If the output data is not found, raise an error
                 raise ValueError("Output data not found in the data tape")
             
-            # Extract the output data from the saved data
+            # Extract the output data and size from the saved data
             out_data = saved_data[0]
+            saved_size = saved_data[1]
             
-            # Compute the gradient of the sigmoid function
-            relu_gradient(out_data.ravel(), out_grad.ravel(), out_buffer.ravel(), self.data.size)
+            # Compute the gradient of the ReLU function
+            relu_gradient(out_data.ravel(), out_grad.ravel(), out_buffer.ravel(), saved_size)
         
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -746,16 +777,20 @@ class Tensor:
         - Tensor: Tensor containing the hyperbolic tangent of the current tensor
         """
         
+        # Extract input data size before defining closures
+        input_data = self.data
+        data_size = input_data.size
+        
         # Define the forward function
         def forward(*args, **kwargs) -> tuple[np.ndarray, int]:
             # Create an empty array to store the output data
-            out_data = np.empty_like(self.data)
+            out_data = np.empty_like(input_data)
             
-            # Compute the sigmoid function
-            tanh_forward(self.data.ravel(), out_data.ravel(), self.data.size)
+            # Compute the tanh function
+            tanh_forward(input_data.ravel(), out_data.ravel(), data_size)
             
-            # Save the output data in the data tape and return it
-            return out_data, tape_push((out_data,))
+            # Save the output data and size in the data tape and return it
+            return out_data, tape_push((out_data, data_size))
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
@@ -764,11 +799,12 @@ class Tensor:
                 # If the output data is not found, raise an error
                 raise ValueError("Output data not found in the data tape")
             
-            # Extract the output data from the saved data
+            # Extract the output data and size from the saved data
             out_data = saved_data[0]
+            saved_size = saved_data[1]
             
-            # Compute the gradient of the sigmoid function
-            tanh_gradient(out_data.ravel(), out_grad.ravel(), out_buffer.ravel(), self.data.size)
+            # Compute the gradient of the tanh function
+            tanh_gradient(out_data.ravel(), out_grad.ravel(), out_buffer.ravel(), saved_size)
         
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -790,32 +826,33 @@ class Tensor:
         - Tensor: Tensor containing the softmax of the current tensor
         """
         
-        # Extract the number of elements in the input tensor and create an empty array to store the output data
-        k = self.data.shape[-1]
-        n = self.data.size // k
+        # Extract input data before defining closures
+        input_data = self.data
+        input_ndim = input_data.ndim
+        
+        # Extract the number of elements in the input tensor
+        k = input_data.shape[-1]
+        n = input_data.size // k
         
         # Define the forward function
         def forward(*args, **kwargs) -> tuple[np.ndarray, int]:     
-            # Extract number of elements in the input tensor
-            ndim = self.data.ndim
-            
             # Compute the axis for softmax
-            ax = axis % ndim
+            ax = axis % input_ndim
             
             # If the axis is not the last one, compute softmax along the specified axis
-            if ax != ndim - 1:
+            if ax != input_ndim - 1:
                 # Compute the maximum value along the specified axis
-                out_data = np.exp(self.data) / np.sum(np.exp(self.data), axis=ax, keepdims=True)
+                out_data = np.exp(input_data) / np.sum(np.exp(input_data), axis=ax, keepdims=True)
             # If the axis is the last one, compute softmax using the kernel function
             else:
                 # Create an empty array to store the output data
-                out_data = np.empty_like(self.data)
+                out_data = np.empty_like(input_data)
             
                 # Compute the softmax function
-                softmax_forward(self.data.ravel(), out_data.ravel(), n, k)
+                softmax_forward(input_data.ravel(), out_data.ravel(), n, k)
 
-            # Save the output data in the data tape and return it
-            return out_data, tape_push((out_data,))
+            # Save the output data and dimensions in the data tape and return it
+            return out_data, tape_push((out_data, n, k))
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
@@ -824,11 +861,13 @@ class Tensor:
                 # If the output data is not found, raise an error
                 raise ValueError("Output data not found in the data tape")
 
-            # Extract the output data from the saved data
+            # Extract the output data and dimensions from the saved data
             out_data = saved_data[0]
+            saved_n = saved_data[1]
+            saved_k = saved_data[2]
             
             # Compute the gradient of the softmax function
-            softmax_gradient(out_data.ravel(), out_grad.ravel(), out_buffer.ravel(), n, k)
+            softmax_gradient(out_data.ravel(), out_grad.ravel(), out_buffer.ravel(), saved_n, saved_k)
             
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -850,25 +889,26 @@ class Tensor:
         - Tensor: Tensor containing the log softmax of the current tensor
         """
         
-        # Extract the number of elements in the input tensor and create an empty array to store the output data
-        k = self.data.shape[-1]
-        n = self.data.size // k
+        # Extract input data before defining closures
+        input_data = self.data
+        input_ndim = input_data.ndim
+        
+        # Extract the number of elements in the input tensor
+        k = input_data.shape[-1]
+        n = input_data.size // k
         
         # Define the forward function
         def forward(*args, **kwargs) -> tuple[np.ndarray, int]:
-            # Extract the number of elements in the input tensor
-            ndim = self.data.ndim
-            
             # Compute the axis for log softmax
-            ax = axis % ndim
+            ax = axis % input_ndim
             
             # If the axis is not the last one, compute log softmax along the specified axis
-            if ax != ndim - 1:
+            if ax != input_ndim - 1:
                 # Compute the maximum value along the specified axis
-                m = np.max(self.data, axis=axis, keepdims=True)
+                m = np.max(input_data, axis=axis, keepdims=True)
                 
                 # Subtract the maximum value from the input data
-                y = self.data - m
+                y = input_data - m
                 
                 # Compute the log sum of exponentials
                 logsum = np.log(np.sum(np.exp(y), axis=axis, keepdims=True))
@@ -879,13 +919,13 @@ class Tensor:
             # If the axis is the last one, compute log softmax using the kernel function
             else:
                 # Create an empty array to store the output data
-                out_data = np.empty_like(self.data)
+                out_data = np.empty_like(input_data)
                 
                 # Compute the log softmax function
-                log_softmax_forward(self.data.ravel(), out_data.ravel(), n, k)
+                log_softmax_forward(input_data.ravel(), out_data.ravel(), n, k)
 
-            # Save the output data in the data tape and return it
-            return out_data, tape_push((out_data,))
+            # Save the output data and dimensions in the data tape and return it
+            return out_data, tape_push((out_data, n, k))
 
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
@@ -894,11 +934,13 @@ class Tensor:
                 # If the output data is not found, raise an error
                 raise ValueError("Output data not found in the data tape")
             
-            # Extract the output data from the saved data
+            # Extract the output data and dimensions from the saved data
             out_data = saved_data[0]
+            saved_n = saved_data[1]
+            saved_k = saved_data[2]
             
             # Compute the gradient of the log softmax function
-            log_softmax_gradient(out_data.ravel(), out_grad.ravel(), out_buffer.ravel(), n, k)
+            log_softmax_gradient(out_data.ravel(), out_grad.ravel(), out_buffer.ravel(), saved_n, saved_k)
             
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -958,9 +1000,6 @@ class Tensor:
         
         # Define the forward function
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Initialize the index for the data tape
-            tape_idx = -1
-            
             # If axis is None, compute the maximum value of the flattened tensor
             if axis is None:
                 # Create a buffer to store the maximum value and its index
@@ -972,57 +1011,55 @@ class Tensor:
                 
                 # If keepdims is True, create an output tensor with the same shape as the input tensor
                 if keepdims:
-                    # Create an output tensor with the same shape as the input tensor
                     out_data = np.full([1]*x_data.ndim, buf[0], dtype=x_data.dtype)
-                # If keepdims is False, create an output tensor with the shape of the maximum value
                 else:
-                    # Create an output tensor with the shape of the maximum value
                     out_data = buf[0]
                     
-                # Save the index in the data tape to use it in the backward pass
-                tape_idx = tape_push((idx,))
+                # Save the index in the data tape
+                tape_idx = tape_push((idx, None))
                 
             # If axis is not None, compute the maximum value along the specified axis
             else:
-                # If axis is not None, compute the maximum value along the specified axis
+                # Compute the maximum value along the specified axis
                 out_data = np.max(x_data, axis=axis, keepdims=keepdims)
                 
-            # Return the computed maximum value and its index
+                # Save x_data for the backward pass (needed for creating mask)
+                tape_idx = tape_push((None, x_data.copy()))
+                
+            # Return the output data and tape index
             return out_data, tape_idx
                 
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Optional[Tuple[Any, ...]], *args, **kwargs) -> None:
             # If axis is None, compute the gradient for the flattened tensor
             if axis is None:
-                # Extract the index from the saved data
-                if saved_data is None:
-                    # If the index is not found, raise an error
+                if saved_data is None or saved_data[0] is None:
                     raise ValueError("Index not found in the data tape")
                 
-                # Compute the index of the maximum value
+                # Compute the gradient of the max function for flattened tensor
                 max_flat_gradient(saved_data[0], np.array([out_grad]).ravel(), out_buffer.ravel())
                 
             # If axis is not None, compute the gradient along the specified axis
             else:
-                # Initialize the gradient tensor
+                # Retrieve x_data from saved_data
+                if saved_data is None or saved_data[1] is None:
+                    raise ValueError("Input data not found in the data tape")
+
+                # Retrieve the expanded gradient
+                x_data = saved_data[1]
                 expanded = out_grad
                 
-                # If axis is a tuple, expand the gradient for each axis in the tuple
+                # Expand the gradient to match the shape of x_data if keepdims is False
                 if not keepdims:
-                    # If keepdims is False, expand the gradient along the specified axis
                     expanded = np.expand_dims(expanded, axis=axis)
                     
                 # Create a mask to identify the maximum values
-                mask = (self.data == expanded)
-
-                # Count the number of maximum values along the specified axis
+                mask = (x_data == expanded)
                 count = np.sum(mask, axis=axis, keepdims=True)
-                
-                # Avoid division by zero; set count to 1 where it is zero
                 grad_x = mask * (expanded / count)
                 
-                # Accumulate the gradient in the input tensor
-                accumulate_gradient(self, grad_x)
+                # Accumulate gradient in out_buffer in-place
+                np.add(out_buffer, grad_x, out=out_buffer)
 
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -1041,15 +1078,19 @@ class Tensor:
         - Tensor: Tensor containing the square root of the current tensor
         """
         
-        # Define the forward function
-        def forward( x_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Compute the square root of the tensor
-            return sqrt_forward(x_data), -1
+        # Define the forward function - save input data for backward
+        def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
+            # Compute the square root and save input for backward pass
+            return sqrt_forward(x_data), tape_push((x_data,))
         
         # Define the backward function
-        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the square root operation
-            sqrt_backward(out_grad, out_buffer, self.data)
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve x_data from saved_data
+            x_data = saved_data[0] if saved_data else None
+            
+            # Compute the gradient of the square root function
+            if x_data is not None:
+                sqrt_backward(out_grad, out_buffer, x_data)
         
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -1072,6 +1113,11 @@ class Tensor:
         - Tensor: Mean of the tensor along the specified axis
         """
         
+        # Capture shape and size locally to avoid closure over entire tensor
+        input_shape = self.data.shape
+        input_size = self.data.size
+        input_dtype = self.data.dtype
+        
         # Define the forward function
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
             # Compute the mean of the tensor along the specified axis
@@ -1081,40 +1127,33 @@ class Tensor:
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
             # If axis is None, compute the gradient for the flattened tensor
             if axis is None:
-                # Create a buffer to store the gradient
-                buf = np.zeros((1,), dtype=self.data.dtype)
-                
-                # Initialize the buffer with the gradient of the output tensor
+                # Compute the gradient of the mean function for flattened tensor
+                buf = np.zeros((1,), dtype=input_dtype)
                 buf[0] = out_grad
-                inv = 1.0 / self.data.size
+                inv = 1.0 / input_size
                 
-                # Compute the gradient of the mean operation
+                # Compute the mean flat backward
                 mean_flat_backward(buf, out_buffer.ravel(), inv)
                 
             # If axis is not None, compute the gradient along the specified axis
             else:
-                # Initialize the gradient tensor
+                # Retrieve the expanded gradient
                 grad = out_grad
                 
-                # If keepdims is False, expand the gradient for each axis in the tuple
+                # Expand the gradient to match the shape of input tensor
                 if not keepdims:
-                    # Expand the gradient along the specified axis
                     grad = np.expand_dims(grad, axis=axis)
 
                 # Compute the number of elements along the specified axis/axes
                 if isinstance(axis, int):
-                    # If axis is an integer, compute the number of elements along that axis
-                    num_elements_along_axis = self.data.shape[axis]
-                    
+                    num_elements_along_axis = input_shape[axis]
                 elif isinstance(axis, tuple):
-                    # If axis is a tuple, compute the number of elements along each axis
-                    num_elements_along_axis = np.prod([self.data.shape[ax] for ax in axis])
+                    num_elements_along_axis = int(np.prod([input_shape[ax] for ax in axis]))
                 else:
-                    # If axis is not an integer or a tuple, raise a TypeError
                     raise TypeError("axis must be an int or a tuple of ints")
 
-                # Accumulate the gradient in the input tensor
-                accumulate_gradient(self, grad / num_elements_along_axis)
+                # Accumulate gradient in out_buffer in-place
+                np.add(out_buffer, grad / num_elements_along_axis, out=out_buffer)
 
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -1185,15 +1224,19 @@ class Tensor:
         - Tensor: Tensor containing the exponential of the current tensor
         """
         
-        # Define the forward function
+        # Define the forward function - save input data for backward
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Compute the exponential of the tensor
-            return np.exp(x_data), -1
+            # Compute the exponential of the tensor and save input for backward
+            return np.exp(x_data), tape_push((x_data,))
         
         # Define the backward function
-        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the exponential operation
-            exp_gradient(out_grad.ravel(), self.data.ravel(), out_buffer.ravel())
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve x_data from saved_data
+            x_data = saved_data[0] if saved_data else None
+            
+            # Compute the gradient of the exponential function
+            if x_data is not None:
+                exp_gradient(out_grad.ravel(), x_data.ravel(), out_buffer.ravel())
         
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -1212,15 +1255,19 @@ class Tensor:
         - Tensor: Tensor containing the natural logarithm of the current tensor
         """
         
-        # Define the forward function
+        # Define the forward function - save input data for backward
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Compute the natural logarithm of the tensor
-            return np.log(x_data), -1
+            # Compute the natural logarithm of the tensor and save input for backward
+            return np.log(x_data), tape_push((x_data,))
         
         # Define the backward function
-        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the logarithm operation
-            log_gradient(self.data.ravel(), out_grad.ravel(), out_buffer.ravel())
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve x_data from saved_data
+            x_data = saved_data[0] if saved_data else None
+            
+            # Compute the gradient of the natural logarithm function
+            if x_data is not None:
+                log_gradient(x_data.ravel(), out_grad.ravel(), out_buffer.ravel())
         
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -1242,21 +1289,21 @@ class Tensor:
         - Tensor: Transposed tensor
         """
         
+        # Precompute inverse axes to avoid closure over mutable state
+        inv_axes = tuple(np.argsort(axes))
+        
         # Define the forward function
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
             # Compute the transpose of the tensor
             return x_data.transpose(axes), -1
         
         # Define the backward function
-        def backward(out_grad: np.ndarray, *args, **kwargs) -> None:
-            # Invert the axes to match the original tensor
-            inv_axes = np.argsort(axes)
-            
-            # Transpose the gradient to match the original tensor
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Transpose the gradient to match the original tensor using pre-computed inv_axes
             grad_x = out_grad.transpose(inv_axes)
             
-            # Accumulate the gradient in the input tensor
-            accumulate_gradient(self, grad_x)
+            # Accumulate the gradient in the output buffer in-place
+            np.add(out_buffer, grad_x, out=out_buffer)
         
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -1479,11 +1526,8 @@ class Tensor:
 
         # Define the forward function
         def forward(x_data: np.ndarray, *args, **kwargs) -> tuple[np.ndarray, int]:
-            # Perform the scatter operation
-            out_data = scatter_forward(x_data, axis, index.data, src.data, reduction)
-
-            # Return the scattered tensor
-            return out_data, -1
+            # Perform the scatter operation and return the scattered tensor
+            return scatter_forward(x_data, axis, index.data, src.data, reduction), -1
             
         # Define the backward function for tensor x
         def backward_x(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
@@ -1518,21 +1562,25 @@ class Tensor:
         - Tensor: Clipped tensor
         """
         
-        # Define the forward function
+        # Define the forward function - save input data for backward
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
             # Create an output tensor with the same shape as the input tensor
             out_data = np.empty_like(x_data)
         
             # Clip the values of the tensor to the specified range
-            clip_forward(self.data.ravel(), min_val, max_val, out_data.ravel())
+            clip_forward(x_data.ravel(), min_val, max_val, out_data.ravel())
             
-            # Return the clipped tensor
-            return out_data, -1
+            # Save input data for backward pass and return the output data
+            return out_data, tape_push((x_data,))
         
         # Define the backward function
-        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Compute the gradient of the clipping operation
-            clip_gradient(self.data.ravel(), out_grad.ravel(), out_buffer.ravel(), min_val, max_val)
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve x_data from saved_data
+            x_data = saved_data[0] if saved_data else None
+            
+            # Compute the gradient of the clip function
+            if x_data is not None:
+                clip_gradient(x_data.ravel(), out_grad.ravel(), out_buffer.ravel(), min_val, max_val)
                 
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -1554,27 +1602,29 @@ class Tensor:
         - Tensor: Sequeezed tensor
         """
         
+        # Capture original shape locally to avoid closure over entire tensor
+        original_shape = self.data.shape
+        
         # Define the forward function
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
             # Squeeze the tensor along the specified axis
             return np.squeeze(x_data, axis=axis), -1
         
         # Define the backward function
-        def backward(out_grad: np.ndarray, *args, **kwargs) -> None:        
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:        
             # Unsqueeze the gradient along the same axis to match the original shape
             if axis is None:
                 # For None case, we need to restore all squeezed dims
                 grad_squeezed = out_grad
-                original_shape = x.data.shape
                 for dim in sorted([i for i, size in enumerate(original_shape) if size == 1], reverse=True):
                     grad_squeezed = np.expand_dims(grad_squeezed, axis=dim)
             else:
                 # For specific axis case
                 grad_squeezed = np.expand_dims(out_grad, axis=axis)
             
-            # Update the gradient of the input tensor
-            accumulate_gradient(self, grad_squeezed)
-        
+            # Accumulate gradient in out_buffer in-place
+            np.add(out_buffer, grad_squeezed, out=out_buffer)
+
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
             t = self,
@@ -1625,18 +1675,21 @@ class Tensor:
         - Tensor: Reshaped tensor
         """
         
+        # Capture original shape locally to avoid closure over entire tensor
+        original_shape = self.data.shape
+        
         # Define the forward function
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
             # Reshape the tensor to the specified new shape
             return x_data.reshape(shape), -1
         
         # Define the backward function
-        def backward(out_grad: np.ndarray, *args, **kwargs) -> None:        
+        def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:        
             # Reshape the gradient to match the original tensor shape
-            grad_back = out_grad.reshape(self.data.shape)
+            grad_back = out_grad.reshape(original_shape)
             
-            # Accumulate the gradient in the input tensor
-            accumulate_gradient(self, grad_back)
+            # Accumulate gradient in out_buffer in-place
+            np.add(out_buffer, grad_back, out=out_buffer)
         
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
@@ -1659,43 +1712,39 @@ class Tensor:
         - Tensor: Repeated tensor
         """
         
+        # Capture shape, size and dtype locally to avoid closure over entire tensor
+        original_shape = self.data.shape
+        original_size = self.data.size
+        original_dtype = self.data.dtype
+        
         # Define the forward function
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
             # If the axis is None, flatten the tensor and repeat
             if axis is None:
-                # Flatten the tensor
-                out_data = np.empty(self.data.size * repeats, dtype=self.data.dtype)
-                
-                # Repeat the flattened tensor
-                repeat_forward(self.data.ravel(), repeats, out_data)
-                
-            # If the axis is specified, repeat along that axis
+                out_data = np.empty(original_size * repeats, dtype=original_dtype)
+                repeat_forward(x_data.ravel(), repeats, out_data)
             else:
-                # Repeat the tensor along the specified axis
-                out_data = np.repeat(self.data, repeats, axis=axis)
+                out_data = np.repeat(x_data, repeats, axis=axis)
                 
-            # Return the repeated tensor
+            # Return the repeated tensors
             return out_data, -1
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
             # If the axis is None, compute the gradient for the flattened tensor
             if axis is None:
-                # Compute the gradient of the repeated tensor
                 repeat_gradient(out_grad.ravel(), repeats, out_buffer.ravel())
-                
-            # If the axis is specified, compute the gradient along that axis
             else:
                 # Reduce the gradient along the specified axis
                 grad_unrepeated = np.add.reduce(
                     out_grad.reshape(
-                        *(self.data.shape[:axis]), self.data.shape[axis], repeats, *self.data.shape[axis+1:]
+                        *(original_shape[:axis]), original_shape[axis], repeats, *original_shape[axis+1:]
                     ), axis = axis+1
                 )
                 
-                # Accumulate the gradient
-                accumulate_gradient(self, grad_unrepeated)
-        
+                # Accumulate gradient in out_buffer in-place
+                np.add(out_buffer, grad_unrepeated, out=out_buffer)
+
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
             t = self,
@@ -1731,8 +1780,7 @@ class Tensor:
         # Define the forward function
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
             # Expand the tensor to the target shape
-            expanded = expand_forward(x_data, target_shape)
-            return expanded, -1
+            return expand_forward(x_data, target_shape), -1
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
@@ -1759,19 +1807,22 @@ class Tensor:
         - Tensor: Padded tensor
         """
         
+        # Capture shape and dtype locally to avoid closure over entire tensor
+        input_shape = self.data.shape
+        input_dtype = self.data.dtype
+        
         # Define the forward function
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Extract the padding widths for each dimension and the input tensor shape
+            # Extract the padding widths for each dimension
             (_, _), (pt, pb), (pl, pr), (_, _) = pad_width
-            batch_size, height, width, channels = self.data.shape
+            batch_size, height, width, channels = input_shape
             
             # Create the output tensor with the new shape
-            out_data = np.empty((batch_size, height + pt + pb, width + pl + pr, channels), dtype=self.data.dtype)
+            out_data = np.empty((batch_size, height + pt + pb, width + pl + pr, channels), dtype=input_dtype)
             
             # Perform the padding operation
-            pad_forward(self.data, pt, pb, pl, pr, out_data)
+            pad_forward(x_data, pt, pb, pl, pr, out_data)
             
-            # Return the padded tensor
             return out_data, -1
         
         # Define the backward function
@@ -1803,20 +1854,28 @@ class Tensor:
         - Tensor: Tensor containing the 2D convolution of the tensor
         """
         
-        # Define the forward function
+        # Define the forward function - save both inputs for backward
         def forward(x_data: np.ndarray, kernel_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Perform the convolution operation
-            return conv_2d_forward(x_data, kernel_data, stride), -1
+            # Perform the convolution operation and save inputs for backward
+            return conv_2d_forward(x_data, kernel_data, stride), tape_push((x_data, kernel_data))
         
         # Define the backward function for the input tensor
-        def backward_x(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Backprop the gradient through the convolution operation
-            conv_2d_backward_x(out_grad=out_grad, out_buffer=out_buffer, kernel_data=kernel.data, stride=stride)
+        def backward_x(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve kernel_data from saved_data
+            _, kernel_data = saved_data if saved_data else (None, None)
+            
+            # Compute the gradient of the convolution with respect to the input tensor
+            if kernel_data is not None:
+                conv_2d_backward_x(out_grad=out_grad, out_buffer=out_buffer, kernel_data=kernel_data, stride=stride)
             
         # Define the backward function for the kernel
-        def backward_w(out_grad: np.ndarray, out_buffer: np.ndarray, *args, **kwargs) -> None:
-            # Backprop the gradient through the convolution operation
-            conv_2d_backward_w(out_grad=out_grad, out_buffer=out_buffer, x_data=self.data, stride=stride)
+        def backward_w(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve x_data from saved_data
+            x_data, _ = saved_data if saved_data else (None, None)
+            
+            # Compute the gradient of the convolution with respect to the kernel
+            if x_data is not None:
+                conv_2d_backward_w(out_grad=out_grad, out_buffer=out_buffer, x_data=x_data, stride=stride)
         
         # Return the tensor operation with the specified forward and backward functions
         return tensor_binary_op(
@@ -1841,14 +1900,17 @@ class Tensor:
         - Tensor: Tensor containing the 2D max pooling of the tensor
         """
         
-        # Define the stride values and initialize the indices for max pooling
+        # Define the stride values
         stride_height, stride_width = stride
+        kernel_height, kernel_width = kernel_size
+        
+        # Capture dtype locally
+        input_dtype = self.data.dtype
         
         # Define the forward function
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:        
             # Extract the input dimensions
-            batch_size, height, width, channels = self.data.shape
-            kernel_height, kernel_width = kernel_size
+            batch_size, height, width, channels = x_data.shape
             
             # Compute the output dimensions
             out_height = (height - kernel_height) // stride_height + 1
@@ -1859,16 +1921,16 @@ class Tensor:
                 raise ValueError("Kernel size or stride too large for input size.")
 
             # Create the output array
-            out_data = np.empty((batch_size, out_height, out_width, channels), dtype=self.data.dtype)
+            out_data = np.empty((batch_size, out_height, out_width, channels), dtype=input_dtype)
             
             # Initialize the indices for max pooling
             arg_i = np.zeros_like(out_data, dtype=np.int32)
             arg_j = np.zeros_like(out_data, dtype=np.int32)
 
             # Perform the max pooling operation
-            max_pool_2d_forward(self.data, kernel_height, kernel_width, stride_height, stride_width, out_data, arg_i, arg_j)
+            max_pool_2d_forward(x_data, kernel_height, kernel_width, stride_height, stride_width, out_data, arg_i, arg_j)
 
-            # Save the indices in the data tape to use them in the backward pass and return the output data
+            # Save the indices in the data tape
             return out_data, tape_push((arg_i, arg_j))
         
         # Define the backward function
@@ -1947,11 +2009,8 @@ class Tensor:
         
         # Define the forward function
         def forward(tensors_list: List[np.ndarray]) -> tuple[np.ndarray, int]:
-            # Perform the stacking operation
-            out = stack_forward(tensors_list, axis)
-                
-            # Return the stacked tensor
-            return out, -1
+            # Perform the stacking operation and return the stacked tensor
+            return stack_forward(tensors_list, axis), -1
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, tensor_idx: int, *args, **kwargs) -> None:
@@ -1983,11 +2042,8 @@ class Tensor:
         
         # Define the forward function
         def forward(x_data: np.ndarray) -> tuple[List[np.ndarray], int]:
-            # Perform the split operation
-            out_tensors = split_forward(x_data, indices_or_sections, axis)
-                
-            # Return the list of sub-tensors
-            return out_tensors, -1
+            # Perform the split operation and return the list of sub-tensors
+            return split_forward(x_data, indices_or_sections, axis), -1
         
         # Define the backward function
         def backward(out_grads: List[np.ndarray], out_buffer: np.ndarray, *args, **kwargs) -> None:
@@ -2032,19 +2088,16 @@ class Tensor:
 
         # Define the forward function
         def forward(tensors_data: List[np.ndarray]) -> tuple[np.ndarray, int]:
-            # Perform the einsum operation
-            out = einsum_forward(subscripts, *tensors_data)
-            
-            # Return the result
-            return out, -1
+            # Perform the einsum operation and return the result
+            return einsum_forward(subscripts, *tensors_data), -1
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, tensor_idx: int, *args, **kwargs) -> None:
             # Compute the gradient for the specified operand
             grad = einsum_backward(subscripts, out_grad, operands_data, tensor_idx)
             
-            # Accumulate the gradient
-            out_buffer += grad
+            # Accumulate the gradient in-place
+            np.add(out_buffer, grad, out=out_buffer)
 
         # Return the tensor operation with the specified forward and backward functions
         return tensor_nary_op(
