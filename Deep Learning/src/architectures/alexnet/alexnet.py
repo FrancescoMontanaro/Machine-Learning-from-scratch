@@ -1,4 +1,5 @@
 from .config import AlexNetConfig
+from ...activations import Softmax
 from ...core import Tensor, Module
 from ..sequential import Sequential
 from ...layers import Dense, LocalResponseNormalization, Flatten, Dropout, MaxPool2D, Conv2D
@@ -124,7 +125,10 @@ class AlexNetModule(Module):
             padding = config.max_pool.padding
         )
         
-        
+        # Create the softmax layer
+        self.softmax = Softmax()
+
+
     ### Protected methods ###
     
     def _forward(self, x: Tensor) -> Tensor:
@@ -138,18 +142,32 @@ class AlexNetModule(Module):
         - Tensor: Output tensor of shape (B, num_classes).
         """
         
-        # Apply the convolutional layers with normalization and pooling
+        # Conv1 -> ReLU -> LRN -> MaxPool
         x = self.max_pooling(self.norm(self.conv_1(x)))
-        x = self.max_pooling(self.norm(self.conv_2(x)))
-        x = self.conv_3(x)
-        x = self.conv_4(x)
-        x = self.max_pooling(self.norm(self.conv_5(x)))
         
-        # Flatten the output and apply the fully connected layers with dropout
+        # Conv2 -> ReLU -> LRN -> MaxPool
+        x = self.max_pooling(self.norm(self.conv_2(x)))
+        
+        # Conv3 -> ReLU (no LRN, no pooling)
+        x = self.conv_3(x)
+        
+        # Conv4 -> ReLU (no LRN, no pooling)
+        x = self.conv_4(x)
+        
+        # Conv5 -> ReLU -> MaxPool (no LRN!)
+        x = self.max_pooling(self.conv_5(x))
+        
+        # Flatten the output
         x = self.flatten(x)
+        
+        # FC1 -> ReLU -> Dropout
         x = self.dropout(self.fc_1(x))
+        
+        # FC2 -> ReLU -> Dropout
         x = self.dropout(self.fc_2(x))
-        x = self.fc_3(x)
+        
+        # FC3 -> Softmax -> Output 
+        x = self.softmax(self.fc_3(x))
         
         # Return the output tensor
         return x
