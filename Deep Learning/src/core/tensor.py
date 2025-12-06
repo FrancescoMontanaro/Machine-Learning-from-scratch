@@ -617,15 +617,12 @@ class Tensor:
         
         # Create a new tensor with the same data but without gradient computation
         return Tensor(data=self.data, requires_grad=False, is_parameter=self.is_parameter)
-    
-    
-    def clear_graph(self, _visited: Optional[set] = None) -> None:
+
+
+    def clear_graph(self) -> None:
         """
         Method to clear the computation graph using iterative approach.
         Handles circular references and avoids creating new objects.
-        
-        Parameters:
-        - _visited: Internal parameter, do not use
         """
         
         # Use iterative approach to avoid recursion overhead and stack limits
