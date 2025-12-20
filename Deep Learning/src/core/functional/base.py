@@ -2,8 +2,8 @@ import numpy as np
 from typing import Callable, List, TYPE_CHECKING
 
 from .tape import tape_pop
+from ..utils import context_manager as ctx
 if TYPE_CHECKING: from ..tensor import Tensor
-from ..utils.context_manager import _NO_GRAD
 
 
 def tensor_unary_op(
@@ -29,7 +29,7 @@ def tensor_unary_op(
     out_data, tape_idx = forward_fn(t.data)
     
     # Check if the gradient is required
-    if _NO_GRAD or not t.requires_grad:
+    if ctx._NO_GRAD or not t.requires_grad:
         # If no gradients are required, clear any saved tape data
         tape_pop(tape_idx)
 
@@ -93,7 +93,7 @@ def tensor_binary_op(
     out_data, tape_idx = forward_fn(t1.data, t2.data)
     
     # Check if the gradient is required
-    if _NO_GRAD or not (t1.requires_grad or t2.requires_grad):
+    if ctx._NO_GRAD or not (t1.requires_grad or t2.requires_grad):
         # If no gradients are required, clear any saved tape data
         tape_pop(tape_idx)
 
@@ -163,7 +163,7 @@ def tensor_nary_op(
     out_data, tape_idx = forward_fn([t.data for t in tensors])
     
     # Check if the gradient is required
-    if _NO_GRAD or not any(t.requires_grad for t in tensors):
+    if ctx._NO_GRAD or not any(t.requires_grad for t in tensors):
         # If no gradients are required, clear any saved tape data
         tape_pop(tape_idx)
 
@@ -227,7 +227,7 @@ def tensor_unary_op_multiple_outputs(
     out_data_list, tape_idx = forward_fn(t.data)
     
     # Check if the gradient is required
-    if _NO_GRAD or not t.requires_grad:
+    if ctx._NO_GRAD or not t.requires_grad:
         # If no gradients are required, clear any saved tape data
         tape_pop(tape_idx)
 
@@ -292,7 +292,7 @@ def tensor_unary_op_binary_output(
     (out_data_a, out_data_b), tape_idx = forward_fn(t.data)
     
     # Check if the gradient is required
-    if _NO_GRAD or not t.requires_grad:
+    if ctx._NO_GRAD or not t.requires_grad:
         # If no gradients are required, clear any saved tape data
         tape_pop(tape_idx)
 
