@@ -30,7 +30,10 @@ def tensor_unary_op(
     
     # Check if the gradient is required
     if _NO_GRAD or not t.requires_grad:
-        # If no gradients are required, return the output tensor without backward
+        # If no gradients are required, clear any saved tape data
+        tape_pop(tape_idx)
+
+        # Return the output tensor without backward
         return tensor_cls(out_data, requires_grad=False)
     
     # Create output tensor
@@ -91,7 +94,10 @@ def tensor_binary_op(
     
     # Check if the gradient is required
     if _NO_GRAD or not (t1.requires_grad or t2.requires_grad):
-        # If no gradients are required, return the output tensor without backward
+        # If no gradients are required, clear any saved tape data
+        tape_pop(tape_idx)
+
+        # Return the output tensor without backward
         return tensor_cls(out_data, requires_grad=False)
     
     # Create output tensor
@@ -158,7 +164,10 @@ def tensor_nary_op(
     
     # Check if the gradient is required
     if _NO_GRAD or not any(t.requires_grad for t in tensors):
-        # If no gradients are required, return the output tensor without backward
+        # If no gradients are required, clear any saved tape data
+        tape_pop(tape_idx)
+
+        # Return the output tensor without backward
         return tensor_cls(out_data, requires_grad=False)
     
     # Create output tensor
@@ -219,7 +228,10 @@ def tensor_unary_op_multiple_outputs(
     
     # Check if the gradient is required
     if _NO_GRAD or not t.requires_grad:
-        # If no gradients are required, return the output tensors without backward
+        # If no gradients are required, clear any saved tape data
+        tape_pop(tape_idx)
+
+        # Return the output tensors without backward
         return [tensor_cls(out_data, requires_grad=False) for out_data in out_data_list]
     
     # Create output tensors
@@ -281,7 +293,10 @@ def tensor_unary_op_binary_output(
     
     # Check if the gradient is required
     if _NO_GRAD or not t.requires_grad:
-        # If no gradients are required, return the output tensors without backward
+        # If no gradients are required, clear any saved tape data
+        tape_pop(tape_idx)
+
+        # Return the output tensors without backward
         return tensor_cls(out_data_a, requires_grad=False), tensor_cls(out_data_b, requires_grad=False)
     
     # Create output tensors
