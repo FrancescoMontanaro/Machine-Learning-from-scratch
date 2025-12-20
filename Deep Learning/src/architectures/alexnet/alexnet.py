@@ -1,5 +1,4 @@
 from .config import AlexNetConfig
-from ...activations import Softmax
 from ...core import Tensor, Module
 from ..sequential import Sequential
 from ...layers import Dense, LocalResponseNormalization, Flatten, Dropout, MaxPool2D, Conv2D
@@ -125,9 +124,6 @@ class AlexNetModule(Module):
             padding = config.max_pool.padding
         )
         
-        # Create the softmax layer
-        self.softmax = Softmax()
-
 
     ### Protected methods ###
     
@@ -166,8 +162,8 @@ class AlexNetModule(Module):
         # FC2 -> ReLU -> Dropout
         x = self.dropout(self.fc_2(x))
         
-        # FC3 -> Softmax -> Output 
-        x = self.softmax(self.fc_3(x))
+        # FC3 -> Output logits
+        x = self.fc_3(x)
         
         # Return the output tensor
         return x

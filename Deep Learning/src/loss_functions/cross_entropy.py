@@ -12,7 +12,8 @@ class CrossEntropy(LossFn):
         self, 
         reduction: Optional[Literal["mean", "sum"]] = "mean", 
         label_smoothing: float = 0.0,
-        from_sequence: bool = False
+        from_sequence: bool = False,
+        from_logits: bool = True
     ) -> None:
         """
         Class constructor for CrossEntropy loss function.
@@ -21,12 +22,14 @@ class CrossEntropy(LossFn):
         - reduction (str): Specifies the reduction to apply to the output. Default is "mean".
         - label_smoothing (float): If greater than 0, applies label smoothing. Default is 0.0.
         - from_sequence (bool): If True, the loss function is applied to sequences. Default is False.
+        - from_logits (bool): If True, y_pred is expected to be logits. Default is True.
         """
         
         # Store the attributes
         self.reduction = reduction
         self.label_smoothing = label_smoothing
         self.from_sequence = from_sequence
+        self.from_logits = from_logits
 
 
     def __call__(self, y_true: Tensor, y_pred: Tensor) -> Tensor:
@@ -34,7 +37,8 @@ class CrossEntropy(LossFn):
         Compute the cross-entropy loss.
         
         Parameters:
-        - input (Tensor): The input tensor (predictions).
+        - y_true (Tensor): Target labels.
+        - y_pred (Tensor): Predicted logits or probabilities.
         """
         
         # If from_sequence is True, reshape the tensors for sequence-to-sequence loss
@@ -67,8 +71,11 @@ class CrossEntropy(LossFn):
             # Apply label smoothing
             target_one_hot = target_one_hot * (1 - self.label_smoothing - smoothing_value) + smoothing_value
 
-        # Compute log softmax
-        log_probs = y_pred.log_softmax(axis=-1)
+        # Compute log probabilities
+        if self.from_logits:
+            log_probs = y_pred.log_softmax(axis=-1)
+        else:
+            log_probs = y_pred.clip(EPSILON, 1 - EPSILON).log()
         
         # Compute negative log likelihood
         loss = - (target_one_hot * log_probs).sum(axis=-1)
