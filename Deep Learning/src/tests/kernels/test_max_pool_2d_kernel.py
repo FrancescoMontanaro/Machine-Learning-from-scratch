@@ -61,8 +61,10 @@ class TestMaxPool2DKernel(Test):
         Test that custom max_pool_2d gradients match torch autograd.
         """
 
-        # Setup tensors with grad
-        x_torch = torch.tensor(self.x_raw, dtype=torch.float32, requires_grad=True).permute(0, 3, 1, 2)
+        # Setup tensors with grad - create leaf tensor first, then permute and retain grad
+        x_torch_leaf = torch.tensor(self.x_raw, dtype=torch.float32, requires_grad=True)
+        x_torch = x_torch_leaf.permute(0, 3, 1, 2)
+        x_torch.retain_grad()
 
         # Custom tensors
         x_custom = Tensor(self.x_raw, dtype=np.float32, requires_grad=True)

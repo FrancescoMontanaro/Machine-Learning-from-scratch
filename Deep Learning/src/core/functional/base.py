@@ -305,8 +305,8 @@ def tensor_unary_op_binary_output(
     
     # Define the backward function
     def _backward():
-        # If either output tensor is None, return
-        if out_a.grad is None or out_b.grad is None:
+        # At least one output tensor must have a gradient to proceed
+        if out_a.grad is None and out_b.grad is None:
             return
         
         # Retrieve the saved data from the tape
@@ -317,9 +317,11 @@ def tensor_unary_op_binary_output(
             # Initialize the gradient to zero
             t.grad = np.zeros_like(t.data, dtype=t.data.dtype)
             
-        # Call the backward functions with the output gradients
-        backward_fn_a(out_grad=out_a.grad, out_buffer=t.grad, saved_data=saved_data)
-        backward_fn_b(out_grad=out_b.grad, out_buffer=t.grad, saved_data=saved_data)
+        # Call the backward functions with the output gradients (if available)
+        if out_a.grad is not None:
+            backward_fn_a(out_grad=out_a.grad, out_buffer=t.grad, saved_data=saved_data)
+        if out_b.grad is not None:
+            backward_fn_b(out_grad=out_b.grad, out_buffer=t.grad, saved_data=saved_data)
         
     # Set the backward function to each output tensor
     out_a._backward = _backward

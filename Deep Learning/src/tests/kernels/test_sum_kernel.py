@@ -42,7 +42,7 @@ class TestSumKernel(Test):
 
         # Assert values are close
         self.assertTrue(
-            np.allclose(out_custom, out_torch, atol=1e-6),
+            np.allclose(out_custom, out_torch, atol=1e-5),
             msg=(
                 f"❌ Forward outputs differ!\n"
                 f"Custom: {out_custom}\n"

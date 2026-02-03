@@ -90,7 +90,8 @@ def masked_fill_gradient(mask_flat: np.ndarray, out_grad_flat: np.ndarray, x_gra
     
     # Iterate over the flattened tensor
     for i in prange(n):
-        # If mask is True, propagate the gradient; otherwise, set to zero
-        if mask_flat[i % m]:
+        # If mask is False, propagate the gradient (original value kept)
+        # If mask is True, gradient is zero (value was replaced by constant)
+        if not mask_flat[i % m]:
             # Propagate the gradient
             x_grad_flat[i] += out_grad_flat[i]

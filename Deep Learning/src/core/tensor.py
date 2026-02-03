@@ -1035,15 +1035,18 @@ class Tensor:
                     out_data = buf[0]
                     
                 # Save the index in the data tape
-                tape_idx = tape_push((idx, None))
+                tape_idx = tape_push((idx, None, None))
                 
             # If axis is not None, compute the maximum value along the specified axis
             else:
-                # Compute the maximum value along the specified axis
+                # Compute the maximum value along the specified axis (keep dims for comparison)
                 out_data = np.max(x_data, axis=axis, keepdims=keepdims)
                 
-                # Save x_data for the backward pass (needed for creating mask)
-                tape_idx = tape_push((None, x_data.copy()))
+                # Compute max with keepdims=True for backward pass comparison
+                max_vals_expanded = np.max(x_data, axis=axis, keepdims=True)
+                
+                # Save x_data and max values for the backward pass (needed for creating mask)
+                tape_idx = tape_push((None, x_data.copy(), max_vals_expanded))
                 
             # Return the output data and tape index
             return out_data, tape_idx
@@ -1060,22 +1063,23 @@ class Tensor:
                 
             # If axis is not None, compute the gradient along the specified axis
             else:
-                # Retrieve x_data from saved_data
-                if saved_data is None or saved_data[1] is None:
-                    raise ValueError("Input data not found in the data tape")
+                # Retrieve x_data and max_vals from saved_data
+                if saved_data is None or saved_data[1] is None or saved_data[2] is None:
+                    raise ValueError("Input data or max values not found in the data tape")
 
-                # Retrieve the expanded gradient
+                # Retrieve x_data and max values (expanded with keepdims=True)
                 x_data = saved_data[1]
-                expanded = out_grad
+                max_vals_expanded = saved_data[2]
                 
                 # Expand the gradient to match the shape of x_data if keepdims is False
+                expanded_grad = out_grad
                 if not keepdims:
-                    expanded = np.expand_dims(expanded, axis=axis)
+                    expanded_grad = np.expand_dims(expanded_grad, axis=axis)
                     
                 # Create a mask to identify the maximum values
-                mask = (x_data == expanded)
+                mask = (x_data == max_vals_expanded)
                 count = np.sum(mask, axis=axis, keepdims=True)
-                grad_x = mask * (expanded / count)
+                grad_x = mask * (expanded_grad / count)
                 
                 # Accumulate gradient in out_buffer in-place
                 np.add(out_buffer, grad_x, out=out_buffer)
@@ -1243,19 +1247,20 @@ class Tensor:
         - Tensor: Tensor containing the exponential of the current tensor
         """
         
-        # Define the forward function - save input data for backward
+        # Define the forward function - save output data for backward
         def forward(x_data: np.ndarray) -> tuple[np.ndarray, int]:
-            # Compute the exponential of the tensor and save input for backward
-            return np.exp(x_data), tape_push((x_data,))
+            # Compute the exponential of the tensor and save output for backward
+            out_data = np.exp(x_data)
+            return out_data, tape_push((out_data.copy(),))
         
         # Define the backward function
         def backward(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
-            # Retrieve x_data from saved_data
-            x_data = saved_data[0] if saved_data else None
+            # Retrieve out_data from saved_data (exp(x))
+            out_data = saved_data[0] if saved_data else None
             
-            # Compute the gradient of the exponential function
-            if x_data is not None:
-                exp_gradient(out_grad.ravel(), x_data.ravel(), out_buffer.ravel())
+            # Compute the gradient of the exponential function: d/dx exp(x) = exp(x)
+            if out_data is not None:
+                exp_gradient(out_data.ravel(), out_grad.ravel(), out_buffer.ravel())
         
         # Return the tensor operation with the specified forward and backward functions
         return tensor_unary_op(
