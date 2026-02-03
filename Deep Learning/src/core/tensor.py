@@ -1912,6 +1912,75 @@ class Tensor:
         )
     
     
+    def conv_transpose_2d(
+        self, 
+        kernel: 'Tensor', 
+        stride: Tuple[int,int] = (1,1),
+        padding: Tuple[int,int] = (0,0),
+        output_padding: Tuple[int,int] = (0,0)
+    ) -> 'Tensor':
+        """
+        Method to compute the 2D transposed convolution (deconvolution) of the tensor.
+        
+        Parameters:
+        - kernel (Tensor): Kernel for the transposed convolution of shape (in_channels, out_channels, kH, kW)
+        - stride (Tuple[int,int]): Stride for the transposed convolution. Default is (1,1)
+        - padding (Tuple[int,int]): Padding applied to input. Default is (0,0)
+        - output_padding (Tuple[int,int]): Additional size added to output. Default is (0,0)
+        
+        Returns:
+        - Tensor: Output tensor of shape (batch_size, out_height, out_width, out_channels)
+        
+        Note:
+        - Input shape: (batch_size, height, width, in_channels)
+        - Kernel shape: (in_channels, out_channels, kernel_height, kernel_width)
+        - Output shape: (batch_size, out_height, out_width, out_channels)
+        - out_height = (in_height - 1) * stride_h - 2 * padding_h + kernel_height + output_padding_h
+        - out_width = (in_width - 1) * stride_w - 2 * padding_w + kernel_width + output_padding_w
+        """
+        
+        # Define the forward function - save both inputs for backward
+        def forward(x_data: np.ndarray, kernel_data: np.ndarray) -> tuple[np.ndarray, int]:
+            # Perform the transposed convolution operation and save inputs for backward
+            return conv_transpose_2d_forward(
+                x_data, kernel_data, stride=stride, padding=padding, output_padding=output_padding
+            ), tape_push((x_data, kernel_data))
+        
+        # Define the backward function for the input tensor
+        def backward_x(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve kernel_data from saved_data
+            _, kernel_data = saved_data if saved_data else (None, None)
+            
+            # Compute the gradient of the transposed convolution with respect to the input tensor
+            if kernel_data is not None:
+                conv_transpose_2d_backward_x(
+                    out_grad=out_grad, out_buffer=out_buffer, kernel_data=kernel_data,
+                    stride=stride, padding=padding, output_padding=output_padding
+                )
+            
+        # Define the backward function for the kernel
+        def backward_w(out_grad: np.ndarray, out_buffer: np.ndarray, saved_data: Any, *args, **kwargs) -> None:
+            # Retrieve x_data from saved_data
+            x_data, _ = saved_data if saved_data else (None, None)
+            
+            # Compute the gradient of the transposed convolution with respect to the kernel
+            if x_data is not None:
+                conv_transpose_2d_backward_w(
+                    out_grad=out_grad, out_buffer=out_buffer, x_data=x_data,
+                    stride=stride, padding=padding, output_padding=output_padding
+                )
+        
+        # Return the tensor operation with the specified forward and backward functions
+        return tensor_binary_op(
+            t1 = self,
+            t2 = kernel, 
+            forward_fn = forward,
+            backward_fn_a = backward_x,
+            backward_fn_b = backward_w,
+            tensor_cls = Tensor
+        )
+    
+    
     def max_pool_2d(self, kernel_size: Tuple[int,int] = (2,2), stride: Tuple[int,int] = (2,2)) -> 'Tensor':
         """
         Method to compute the 2D max pooling of the tensor

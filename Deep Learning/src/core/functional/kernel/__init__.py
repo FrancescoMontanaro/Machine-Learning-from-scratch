@@ -32,4 +32,5 @@ from .matmul import matmul_forward, matmul_backward_a, matmul_backward_b
 from .conv_2d import conv_2d_forward, conv_2d_backward_x, conv_2d_backward_w
 from .expand import expand_forward, expand_backward, expand_backward_sum_axis
 from .scatter import scatter_forward, scatter_backward_x, scatter_backward_src
+from .conv_transpose_2d import conv_transpose_2d_forward, conv_transpose_2d_backward_x, conv_transpose_2d_backward_w
 from .masked_fill import masked_fill_forward, masked_fill_forward_inf, masked_fill_forward_neg_inf, masked_fill_gradient

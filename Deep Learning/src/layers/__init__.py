@@ -1,5 +1,5 @@
 from .batch_normalization import BatchNormalization
-from .convolutional import Conv2D
+from .convolutional import Conv2D, ConvTranspose2D
 from .dense import Dense
 from .dropout import Dropout
 from .embedding import Embedding
