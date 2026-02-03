@@ -2,7 +2,7 @@ from typing import Literal, Optional
 
 from .base import LossFn
 from ..core import Tensor
-from ..core.utils.constants import *
+from ..core.utils.constants import EPSILON
 
 
 class BinaryCrossEntropy(LossFn):
