@@ -3,10 +3,10 @@ from typing import Optional, List
 
 from ..layers import Dropout
 from ..activations import Tanh, Sigmoid
-from ..core import Tensor, Module, TensorsList
+from ..core import Tensor, SingleOutputModule, TensorsList
 
 
-class GRU(Module):
+class GRU(SingleOutputModule):
     
     ### Magic methods ###
     

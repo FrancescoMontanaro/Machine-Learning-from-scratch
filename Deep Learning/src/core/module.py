@@ -2,7 +2,7 @@ import os
 import re
 import numpy as np
 import dill as pickle
-from typing import Optional, Any
+from typing import Optional, Any, Tuple, Union, TYPE_CHECKING
 
 from .tensor import Tensor
 from .tensors_list import TensorsList
@@ -75,7 +75,7 @@ class Module:
         super().__setattr__(name, value)
 
 
-    def __call__(self, *args, **kwargs) -> Tensor:
+    def __call__(self, *args, **kwargs) -> Union[Tensor, Tuple[Tensor, ...]]:
         """
         Method to call the forward method of the module
         
@@ -83,7 +83,7 @@ class Module:
         - x (Tensor): Input tensor
         
         Returns:
-        - Tensor: Output of the module after the forward pass
+        - Union[Tensor, Tuple[Tensor, ...]]: Output of the module after the forward pass
         """
         
         # Check if more than one positional argument is provided
@@ -239,12 +239,12 @@ class Module:
                 module.reset_cache()
 
 
-    def forward(self, *args, **kwargs) -> Tensor:
+    def forward(self, *args, **kwargs) -> Union[Tensor, Tuple[Tensor, ...]]:
         """
         Abstract method to define the forward pass of the module
         
         Returns:
-        - Tensor: Output of the module after the forward pass
+        - Union[Tensor, Tuple[Tensor, ...]]: Output of the module after the forward pass
         """
         
         ### Step 1: Lazy init ###
@@ -262,36 +262,7 @@ class Module:
         ### Step 3: Update the output shape ###
         
         # Save the input and  output shape of the module
-        self._output_shape = out.shape
-        
-        # Return the output tensor
-        return out
-    
-    
-    def forward_with_multi_outputs(self, *args, **kwargs) -> tuple[Tensor, ...]:
-        """
-        Method to define the forward pass of the module with multiple outputs
-        
-        Returns:
-        - tuple[Tensor, ...]: Outputs of the module after the forward pass
-        """
-        
-        ### Step 1: Lazy init ###
-        
-        # Check if the module is initialized
-        if not self._output_shape:
-            # Initialize the parameters of the module
-            self._lazy_init(*args, **kwargs)
-        
-        ### Step 2: Forward pass, to be implemented in the child class ###
-        
-        # Call the forward method of the module
-        out = self._forward_with_multi_outputs(*args, **kwargs)
-        
-        ### Step 3: Update the output shape ###
-        
-        # Save the input and  output shape of the module
-        self._output_shape = tuple(o.shape for o in out)
+        self._output_shape = tuple(o.shape for o in out) if isinstance(out, tuple) else out.shape
         
         # Return the output tensor
         return out
@@ -306,6 +277,30 @@ class Module:
         - is_root (bool): If True, prints headers/footers or the top-level node (depending on the mode). Internally used for recursion.
         - prefix (str): Used internally to manage indentation for the tree layout.
         """
+        
+        def _format_shape(shape: Optional[tuple]) -> str:
+            """
+            Helper to format output shape, handling both single and multiple outputs.
+            
+            Parameters:
+            - shape: The output shape(s) to format, which can be a tuple for single output or a tuple of tuples for multiple outputs.
+            
+            Returns:
+            - str: A formatted string representing the output shape(s).
+            """
+
+            # If shape is None, return "?" to indicate unknown shape
+            if shape is None:
+                return "?"
+            
+            # Check if this is a tuple of shapes (multiple outputs)
+            # A tuple of shapes will have tuple elements, while a single shape has int elements
+            if isinstance(shape, tuple) and len(shape) > 0 and isinstance(shape[0], tuple):
+                # Multiple output shapes: format each and join with ", "
+                return "[" + ", ".join(f"({', '.join(str(d) for d in s)})" for s in shape) + "]"
+            else:
+                # Single output shape
+                return f"({', '.join(str(dim) for dim in shape)})" if isinstance(shape, tuple) else "?"
 
         # If NOT recursive, print the summary in tabular format
         if not recursive:
@@ -323,9 +318,8 @@ class Module:
                 module_name = f"{module.name} ({module.__class__.__name__})"
                 module_name = format_summary_output(module_name, 50) + " " * 5
                 
-                # Extract the output shape and format it
-                output_shape = module.output_shape
-                output_shape = f"({', '.join(str(dim) for dim in output_shape)})" if isinstance(output_shape, tuple) else "?"
+                # Extract the output shape and format it using helper function
+                output_shape = _format_shape(module.output_shape)
                 output_shape = format_summary_output(output_shape, 20)
 
                 # Extract the number of parameters and format it
@@ -350,9 +344,8 @@ class Module:
         else:
             # For the root module, print its name/class (and optional shape/params)
             if is_root:
-                # Extract the shape of the module and format it
-                shape = self.output_shape
-                shape_str = f"({', '.join(str(dim) for dim in shape)})" if isinstance(shape, tuple) else "?"
+                # Extract the shape of the module and format it using helper function
+                shape_str = _format_shape(self.output_shape)
                 
                 # Extract the number of parameters
                 num_params = self.params_count
@@ -367,9 +360,8 @@ class Module:
                 is_last = (i == len(modules) - 1)
                 branch_symbol = "└──" if is_last else "├──"
 
-                # Try to get shape
-                shape = module.output_shape
-                shape_str = f"({', '.join(str(dim) for dim in shape)})" if isinstance(shape, tuple) else "?"
+                # Format shape using helper function
+                shape_str = _format_shape(module.output_shape)
 
                 # Try to get number of parameters
                 num_params = module.params_count
@@ -596,28 +588,19 @@ class Module:
         pass
     
     
-    def _forward(self, *args, **kwargs) -> Tensor:
+    def _forward(self, *args, **kwargs) -> Union[Tensor, Tuple[Tensor, ...]]:
         """
         Abstract method to define the forward pass of the module
         This method should be implemented in the child classes
         
         Parameters:
         - x (Tensor): Input tensor
+        
+        Returns:
+        - Union[Tensor, Tuple[Tensor, ...]]: Output tensor(s) of the forward pass
         """
         
         raise NotImplementedError("The forward method must be implemented in the child class.")
-    
-    
-    def _forward_with_multi_outputs(self, *args, **kwargs) -> tuple[Tensor, ...]:
-        """
-        Abstract method to define the forward pass of the module with multiple outputs
-        This method should be implemented in the child classes
-        
-        Parameters:
-        - x (Tensor): Input tensor
-        """
-        
-        raise NotImplementedError("The forward_with_multi_outputs method must be implemented in the child class.")
 
 
     def _clear_indexed_tensors(self, list_name: str) -> None:
@@ -662,3 +645,25 @@ class Module:
             
         # Register the parameter in the dictionary
         _params[f"{list_name}_{index}"] = parameter
+
+
+class SingleOutputModule(Module):
+    """
+    Base class for modules that always return a single Tensor.
+    """
+    
+    if TYPE_CHECKING:
+        def __call__(self, *args, **kwargs) -> Tensor: ...
+        def _forward(self, *args, **kwargs) -> Tensor: ...
+        def forward(self, *args, **kwargs) -> Tensor: ...
+
+
+class MultiOutputModule(Module):
+    """
+    Base class for modules that always return a tuple of Tensors.
+    """
+    
+    if TYPE_CHECKING:
+        def __call__(self, *args, **kwargs) -> Tuple[Tensor, ...]: ...
+        def _forward(self, *args, **kwargs) -> Tuple[Tensor, ...]: ...
+        def forward(self, *args, **kwargs) -> Tuple[Tensor, ...]: ...

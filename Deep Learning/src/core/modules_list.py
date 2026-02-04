@@ -1,34 +1,33 @@
-from typing import Generic, TypeVar, Union, overload
+from typing import Generic, TypeVar, Union, overload, cast, Iterator
 
 from . import Tensor
-
-from .module import Module
+from .module import SingleOutputModule
 
 # Define a type variable T that is bound to the Module class
-T = TypeVar('T', bound=Module)
+T = TypeVar('T', bound=SingleOutputModule)
 
 
-class ModuleList(Module, Generic[T]):
+class ModuleList(SingleOutputModule, Generic[T]):
     
     ### Magic Methods ###
     
-    def __init__(self, modules: list[Module], *args, **kwargs) -> None:
+    def __init__(self, modules: list[T], *args, **kwargs) -> None:
         """
         Class constructor.
         
         Parameters:
-        - modules (list[Module]): List of modules to be stored in the ModuleList.
+        - modules (list[T]): List of modules to be stored in the ModuleList.
         
         Raises:
-        - TypeError: If any of the elements in the list are not of type Module.
+        - TypeError: If any of the elements in the list are not of type SingleOutputModule.
         """
         
         # Call the parent class constructor
         super().__init__(*args, **kwargs)
         
-        # Check if all elements in the list are of type Module
-        if not all(isinstance(module, Module) for module in modules):
-            raise TypeError("All elements in the list must be of type Module.")
+        # Check if all elements in the list are of type SingleOutputModule
+        if not all(isinstance(module, SingleOutputModule) for module in modules):
+            raise TypeError("All elements in the list must be of type SingleOutputModule.")
         
         # Iterate over the modules
         for i, module in enumerate(modules):
@@ -36,20 +35,20 @@ class ModuleList(Module, Generic[T]):
             setattr(self, str(i), module)
 
     
-    def __iter__(self):
+    def __iter__(self) -> Iterator[T]:
         """
         Returns an iterator over the modules in the ModuleList.
         
         Returns:
-        - iterator: An iterator over the modules in the ModuleList.
+        - Iterator[T]: An iterator over the modules in the ModuleList.
         """
         
-        # Iterate over the modules
-        return iter(self._modules.values())
+        # Iterate over the modules (cast needed because _modules stores Module, not T)
+        return cast(Iterator[T], iter(self._modules.values()))
     
     
     @overload
-    def __getitem__(self, idx: int) -> Module: 
+    def __getitem__(self, idx: int) -> T: 
         """
         Returns the module at the specified index.
         
@@ -57,7 +56,7 @@ class ModuleList(Module, Generic[T]):
         - idx (int): The index of the module to be returned.
         
         Returns:
-        - Module: The module at the specified index.
+        - SingleOutputModule: The module at the specified index.
         """
         
         # Just to satisfy the overload
@@ -65,7 +64,7 @@ class ModuleList(Module, Generic[T]):
     
     
     @overload
-    def __getitem__(self, idx: slice) -> list[Module]: 
+    def __getitem__(self, idx: slice) -> list[T]: 
         """
         Returns a list of modules at the specified slice.
         
@@ -73,14 +72,14 @@ class ModuleList(Module, Generic[T]):
         - idx (slice): The slice of the modules to be returned.
         
         Returns:
-        - list[Module]: A list of modules at the specified slice.
+        - list[SingleOutputModule]: A list of modules at the specified slice.
         """
         
         # Just to satisfy the overload
         ...
     
     
-    def __getitem__(self, idx: Union[int, slice]) -> Union[Module, list[Module]]:
+    def __getitem__(self, idx: Union[int, slice]) -> Union[T, list[T]]:
         """
         Returns the module at the specified index or a list of modules at the specified slice.
         
@@ -88,11 +87,15 @@ class ModuleList(Module, Generic[T]):
         - idx (Union[int, slice]): The index or slice of the modules to be returned.
         
         Returns:
-        - Union[Module, list[Module]]: The module at the specified index or a list of modules at the specified slice.
+        - Union[T, list[T]]: The module at the specified index or a list of modules at the specified slice.
         """
         
-        # Return the module at the specified index
-        return list(self._modules.values())[idx]
+        # Get the module(s) at the specified index or slice
+        out = list(self._modules.values())[idx]
+        out = cast(Union[T, list[T]], out)
+
+        # Return the output
+        return out
     
     
     def __len__(self) -> int:

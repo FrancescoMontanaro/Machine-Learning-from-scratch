@@ -3,11 +3,11 @@ from typing import Optional
 
 from .block import Block
 from ..config import TransformerConfig
-from ....core import Tensor, Module, ModuleList
+from ....core import Tensor, SingleOutputModule, ModuleList
 from ....layers import Dense, Embedding, LayerNormalization, PositionalEncoding
 
 
-class Decoder(Module):
+class Decoder(SingleOutputModule):
     
     ### Magic methods ###
     

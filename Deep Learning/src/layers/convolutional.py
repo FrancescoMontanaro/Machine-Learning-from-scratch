@@ -1,11 +1,11 @@
 import numpy as np
 from typing import Literal, Optional, Tuple
 
-from ..core import Tensor, Module
 from ..activations import Activation
+from ..core import Tensor, SingleOutputModule
 
 
-class Conv2D(Module):
+class Conv2D(SingleOutputModule):
     
     ### Magic methods ###
     
@@ -140,7 +140,7 @@ class Conv2D(Module):
         )
 
 
-class ConvTranspose2D(Module):
+class ConvTranspose2D(SingleOutputModule):
     
     ### Magic methods ###
     

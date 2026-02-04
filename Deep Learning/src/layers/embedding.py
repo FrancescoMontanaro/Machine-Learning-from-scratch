@@ -1,9 +1,9 @@
 import numpy as np
 
-from ..core import Tensor, Module
+from ..core import Tensor, SingleOutputModule
 
 
-class Embedding(Module):
+class Embedding(SingleOutputModule):
     
     ### Magic methods ###
     

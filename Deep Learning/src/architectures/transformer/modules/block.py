@@ -2,7 +2,7 @@ from typing import Optional, Union
 
 from .mlp import MLP
 from .moe import MoE
-from ....core import Tensor, Module
+from ....core import Tensor, SingleOutputModule
 from ....layers import LayerNormalization, RMSNorm
 from .self_attention import SelfMultiHeadAttention
 from .cross_attention import CrossMultiHeadAttention
@@ -10,7 +10,7 @@ from .self_latent_attention import SelfMultiHeadLatentAttention
 from ..config import TransformerBlockConfig, DeepSeekTransformerBlockConfig, AttentionConfig
 
 
-class Block(Module):
+class Block(SingleOutputModule):
     
     ### Magic methods ###
     

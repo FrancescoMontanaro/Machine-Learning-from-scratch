@@ -1,9 +1,9 @@
 import numpy as np
 
-from ..core import Tensor, Module
+from ..core import Tensor, SingleOutputModule
 
 
-class RoPE(Module):
+class RoPE(SingleOutputModule):
     """
     Rotary Positional Embedding (RoPE) layer.    
     Applies rotational position encoding to input tensors, allowing the model

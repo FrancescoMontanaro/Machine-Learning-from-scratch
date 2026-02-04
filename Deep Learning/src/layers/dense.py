@@ -1,11 +1,11 @@
 import numpy as np
 from typing import Optional
 
-from ..core import Tensor, Module
 from ..activations import Activation
+from ..core import Tensor, SingleOutputModule
 
 
-class Dense(Module):
+class Dense(SingleOutputModule):
     
     ### Magic methods ###
     

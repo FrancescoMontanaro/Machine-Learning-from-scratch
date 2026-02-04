@@ -2,11 +2,11 @@ import numpy as np
 
 from ....layers import Dense, Dropout
 from ..config import AttentionConfig
-from ....core import Tensor, Module, ModuleList
 from ....core.utils.data_processing import concat
+from ....core import Tensor, SingleOutputModule, ModuleList
 
 
-class SelfSingleHeadAttention(Module):
+class SelfSingleHeadAttention(SingleOutputModule):
     
     ### Magic methods ###
     
@@ -121,7 +121,7 @@ class SelfSingleHeadAttention(Module):
             self.register_buffer("attention_mask", Tensor(np.tril(np.ones((self.max_seq_len, self.max_seq_len))))) # (S, S) -> (S, S)
     
     
-class SelfMultiHeadAttention(Module):
+class SelfMultiHeadAttention(SingleOutputModule):
     
     ### Magic methods ###
     

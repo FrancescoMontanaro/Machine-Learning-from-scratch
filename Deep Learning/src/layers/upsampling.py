@@ -1,9 +1,9 @@
 from typing import Literal
 
-from ..core import Tensor, Module
+from ..core import Tensor, SingleOutputModule
 
 
-class UpSampling2D(Module):
+class UpSampling2D(SingleOutputModule):
     
     ### Magic methods ###
     

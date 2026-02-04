@@ -1,10 +1,10 @@
 from ..config import MLPConfig
 from ....activations import ReLU
-from ....core import Tensor, Module
 from ....layers import Dense, Dropout
+from ....core import Tensor, SingleOutputModule
 
 
-class MLP(Module):
+class MLP(SingleOutputModule):
     
     ### Magic methods ###
     

@@ -2,23 +2,23 @@ import math
 import time
 from typing import Optional, Dict, Tuple
 
-from ..base import Architecture
 from ...models import TrainingArguments
-from ...core import Tensor, Module, ModuleList
+from ..base import SingleOutputArchitecture
 from ...core.utils.context_manager import no_grad
+from ...core import Tensor, SingleOutputModule, ModuleList
 from ...core.utils.data_processing import shuffle_data, concat
 
 
-class Sequential(Architecture):
+class Sequential(SingleOutputArchitecture):
     
     ### Magic methods ###
     
-    def __init__(self, modules: list[Module], *args, **kwargs) -> None:
+    def __init__(self, modules: list[SingleOutputModule], *args, **kwargs) -> None:
         """
         Class constructor
         
         Parameters:
-        - modules (list[Module]): List of modules to add to the sequential model
+        - modules (list[SingleOutputModule]): List of modules to add to the sequential model
         """
         
         # Initialize the parent class
@@ -437,7 +437,7 @@ class Sequential(Architecture):
         
         # Compute batching
         num_steps = max(1, math.ceil(total_samples / batch_size)) if batch_size else 1
-        outputs = []
+        outputs: list[Tensor] = []
         elapsed_time = 0.0
         
         # Process in batches

@@ -1,9 +1,9 @@
 import numpy as np
 
-from ..core import Tensor, Module
+from ..core import Tensor, SingleOutputModule
 
 
-class Flatten(Module):
+class Flatten(SingleOutputModule):
         
     ### Protected methods ###
     

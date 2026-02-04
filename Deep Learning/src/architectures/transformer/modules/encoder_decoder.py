@@ -1,10 +1,10 @@
 from .decoder import Decoder
 from .encoder import Encoder
-from ....core import Tensor, Module
+from ....core import Tensor, SingleOutputModule
 from ..config import EncoderDecoderTransformerConfig
 
 
-class EncoderDecoder(Module):
+class EncoderDecoder(SingleOutputModule):
 
     ### Magic methods ###
     

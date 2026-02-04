@@ -3,10 +3,10 @@ from typing import Optional, List
 
 from ..layers import Dropout
 from ..activations import Activation, Tanh
-from ..core import Tensor, Module, TensorsList
+from ..core import Tensor, SingleOutputModule, TensorsList
 
 
-class RNN(Module):
+class RNN(SingleOutputModule):
     
     ### Magic methods ###
     

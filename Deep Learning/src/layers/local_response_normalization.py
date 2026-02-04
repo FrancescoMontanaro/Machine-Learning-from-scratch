@@ -1,6 +1,6 @@
-from ..core import Tensor, Module
+from ..core import Tensor, SingleOutputModule
 
-class LocalResponseNormalization(Module):
+class LocalResponseNormalization(SingleOutputModule):
     
     ### Magic methods ###
     

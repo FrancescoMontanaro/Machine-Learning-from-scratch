@@ -2,11 +2,11 @@ import numpy as np
 
 from ..config import AttentionConfig
 from ....layers import Dense, Dropout
-from ....core import Tensor, Module, ModuleList
+from ....core import Tensor, SingleOutputModule, ModuleList
 from ....core.utils.data_processing import concat
 
 
-class CrossSingleHeadAttention(Module):
+class CrossSingleHeadAttention(SingleOutputModule):
     
     ### Magic methods ###
     
@@ -125,7 +125,7 @@ class CrossSingleHeadAttention(Module):
             self.register_buffer("attention_mask", Tensor(np.tril(np.ones((S_enc, S_dec))))) # (S, S) -> (S, S)
 
 
-class CrossMultiHeadAttention(Module):
+class CrossMultiHeadAttention(SingleOutputModule):
     
     ### Magic methods ###
     

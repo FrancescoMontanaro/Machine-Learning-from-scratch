@@ -1,12 +1,13 @@
 import numpy as np
+from typing import cast
 
 from ..config import MOEConfig
 from ....activations import SiLU
 from ....layers import Dense, Dropout
-from ....core import Tensor, Module, ModuleList
+from ....core import Tensor, SingleOutputModule, MultiOutputModule, ModuleList
 
 
-class Gate(Module):
+class Gate(MultiOutputModule):
     """
     Gating mechanism for Mixture of Experts (MoE) layers.
     """
@@ -43,7 +44,7 @@ class Gate(Module):
         
     ### Protected methods ###
 
-    def _forward_with_multi_outputs(self, x: Tensor, *args, **kwargs) -> tuple[Tensor, Tensor]:
+    def _forward(self, x: Tensor, *args, **kwargs) -> tuple[Tensor, Tensor]:
         """
         Foward pass of the layer
         
@@ -149,7 +150,7 @@ class Gate(Module):
         
 
      
-class MLP(Module):
+class MLP(SingleOutputModule):
     """
     Simple Multi-Layer Perceptron (MLP) for MoE layers.
     """
@@ -202,10 +203,10 @@ class MLP(Module):
         """
         
         # Compute the output of the MLP (SwiGLU activation: w2(SiLU(w1(x)) * w3(x)))
-        out = self.w2(self.w1(x) * self.w3(x))
+        out = self.w2(cast(Tensor, self.w1(x)) * cast(Tensor, self.w3(x)))
         
         # Apply dropout and return the output
-        return self.dropout(out)
+        return cast(Tensor, self.dropout(out))
     
 
     def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
@@ -232,7 +233,7 @@ class MLP(Module):
         
         
 
-class MoE(Module):
+class MoE(SingleOutputModule):
     """
     Mixture of Experts (MoE) layer.
     """
@@ -300,7 +301,7 @@ class MoE(Module):
         x = x.reshape((-1, E)) # (B, S, E) -> (B * S, E)
         
         # Compute the gating weights and selected expert indices
-        weights, indices = self.gate.forward_with_multi_outputs(x) # (B * S, top_k), (B * S, top_k)
+        weights, indices = self.gate.forward(x) # (B * S, top_k), (B * S, top_k)
         
         # Convert indices to integer for numpy operations
         indices_np = indices.flatten().to_numpy().astype(np.int64)
@@ -324,10 +325,10 @@ class MoE(Module):
             idx, top = np.where(indices.to_numpy().astype(np.int64) == i)
             
             # Scatter the expert's output to the final output tensor
-            routed_experts_out[idx] += expert(x[idx]) * weights[idx, top].unsqueeze(-1)
+            routed_experts_out[idx] += cast(Tensor, expert(x[idx])) * weights[idx, top].unsqueeze(-1)
             
         # Compute the output of the shared experts
-        shared_experts_out = self.shared_experts(x) # (B * S, E)
+        shared_experts_out = cast(Tensor, self.shared_experts(x)) # (B * S, E)
 
         # Combine the outputs of the routed and shared experts and reshape back
         # to the original batch and sequence dimensions

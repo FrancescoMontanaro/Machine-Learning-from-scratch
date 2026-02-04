@@ -1,12 +1,12 @@
 import numpy as np
 
-from ....core import Tensor, Module
 from ..config import LatentAttentionConfig
+from ....core import Tensor, SingleOutputModule
 from ....layers import Dense, RMSNorm, Dropout, RoPE
 from ....core.utils.data_processing import split, einsum
 
 
-class SelfMultiHeadLatentAttention(Module):
+class SelfMultiHeadLatentAttention(SingleOutputModule):
     
     ### Magic methods ###
     

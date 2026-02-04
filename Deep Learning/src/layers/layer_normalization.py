@@ -1,9 +1,9 @@
 import numpy as np
 
-from ..core import Tensor, Module
+from ..core import Tensor, SingleOutputModule
 
 
-class LayerNormalization(Module):
+class LayerNormalization(SingleOutputModule):
     
     ### Magic methods ###
     

@@ -3,10 +3,10 @@ from typing import Optional, List, Tuple
 
 from ..layers import Dropout
 from ..activations import Tanh, Sigmoid
-from ..core import Tensor, Module, TensorsList
+from ..core import Tensor, SingleOutputModule, TensorsList
 
 
-class LSTM(Module):
+class LSTM(SingleOutputModule):
     
     ### Magic methods ###
     

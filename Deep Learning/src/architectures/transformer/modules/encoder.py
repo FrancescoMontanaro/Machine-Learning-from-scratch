@@ -2,11 +2,11 @@ import numpy as np
 
 from .block import Block
 from ..config import TransformerConfig
-from ....core import Tensor, Module, ModuleList
+from ....core import Tensor, SingleOutputModule, ModuleList
 from ....layers import Dense, Embedding, LayerNormalization, PositionalEncoding
 
 
-class Encoder(Module):
+class Encoder(SingleOutputModule):
     
     ### Magic methods ###
     

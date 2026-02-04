@@ -1,9 +1,9 @@
 import numpy as np
 
-from ..core import Tensor, Module
+from ..core import Tensor, SingleOutputModule
 
 
-class PositionalEncoding(Module):
+class PositionalEncoding(SingleOutputModule):
     
     ### Magic methods ###
     
