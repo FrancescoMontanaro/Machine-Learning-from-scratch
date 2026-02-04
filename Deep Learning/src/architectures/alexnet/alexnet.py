@@ -1,6 +1,6 @@
 from .config import AlexNetConfig
-from ...core import Tensor, Module
 from ..sequential import Sequential
+from ...core import Tensor, SingleOutputModule
 from ...layers import Dense, LocalResponseNormalization, Flatten, Dropout, MaxPool2D, Conv2D
 
 
@@ -23,7 +23,7 @@ class AlexNet(Sequential):
         )
 
 
-class AlexNetModule(Module):
+class AlexNetModule(SingleOutputModule):
     
     ### Magic methods ###
     
