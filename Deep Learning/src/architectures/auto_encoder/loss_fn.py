@@ -59,10 +59,10 @@ class VAELoss(LossFn):
         bce = self.bce_loss(y_true, y_pred)
         
         if self.normalize_reconstruction:
-            # Mean over all dimensions - gives loss in ~0.1-0.5 range
+            # Mean over all dimensions
             rec = bce.mean()
         else:
-            # Sum over spatial dimensions, mean over batch - gives loss in ~50-200 range for MNIST
+            # Sum over spatial dimensions, mean over batch
             rec = bce.sum(axis=(1,2,3)).mean()
 
         # Compute KL divergence for VAE: KL(q(z|x) || N(0,1))
