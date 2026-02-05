@@ -5,7 +5,7 @@ class LossFn:
     
     ### Magic methods ###
 
-    def __call__(self, y_true: Tensor, y_pred: Tensor) -> Tensor:
+    def __call__(self, y_true: Tensor, y_pred: Tensor, *args, **kwargs) -> Tensor:
         """
         Compute the loss.
 

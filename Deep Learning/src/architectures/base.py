@@ -76,26 +76,3 @@ class Architecture(Module):
         
         # Clear the cache of the model by calling the garbage collector
         gc.collect()
-
-
-
-class SingleOutputArchitecture(Architecture):
-    """
-    Class representing an architecture that outputs a single tensor.
-    """
-    
-    if TYPE_CHECKING:
-        def __call__(self, *args, **kwargs) -> Tensor: ...
-        def _forward(self, *args, **kwargs) -> Tensor: ...
-        def forward(self, *args, **kwargs) -> Tensor: ...
-
-
-class MultiOutputArchitecture(Architecture):
-    """
-    Class representing an architecture that outputs multiple tensors.
-    """
-    
-    if TYPE_CHECKING:
-        def __call__(self, *args, **kwargs) -> tuple[Tensor, ...]: ...
-        def _forward(self, *args, **kwargs) -> tuple[Tensor, ...]: ...
-        def forward(self, *args, **kwargs) -> tuple[Tensor, ...]: ...

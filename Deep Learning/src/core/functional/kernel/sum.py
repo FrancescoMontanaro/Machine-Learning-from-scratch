@@ -305,51 +305,9 @@ def _sum_all_4d_kd_false(x: np.ndarray) -> np.ndarray:
     return _sum_all_4d(x)
 
 
-@njit(fastmath=True)
 def _reduce_multi_axes(x: np.ndarray, axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> np.ndarray:
-    # Convert the axes to a tuple of integers
-    if axis is None:
-        axes = tuple(range(x.ndim))
-    elif isinstance(axis, int):
-        axes = tuple(sorted({a % x.ndim for a in (axis,)}))
-    else:
-        axes = tuple(sorted({a % x.ndim for a in axis}))
-
-    # Iterate over the axes in reverse order
-    for ax in axes:
-        # Reduce the axes one by one
-        if x.ndim == 1:
-            x = _sum_all_1d_kd_false(x)
-        elif x.ndim == 2:
-            x = _sum_axis0_2d_kd_false(x) if ax == 0 else _sum_axis1_2d_kd_false(x)
-        elif x.ndim == 3:
-            x = (
-                _sum_axis0_3d_kd_false(x) if ax == 0 else
-                _sum_axis1_3d_kd_false(x) if ax == 1 else
-                _sum_axis2_3d_kd_false(x)
-            )
-        elif x.ndim == 4:
-            x = (
-                _sum_axis0_4d_kd_false(x) if ax == 0 else
-                _sum_axis1_4d_kd_false(x) if ax == 1 else
-                _sum_axis2_4d_kd_false(x) if ax == 2 else
-                _sum_axis3_4d_kd_false(x)
-            )
-        else:
-            raise ValueError("Unsupported number of dimensions. Max rank is 4.")
-
-    # If keepdims is True, reshape the output to keep the reduced dimensions
-    if keepdims:
-        # Create a new shape with 1s in the reduced dimensions
-        shape = list(x.shape)
-        for ax in axes:
-            shape.insert(ax, 1)
-            
-        # Reshape the output to keep the reduced dimensions
-        x = np.reshape(x, tuple(shape))
-
-    # Return the reduced tensor
-    return x
+    # Reduce the tensor along multiple axes using numpy's sum
+    return np.sum(x, axis=axis, keepdims=keepdims)
 
 
 def sum_forward(x: np.ndarray, axis: Optional[Union[int, Tuple[int, ...]]] = None, keepdims: bool = False) -> np.ndarray:
