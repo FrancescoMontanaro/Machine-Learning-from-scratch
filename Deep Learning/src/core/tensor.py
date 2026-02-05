@@ -30,7 +30,7 @@ class Tensor:
     ###### Magic methods ######
     ###########################
     
-    def __init__(self, data: Union[int, float, np.ndarray], requires_grad: bool = False, dtype: type = np.float32, is_parameter: bool = False) -> None:
+    def __init__(self, data: Union[int, float, np.ndarray], requires_grad: bool = False, dtype: Union[type, np.dtype] = np.float32, is_parameter: bool = False) -> None:
         """
         Constructor for the Tensor class
         
@@ -2199,3 +2199,64 @@ class Tensor:
             backward_fn = backward,
             tensor_cls = Tensor
         )
+    
+    
+    @staticmethod
+    def randn_like(tensor: 'Tensor', requires_grad: bool = False, is_parameter: bool = False) -> 'Tensor':
+        """
+        Create a tensor with random values from a standard normal distribution (mean=0, std=1)
+        with the same shape and dtype as the input tensor.
+        
+        Parameters:
+        - tensor (Tensor): Reference tensor to get shape and dtype from
+        - requires_grad (bool): Flag to indicate if the gradient needs to be computed
+        
+        Returns:
+        - Tensor: New tensor with random normal values
+        """
+        
+        # Create random normal data with same shape
+        random_data = np.random.randn(*tensor.data.shape).astype(tensor.data.dtype)
+        
+        # Return new tensor (no gradient connection to input)
+        return Tensor(data=random_data, requires_grad=requires_grad, dtype=tensor.data.dtype, is_parameter=is_parameter)
+    
+    
+    @staticmethod
+    def zeros_like(tensor: 'Tensor', requires_grad: bool = False, is_parameter: bool = False) -> 'Tensor':
+        """
+        Create a tensor filled with zeros with the same shape and dtype as the input tensor.
+        
+        Parameters:
+        - tensor (Tensor): Reference tensor to get shape and dtype from
+        - requires_grad (bool): Flag to indicate if the gradient needs to be computed
+        
+        Returns:
+        - Tensor: New tensor filled with zeros
+        """
+        
+        # Create zeros data with same shape
+        zeros_data = np.zeros(tensor.data.shape, dtype=tensor.data.dtype)
+        
+        # Return new tensor
+        return Tensor(data=zeros_data, requires_grad=requires_grad, dtype=tensor.data.dtype, is_parameter=is_parameter)
+    
+    
+    @staticmethod
+    def ones_like(tensor: 'Tensor', requires_grad: bool = False, is_parameter: bool = False) -> 'Tensor':
+        """
+        Create a tensor filled with ones with the same shape and dtype as the input tensor.
+        
+        Parameters:
+        - tensor (Tensor): Reference tensor to get shape and dtype from
+        - requires_grad (bool): Flag to indicate if the gradient needs to be computed
+        
+        Returns:
+        - Tensor: New tensor filled with ones
+        """
+        
+        # Create ones data with same shape
+        ones_data = np.ones(tensor.data.shape, dtype=tensor.data.dtype)
+        
+        # Return new tensor
+        return Tensor(data=ones_data, requires_grad=requires_grad, dtype=tensor.data.dtype, is_parameter=is_parameter)

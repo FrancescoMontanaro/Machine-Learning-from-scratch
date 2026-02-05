@@ -1,19 +1,19 @@
 import math
 import time
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, List, Union, cast
 
+from ..base import Architecture
 from ...models import TrainingArguments
-from ..base import SingleOutputArchitecture
+from ...core import Tensor, Module, ModuleList
 from ...core.utils.context_manager import no_grad
-from ...core import Tensor, SingleOutputModule, ModuleList
 from ...core.utils.data_processing import shuffle_data, concat
 
 
-class Sequential(SingleOutputArchitecture):
+class Sequential(Architecture):
     
     ### Magic methods ###
     
-    def __init__(self, modules: list[SingleOutputModule], *args, **kwargs) -> None:
+    def __init__(self, modules: list[Module], *args, **kwargs) -> None:
         """
         Class constructor
         
@@ -220,15 +220,20 @@ class Sequential(SingleOutputArchitecture):
             # Slice y_batch directly on .data to avoid computational graph overhead
             y_batch = Tensor(
                 y_train.data[step * train_args.train_batch_size:(step + 1) * train_args.train_batch_size],
-                requires_grad=False
+                requires_grad = False
             )
             
             # Forward pass
             batch_kwargs = dict(zip(input_names, x_batch))
             output = self.forward(**batch_kwargs)
+
+            # Handle multiple outputs by separating main output and additional outputs
+            additional_outputs = ()
+            if isinstance(output, tuple):
+                output, *additional_outputs = output
             
             # Compute loss and backpropagate gradients
-            loss = train_args.loss_fn(y_batch, output)
+            loss = train_args.loss_fn(y_batch, output, *additional_outputs) # Pass additional outputs if any
             (loss / train_args.gradient_accumulation_steps).backward()
             
             # Update parameters if needed
@@ -314,10 +319,15 @@ class Sequential(SingleOutputArchitecture):
                 
                 # Forward pass
                 batch_kwargs = dict(zip(input_names, x_batch))
-                output = self.forward(**batch_kwargs)
+                output= self.forward(**batch_kwargs)
+                
+                # Handle multiple outputs by separating main output and additional outputs
+                additional_outputs = ()
+                if isinstance(output, tuple):
+                    output, *additional_outputs = output
                 
                 # Compute loss for this batch
-                batch_loss = train_args.loss_fn(y_batch, output).detach().to_numpy().item()
+                batch_loss = train_args.loss_fn(y_batch, output, *additional_outputs).detach().to_numpy().item()
                 
                 # Accumulate metrics
                 epoch_loss += batch_loss
@@ -389,7 +399,7 @@ class Sequential(SingleOutputArchitecture):
         tensors_to_batch: Optional[list[str]] = None,
         verbose: bool = False, 
         **kwargs
-    ) -> Tensor:
+    ) -> Union[Tensor, Tuple[Tensor, ...]]:
         """
         Forward pass of the model
         
@@ -437,7 +447,7 @@ class Sequential(SingleOutputArchitecture):
         
         # Compute batching
         num_steps = max(1, math.ceil(total_samples / batch_size)) if batch_size else 1
-        outputs: list[Tensor] = []
+        outputs: List[Union[Tensor, Tuple[Tensor, ...]]] = []
         elapsed_time = 0.0
         
         # Process in batches
@@ -480,8 +490,28 @@ class Sequential(SingleOutputArchitecture):
                 # Print the progress
                 print(f"\rProcessing batch {step + 1}/{num_steps} - {round(ms_per_step, 2)} ms/step", end="")
         
-        # Concatenate outputs and return the result
-        return concat(outputs, axis=0)
+        # After processing all batches, concatenate outputs if there are multiple batches
+        if isinstance(outputs[0], tuple):
+            # Cast outputs to List[Tuple[Tensor, ...]] for type checking
+            tuple_outputs = cast(List[Tuple[Tensor, ...]], outputs)
+
+            # If outputs are tuples, we need to concatenate each element separately
+            num_outputs = len(tuple_outputs[0])
+            concatenated_outputs = []
+            for i in range(num_outputs):
+                # Extract the i-th element from each output tuple and concatenate
+                output_i = [output[i] for output in tuple_outputs]
+                concatenated_outputs.append(concat(output_i, axis=0))
+
+            # Return a tuple of concatenated outputs
+            return tuple(concatenated_outputs)
+        
+        else:
+            # Cast outputs to List[Tensor] for type checking
+            tensor_outputs = cast(List[Tensor], outputs)
+            
+            # Concatenate outputs and return the result
+            return concat(tensor_outputs, axis=0)
     
     
     def _lazy_init(self, *args, **kwargs) -> None:
