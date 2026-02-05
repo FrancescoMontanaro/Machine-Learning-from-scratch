@@ -168,6 +168,9 @@ class AutoRegressive(Sequential):
             # Get the prediction logits from the model
             out = self(x=model_input, start_pos=start_pos)
             
+            # Ensure the output is a tensor
+            assert isinstance(out, Tensor), "Model output must be a Tensor"
+
             # Apply denormalization if provided
             if postprocess_fn is not None:
                 out = postprocess_fn(out)
