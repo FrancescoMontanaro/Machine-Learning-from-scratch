@@ -1,9 +1,9 @@
 import numpy as np
 
-from ..core import Tensor, SingleOutputModule
+from ..core import Tensor, Module
 
 
-class BatchNormalization(SingleOutputModule):
+class BatchNormalization(Module):
     
     ### Magic methods ###
     

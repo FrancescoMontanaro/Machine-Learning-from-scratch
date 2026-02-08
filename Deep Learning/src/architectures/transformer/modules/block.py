@@ -2,7 +2,7 @@ from typing import Optional, Union
 
 from .mlp import MLP
 from .moe import MoE
-from ....core import Tensor, SingleOutputModule
+from ....core import Tensor, Module
 from ....layers import LayerNormalization, RMSNorm
 from .self_attention import SelfMultiHeadAttention
 from .cross_attention import CrossMultiHeadAttention
@@ -10,7 +10,7 @@ from .self_latent_attention import SelfMultiHeadLatentAttention
 from ..config import TransformerBlockConfig, DeepSeekTransformerBlockConfig, AttentionConfig
 
 
-class Block(SingleOutputModule):
+class Block(Module):
     
     ### Magic methods ###
     
@@ -105,15 +105,15 @@ class Block(SingleOutputModule):
         # - E: embedding size (embedding dimension of the original data)
         
         # Apply the multi-attention mechanism with skip connections
-        out = x + self.self_attention_heads(self.layer_norm_1(x)) # (B, S, E) + (B, S, E) -> (B, S, E)
+        out = x + self.self_attention_heads(self.layer_norm_1(x).output).output # (B, S, E) + (B, S, E) -> (B, S, E)
         
         # Check if cross-attention has to be applied
         if isinstance(encoder_output, Tensor):
             # Apply cross-attention with residual connection
-            out = out + self.cross_attention_heads(self.layer_norm_cross(out), encoder_output) # (B, S, E) + (B, S, E) -> (B, S, E)
+            out = out + self.cross_attention_heads(self.layer_norm_cross(out).output, encoder_output=encoder_output).output # (B, S, E) + (B, S, E) -> (B, S, E)
         
         # Apply the ffn module with skip connections
-        return out + self.ffn(self.layer_norm_2(out)) # (B, S, E) + (B, S, E) -> (B, S, E)
+        return out + self.ffn(self.layer_norm_2(out).output).output # (B, S, E) + (B, S, E) -> (B, S, E)
     
     
     def _forward_deepseek_transformer_block(
@@ -143,10 +143,10 @@ class Block(SingleOutputModule):
         # - E: embedding size (embedding dimension of the original data)
         
         # Apply the self multi-head latent attention with skip connections
-        x = x + self.mla(self.attn_norm(x), start_pos=start_pos) # (B, S, E) + (B, S, E) -> (B, S, E)
+        x = x + self.mla(self.attn_norm(x).output, start_pos=start_pos).output # (B, S, E) + (B, S, E) -> (B, S, E)
         
         # Apply the MoE feed-forward network with skip connections
-        x = x + self.ffn_moe(self.ffn_norm(x)) # (B, S, E) + (B, S, E) -> (B, S, E)
+        x = x + self.ffn_moe(self.ffn_norm(x).output).output # (B, S, E) + (B, S, E) -> (B, S, E)
         
         # Return the output
         return x

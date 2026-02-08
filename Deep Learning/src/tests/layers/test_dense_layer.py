@@ -52,7 +52,7 @@ class TestDenseLayer(Test):
         """
         
         # Forward pass
-        y_custom = self.layer_custom(self.x_tensor)
+        y_custom = self.layer_custom(self.x_tensor).output
         y_torch = self.layer_torch(self.x_torch)
 
         # Compare the forward pass results
@@ -72,7 +72,7 @@ class TestDenseLayer(Test):
         """
         
         # Forward pass
-        y_custom = self.layer_custom(self.x_tensor)
+        y_custom = self.layer_custom(self.x_tensor).output
         y_torch = self.layer_torch(self.x_torch)
         
         # Define a simple loss (sum of all elements) and perform the backward pass

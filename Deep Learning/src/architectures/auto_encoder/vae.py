@@ -1,12 +1,11 @@
 import numpy as np
-from typing import Tuple
 
-from ...core import Tensor, MultiOutputModule, SingleOutputModule
+from ...core import Tensor, Module, ModuleOutput
 from .config import VAEConfig, VAEEncoderConfig, VAEDecoderConfig
 from ...layers import Dense, Flatten, Conv2D, ConvTranspose2D, Reshape
 
 
-class VAEEncoder(MultiOutputModule):
+class VAEEncoder(Module):
 
     ### Magic methods ###
 
@@ -58,7 +57,7 @@ class VAEEncoder(MultiOutputModule):
 
     ### Protected methods ###
 
-    def _forward(self, x: Tensor, *args, **kwargs) -> Tuple[Tensor, Tensor]:
+    def _forward(self, x: Tensor, *args, **kwargs) -> 'ModuleOutput':
         """
         Forward pass of the VAE Encoder.
 
@@ -66,28 +65,52 @@ class VAEEncoder(MultiOutputModule):
         - x (Tensor): Input tensor.
 
         Returns:
-        - Tuple[Tensor, Tensor]: Mean and log variance tensors after passing through the encoder.
+        - ModuleOutput: Output with z (reparameterized) as primary, mu and logvar as auxiliary.
         """
         
         # Forward pass through the layers
-        x = self.conv1(x)
-        x = self.conv2(x)
+        x = self.conv1(x).output
+        x = self.conv2(x).output
         
         # Save shape before flatten (excluding batch dimension)
         self.pre_flatten_shape = x.shape[1:]
         
-        x = self.flatten(x)
-        x = self.fc(x)
+        x = self.flatten(x).output
+        x = self.fc(x).output
 
         # Compute the mean and log variance for the latent space
-        mu = self.fc_mu(x)
-        logvar = self.fc_logvar(x)
+        mu = self.fc_mu(x).output
+        logvar = self.fc_logvar(x).output
 
-        # Return the mean and log variance
-        return mu, logvar
+        # Reparameterization trick
+        z = self._reparameterize(mu, logvar)
+
+        # Return ModuleOutput with z as primary, mu and logvar as auxiliary
+        return ModuleOutput(output=z, mu=mu, logvar=logvar)
+
+
+    @staticmethod
+    def _reparameterize(mu: Tensor, logvar: Tensor) -> Tensor:
+        """
+        Reparameterization trick to sample from N(mu, var) using N(0,1).
+
+        Parameters:
+        - mu (Tensor): Mean tensor.
+        - logvar (Tensor): Log variance tensor.
+
+        Returns:
+        - Tensor: Sampled tensor from N(mu, var).
+        """
+        
+        # Compute standard deviation and sample epsilon
+        std = (logvar * 0.5).exp()
+        eps = Tensor.randn_like(std)
+
+        # Return the sampled tensor
+        return mu + std * eps
     
 
-class VAEDecoder(SingleOutputModule):
+class VAEDecoder(Module):
 
     ### Magic methods ###
 
@@ -176,17 +199,17 @@ class VAEDecoder(SingleOutputModule):
         """
         
         # Forward pass through the layers
-        x = self.fc(x)
-        x = self.reshape(x)
-        x = self.deconv_1(x)
-        x = self.deconv_2(x)
-        x = self.deconv_3(x)
+        x = self.fc(x).output
+        x = self.reshape(x).output
+        x = self.deconv_1(x).output
+        x = self.deconv_2(x).output
+        x = self.deconv_3(x).output
 
         # Return the reconstructed output
         return x
     
 
-class VAE(MultiOutputModule):
+class VAE(Module):
 
     ### Magic methods ###
 
@@ -216,7 +239,7 @@ class VAE(MultiOutputModule):
 
     ### Protected methods ###
 
-    def _forward(self, x: Tensor, *args, **kwargs) -> Tuple[Tensor, Tensor, Tensor]:
+    def _forward(self, x: Tensor, *args, **kwargs) -> 'ModuleOutput':
         """
         Forward pass of the VAE architecture.
         
@@ -224,42 +247,18 @@ class VAE(MultiOutputModule):
         - x (Tensor): Input tensor.
         
         Returns:
-        - Tuple[Tensor, Tensor, Tensor]: Reconstructed output, mean, and log variance tensors.
+        - ModuleOutput: Reconstructed output as primary, mu and logvar as auxiliary.
         """
 
         # Forward pass through the encoder
-        mu, logvar = self.encoder(x)
+        enc = self.encoder(x)
         
         # Lazy initialization: set decoder reshape shape from encoder's pre-flatten shape
         if not self.decoder.is_initialized:
             self.decoder.set_reshape_shape(self.encoder.pre_flatten_shape)
 
-        # Reparameterization trick to sample from N(mu, var) from N(0,1) in a differentiable way
-        z = self._reparameterize(mu, logvar)
+        # Forward pass through the decoder (z is the primary output of encoder)
+        recon = self.decoder(enc.output)
 
-        # Forward pass through the decoder
-        recon = self.decoder(z)
-
-        # Return the reconstructed output, mean, and log variance
-        return recon, mu, logvar
-
-
-    @staticmethod
-    def _reparameterize(mu: Tensor, logvar: Tensor) -> Tensor:
-        """
-        Reparameterization trick to sample from N(mu, var) using N(0,1).
-
-        Parameters:
-        - mu (Tensor): Mean tensor.
-        - logvar (Tensor): Log variance tensor.
-
-        Returns:
-        - Tensor: Sampled tensor from N(mu, var).
-        """
-        
-        # Compute standard deviation and sample epsilon
-        std = (logvar * 0.5).exp()
-        eps = Tensor.randn_like(std)
-
-        # Return the sampled tensor
-        return mu + std * eps
+        # Return the reconstructed output with mu and logvar as auxiliary
+        return ModuleOutput(output=recon.output, mu=enc.mu, logvar=enc.logvar)

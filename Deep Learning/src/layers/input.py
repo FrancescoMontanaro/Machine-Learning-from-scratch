@@ -1,7 +1,7 @@
-from ..core import Tensor, SingleOutputModule
+from ..core import Tensor, Module
 
 
-class Input(SingleOutputModule):
+class Input(Module):
     
     ### Protected methods ###
     

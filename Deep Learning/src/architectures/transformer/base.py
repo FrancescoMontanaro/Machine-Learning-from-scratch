@@ -208,8 +208,7 @@ class EncoderDecoderTransformer(AutoRegressive):
             start_pos = 0 if step == 0 else cropped_decoder.shape[1] - 1
 
             # Forward through encoder‑decoder module
-            out = self(x=cropped_decoder, encoder_input=encoder_input, start_pos=start_pos)
-            assert isinstance(out, Tensor), "Model output must be a Tensor"
+            out = self(x=cropped_decoder, encoder_input=encoder_input, start_pos=start_pos).output
 
             # Optional post‑processing (e.g. projection back to original scale)
             if postprocess_fn is not None:

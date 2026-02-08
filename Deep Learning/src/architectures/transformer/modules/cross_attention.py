@@ -2,11 +2,11 @@ import numpy as np
 
 from ..config import AttentionConfig
 from ....layers import Dense, Dropout
-from ....core import Tensor, SingleOutputModule, ModuleList
+from ....core import Tensor, Module, ModuleList
 from ....core.utils.data_processing import concat
 
 
-class CrossSingleHeadAttention(SingleOutputModule):
+class CrossSingleHeadAttention(Module):
     
     ### Magic methods ###
     
@@ -46,12 +46,12 @@ class CrossSingleHeadAttention(SingleOutputModule):
     
     ### Protected methods ###
     
-    def _forward(self, decoder_x: Tensor, encoder_output: Tensor) -> Tensor:
+    def _forward(self, x: Tensor, encoder_output: Tensor) -> Tensor:
         """
         Forward pass of the cross-attention layer
         
         Parameters:
-        - decoder_x (Tensor): Decoder input tensor (queries come from decoder)
+        - x (Tensor): Decoder input tensor (queries come from decoder)
         - encoder_output (Tensor): Encoder output tensor (keys and values come from encoder)
         
         Returns:
@@ -70,9 +70,9 @@ class CrossSingleHeadAttention(SingleOutputModule):
         
         # Apply the key, query and value matrices
         # Query comes from decoder, Key and Value come from encoder
-        q = self.query(decoder_x) # (B, S_dec, E) -> (B, S_dec, H)
-        k = self.key(encoder_output) # (B, S_enc, E) -> (B, S_enc, H)
-        v = self.value(encoder_output) # (B, S_enc, E) -> (B, S_enc, H)
+        q = self.query(x).output # (B, S_dec, E) -> (B, S_dec, H)
+        k = self.key(encoder_output).output # (B, S_enc, E) -> (B, S_enc, H)
+        v = self.value(encoder_output).output # (B, S_enc, E) -> (B, S_enc, H)
         
         # Compute cross-attention scores
         scores: Tensor = q @ k.transpose((0, 2, 1)) * (self.head_size ** -0.5) # (B, S_dec, H) @ (B, H, S_enc) -> (B, S_dec, S_enc)
@@ -80,7 +80,7 @@ class CrossSingleHeadAttention(SingleOutputModule):
         # If causal attention is enabled, we need to apply the attention mask
         if self.causal_attention:
             # Unpack the shape of the input data for better readability
-            _, S_dec, _ = decoder_x.shape # (B, S_dec, E)
+            _, S_dec, _ = x.shape # (B, S_dec, E)
             _, S_enc, _ = encoder_output.shape # (B, S_enc, E)
             
             # Apply the attention mask to the scores
@@ -90,7 +90,7 @@ class CrossSingleHeadAttention(SingleOutputModule):
         attention_weights = scores.softmax(axis=-1)
         
         # Apply dropout to the attention weights
-        attention_weights = self.dropout(attention_weights) # (B, S_dec, S_enc) -> (B, S_dec, S_enc)
+        attention_weights = self.dropout(attention_weights).output # (B, S_dec, S_enc) -> (B, S_dec, S_enc)
         
         # Compute the contextual embeddings by applying the attention weights to the value embeddings
         contextual_embeddings = attention_weights @ v # (B, S_dec, S_enc) @ (B, S_enc, H) -> (B, S_dec, H)
@@ -99,12 +99,12 @@ class CrossSingleHeadAttention(SingleOutputModule):
         return contextual_embeddings # (B, S_dec, H)
     
     
-    def _lazy_init(self, decoder_x: Tensor, encoder_output: Tensor) -> None:
+    def _lazy_init(self, x: Tensor, encoder_output: Tensor) -> None:
         """
         Method to initialize the module
         
         Parameters:
-        - decoder_x (Tensor): Decoder input data. Shape: (Batch size, decoder sequence length, embedding size)
+        - x (Tensor): Decoder input data. Shape: (Batch size, decoder sequence length, embedding size)
         - encoder_output (Tensor): Encoder output data. Shape: (Batch size, encoder sequence length, embedding size)
         
         Raises:
@@ -112,20 +112,20 @@ class CrossSingleHeadAttention(SingleOutputModule):
         """
         
         # Check if the input shapes are valid
-        assert len(decoder_x.shape) == 3, f"Invalid decoder input shape. Input must be a 3D array. Got shape: {decoder_x.shape}"
+        assert len(x.shape) == 3, f"Invalid decoder input shape. Input must be a 3D array. Got shape: {x.shape}"
         assert len(encoder_output.shape) == 3, f"Invalid encoder output shape. Input must be a 3D array. Got shape: {encoder_output.shape}"
         
         # If causal attention is enabled, we need to create the attention mask
         if self.causal_attention:
             # Unpack the shape of the input data
-            _, S_dec, _ = decoder_x.shape # (B, S_dec, E)
+            _, S_dec, _ = x.shape # (B, S_dec, E)
             _, S_enc, _ = encoder_output.shape # (B, S_enc, E)
             
             # Initialize the attention mask as a lower triangular matrix for causal attention
             self.register_buffer("attention_mask", Tensor(np.tril(np.ones((S_enc, S_dec))))) # (S, S) -> (S, S)
 
 
-class CrossMultiHeadAttention(SingleOutputModule):
+class CrossMultiHeadAttention(Module):
     
     ### Magic methods ###
     
@@ -159,12 +159,12 @@ class CrossMultiHeadAttention(SingleOutputModule):
         
     ### Protected methods ###
     
-    def _forward(self, decoder_x: Tensor, encoder_output: Tensor) -> Tensor:
+    def _forward(self, x: Tensor, encoder_output: Tensor) -> Tensor:
         """
         Forward pass of the CrossMultiHeadAttention module
         
         Parameters:
-        - decoder_x (Tensor): The decoder input tensor
+        - x (Tensor): The decoder input tensor
         - encoder_output (Tensor): The encoder output tensor
         
         Returns:
@@ -172,18 +172,18 @@ class CrossMultiHeadAttention(SingleOutputModule):
         """
         
         # Apply each head to the embeddings
-        out = concat([head(decoder_x, encoder_output) for head in self.heads], axis=-1) # (B, S_dec, E) -> (B, S_dec, H * n_heads)
+        out = concat([head(x, encoder_output=encoder_output).output for head in self.heads], axis=-1) # (B, S_dec, E) -> (B, S_dec, H * n_heads)
         
         # Apply the output linear layer to project the embeddings back to the original size
-        return self.dropout(self.output_linear(out)) # (B, S_dec, H * n_heads) -> (B, S_dec, E)
+        return self.dropout(self.output_linear(out).output).output # (B, S_dec, H * n_heads) -> (B, S_dec, E)
         
     
-    def _lazy_init(self, decoder_x: Tensor, encoder_output: Tensor) -> None:
+    def _lazy_init(self, x: Tensor, encoder_output: Tensor) -> None:
         """
         Method to initialize the module
         
         Parameters:
-        - decoder_x (Tensor): Decoder input data. Shape: (Batch size, decoder sequence length, embedding size)
+        - x (Tensor): Decoder input data. Shape: (Batch size, decoder sequence length, embedding size)
         - encoder_output (Tensor): Encoder output data. Shape: (Batch size, encoder sequence length, embedding size)
         
         Raises:
@@ -191,11 +191,11 @@ class CrossMultiHeadAttention(SingleOutputModule):
         """
         
         # Check if the input shapes are valid
-        assert len(decoder_x.shape) == 3, f"Invalid decoder input shape. Got shape: {decoder_x.shape}"
+        assert len(x.shape) == 3, f"Invalid decoder input shape. Got shape: {x.shape}"
         assert len(encoder_output.shape) == 3, f"Invalid encoder output shape. Got shape: {encoder_output.shape}"
         
         # Unpack the shape of the decoder input data
-        _, _, E = decoder_x.shape # (B, S_dec, E)
+        _, _, E = x.shape # (B, S_dec, E)
         
         # Initialize the output linear layer
         self.output_linear = Dense(E) # (B, S_dec, H * n_heads) -> (B, S_dec, E)

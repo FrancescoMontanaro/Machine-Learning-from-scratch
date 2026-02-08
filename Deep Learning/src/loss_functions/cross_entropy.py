@@ -32,13 +32,14 @@ class CrossEntropy(LossFn):
         self.from_logits = from_logits
 
 
-    def __call__(self, y_true: Tensor, y_pred: Tensor) -> Tensor:
+    def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> Tensor:
         """
         Compute the cross-entropy loss.
         
         Parameters:
         - y_true (Tensor): Target labels.
         - y_pred (Tensor): Predicted logits or probabilities.
+        - **aux (Tensor): Auxiliary tensors (unused, accepted for interface compatibility).
         """
         
         # If from_sequence is True, reshape the tensors for sequence-to-sequence loss

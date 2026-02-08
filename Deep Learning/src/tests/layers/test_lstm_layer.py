@@ -85,7 +85,7 @@ class TestLSTMLayer(Test):
         """
         
         # Forward pass
-        y_custom = self.layer_custom(self.x_tensor)
+        y_custom = self.layer_custom(self.x_tensor).output
         y_torch, _ = self.layer_torch(self.x_torch)
 
         self.assertTrue(
@@ -104,7 +104,7 @@ class TestLSTMLayer(Test):
         """
         
         # Forward pass
-        y_custom = self.layer_custom(self.x_tensor)
+        y_custom = self.layer_custom(self.x_tensor).output
         y_torch, _ = self.layer_torch(self.x_torch)
 
         # Define loss and backpropagate

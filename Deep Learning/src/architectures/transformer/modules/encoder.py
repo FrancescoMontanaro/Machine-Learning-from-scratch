@@ -2,11 +2,11 @@ import numpy as np
 
 from .block import Block
 from ..config import TransformerConfig
-from ....core import Tensor, SingleOutputModule, ModuleList
+from ....core import Tensor, Module, ModuleList
 from ....layers import Dense, Embedding, LayerNormalization, PositionalEncoding
 
 
-class Encoder(SingleOutputModule):
+class Encoder(Module):
     
     ### Magic methods ###
     
@@ -72,26 +72,26 @@ class Encoder(SingleOutputModule):
         _, S, *_ = x.shape # (B, S)
             
         # Project the input data to the embedding space
-        embeddings = self.input_proj(x) # (B, S) -> (B, S, E)
+        embeddings = self.input_proj(x).output # (B, S) -> (B, S, E)
         
         # Add positional encoding
         if isinstance(self.positional_encoding, PositionalEncoding):
             # Use sinusoidal positional encoding (adds directly to embeddings)
-            embeddings = self.positional_encoding(embeddings) # (B, S, E) -> (B, S, E)
+            embeddings = self.positional_encoding(embeddings).output # (B, S, E) -> (B, S, E)
         else:
             # Use trainable positional embeddings
             positions = Tensor(np.arange(S)) # Create position indices (S,)
-            pos_embeddings = self.positional_encoding(positions) # (S,) -> (S, E)
+            pos_embeddings = self.positional_encoding(positions).output # (S,) -> (S, E)
             
             # Add positional embeddings to input embeddings
             embeddings = embeddings + pos_embeddings # (B, S, E) + (S, E) -> (B, S, E)
         
         # Apply the encoder blocks
         for block in self.encoder_blocks:
-            embeddings = block(embeddings) # (B, S, E) -> (B, S, E)
+            embeddings = block(embeddings).output # (B, S, E) -> (B, S, E)
             
         # Apply layer normalization and return the encoded representations
-        out = self.layer_norm(embeddings) # (B, S, E) -> (B, S, E)
+        out = self.layer_norm(embeddings).output # (B, S, E) -> (B, S, E)
         
         # If the model is set to return the full sequence, return the output
         if self.return_sequence:

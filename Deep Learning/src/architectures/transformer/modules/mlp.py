@@ -1,10 +1,10 @@
 from ..config import MLPConfig
 from ....activations import ReLU
+from ....core import Tensor, Module
 from ....layers import Dense, Dropout
-from ....core import Tensor, SingleOutputModule
 
 
-class MLP(SingleOutputModule):
+class MLP(Module):
     
     ### Magic methods ###
     
@@ -55,10 +55,10 @@ class MLP(SingleOutputModule):
         # - E: embedding size (embedding dimension of the original data)
             
         # Apply the input dense layer to the data
-        out = self.input_dense(x) # (B, S, E) -> (B, S, 4 * E)
+        out = self.input_dense(x).output # (B, S, E) -> (B, S, 4 * E)
         
         # Apply the output dense layer to the data
-        return self.dropout(self.output_dense(out)) # (B, S, 4 * E) -> (B, S, E)
+        return self.dropout(self.output_dense(out).output).output # (B, S, 4 * E) -> (B, S, E)
         
     
     def _lazy_init(self, x: Tensor) -> None:

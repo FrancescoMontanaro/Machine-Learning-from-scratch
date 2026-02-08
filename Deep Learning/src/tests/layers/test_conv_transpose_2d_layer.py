@@ -76,7 +76,7 @@ class TestConvTranspose2DLayer(Test):
         
         # Forward pass
         # Custom: (batch, H, W, C) -> (batch, H', W', C')
-        y_custom = self.conv_custom(self.x_tensor)
+        y_custom = self.conv_custom(self.x_tensor).output
         
         # PyTorch: (batch, C, H, W) -> (batch, C', H', W')
         y_torch = self.conv_torch(self.x_torch.permute(0, 3, 1, 2)).permute(0, 2, 3, 1)
@@ -99,7 +99,7 @@ class TestConvTranspose2DLayer(Test):
         """
         
         # Forward pass
-        y_custom = self.conv_custom(self.x_tensor)
+        y_custom = self.conv_custom(self.x_tensor).output
         y_torch = self.conv_torch(self.x_torch.permute(0, 3, 1, 2)).permute(0, 2, 3, 1)
         
         # Define a simple loss (sum of all elements) and perform the backward pass
@@ -138,7 +138,7 @@ class TestConvTranspose2DLayer(Test):
         expected_width = (in_width - 1) * self.stride[1] - 2 * self.padding[1] + self.kernel_size[1] + self.output_padding[1]
         
         # Forward pass
-        y_custom = self.conv_custom(self.x_tensor)
+        y_custom = self.conv_custom(self.x_tensor).output
         
         # Check shape
         self.assertEqual(y_custom.shape[1], expected_height, f"Height mismatch: {y_custom.shape[1]} vs {expected_height}")
@@ -173,7 +173,7 @@ class TestConvTranspose2DLayer(Test):
                 conv_torch.bias.copy_(b_custom)
         
         # Forward pass
-        y_custom = conv_custom(x_tensor)
+        y_custom = conv_custom(x_tensor).output
         y_torch = conv_torch(x_torch.permute(0, 3, 1, 2)).permute(0, 2, 3, 1)
         
         # Compare

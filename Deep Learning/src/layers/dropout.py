@@ -1,9 +1,9 @@
 import numpy as np
 
-from ..core import Tensor, SingleOutputModule
+from ..core import Tensor, Module
 
 
-class Dropout(SingleOutputModule):
+class Dropout(Module):
     
     ### Magic methods ###
     

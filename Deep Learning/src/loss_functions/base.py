@@ -5,13 +5,14 @@ class LossFn:
     
     ### Magic methods ###
 
-    def __call__(self, y_true: Tensor, y_pred: Tensor, *args, **kwargs) -> Tensor:
+    def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> Tensor:
         """
         Compute the loss.
 
         Parameters:
         - y_true (Tensor): True target variable
         - y_pred (Tensor): Predicted target variable
+        - **aux (Tensor): Auxiliary tensors from ModuleOutput (e.g., mu, logvar for VAE)
 
         Returns:
         - Tensor: the loss value as a tensor

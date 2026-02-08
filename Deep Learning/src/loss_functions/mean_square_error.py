@@ -18,7 +18,7 @@ class MeanSquareError(LossFn):
         self.from_sequence = from_sequence
         
 
-    def __call__(self, y_true: Tensor, y_pred: Tensor) -> Tensor:
+    def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> Tensor:
         """
         Compute the mean squared error loss.
         

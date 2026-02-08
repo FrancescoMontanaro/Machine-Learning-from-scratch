@@ -1,10 +1,10 @@
 from .decoder import Decoder
 from .encoder import Encoder
-from ....core import Tensor, SingleOutputModule
+from ....core import Tensor, Module
 from ..config import EncoderDecoderTransformerConfig
 
 
-class EncoderDecoder(SingleOutputModule):
+class EncoderDecoder(Module):
 
     ### Magic methods ###
     
@@ -48,10 +48,10 @@ class EncoderDecoder(SingleOutputModule):
         """
         
         # Compute the encoder output
-        encoder_output = self.encoder(x=encoder_input, *args, **kwargs) # (B, S_enc, E) -> (B, S_enc, E)
+        encoder_output = self.encoder(x=encoder_input, *args, **kwargs).output # (B, S_enc, E) -> (B, S_enc, E)
         
         # Compute the decoder output
-        decoder_output = self.decoder(x=x, encoder_output=encoder_output, *args, **kwargs) # (B, S_dec, E) + (B, S_enc, E) -> (B, S_dec, O)
+        decoder_output = self.decoder(x=x, encoder_output=encoder_output, *args, **kwargs).output # (B, S_dec, E) + (B, S_enc, E) -> (B, S_dec, O)
 
         # Check if the model is set to return the full sequence or just the last output
         if self.return_sequence:

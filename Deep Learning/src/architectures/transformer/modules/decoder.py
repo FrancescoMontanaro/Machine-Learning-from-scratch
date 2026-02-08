@@ -3,11 +3,11 @@ from typing import Optional
 
 from .block import Block
 from ..config import TransformerConfig
-from ....core import Tensor, SingleOutputModule, ModuleList
+from ....core import Tensor, Module, ModuleList
 from ....layers import Dense, Embedding, LayerNormalization, PositionalEncoding
 
 
-class Decoder(SingleOutputModule):
+class Decoder(Module):
     
     ### Magic methods ###
     
@@ -90,16 +90,16 @@ class Decoder(SingleOutputModule):
         _, S, *_ = x.shape # (B, S) or (B, S, F)
             
         # Project the input data to the embedding space
-        embeddings = self.input_proj(x) # (B, S) -> (B, S, E)
+        embeddings = self.input_proj(x).output # (B, S) -> (B, S, E)
         
         # Add positional encoding
         if isinstance(self.positional_encoding, PositionalEncoding):
             # Use sinusoidal positional encoding (adds directly to embeddings)
-            embeddings = self.positional_encoding(embeddings) # (B, S, E) -> (B, S, E)
+            embeddings = self.positional_encoding(embeddings).output # (B, S, E) -> (B, S, E)
         else:
             # Use trainable positional embeddings
             positions = Tensor(np.arange(start_pos, start_pos + S)) # Create position indices (S,)
-            pos_embeddings = self.positional_encoding(positions) # (S,) -> (S, E)
+            pos_embeddings = self.positional_encoding(positions).output # (S,) -> (S, E)
             
             # Add positional embeddings to input embeddings
             embeddings = embeddings + pos_embeddings # (B, S, E) + (S, E) -> (B, S, E)
@@ -110,10 +110,10 @@ class Decoder(SingleOutputModule):
                 x = embeddings, 
                 start_pos = start_pos, 
                 encoder_output = encoder_output
-            )
+            ).output
             
         # Apply the output layer to get the logits
-        out = self.output_layer(self.layer_norm(embeddings)) # (B, S, E) -> (B, S, O)
+        out = self.output_layer(self.layer_norm(embeddings).output).output # (B, S, E) -> (B, S, O)
         
         # If the model is set to return the full sequence, return the output
         if self.return_sequence:

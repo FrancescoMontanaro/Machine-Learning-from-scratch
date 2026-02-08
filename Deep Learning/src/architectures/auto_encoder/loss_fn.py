@@ -41,19 +41,25 @@ class VAELoss(LossFn):
         self.current_epoch = 0
     
 
-    def __call__(self, y_true: Tensor, y_pred: Tensor, mu: Tensor, logvar: Tensor) -> Tensor:
+    def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> Tensor:
         """
         Compute the VAE loss, which is the sum of the reconstruction loss (BCE) and the weighted KL divergence.
         
         Parameters:
         - y_true (Tensor): Original input tensor.
         - y_pred (Tensor): Reconstructed tensor from the VAE.
-        - mu (Tensor): Mean tensor from the encoder's latent space.
-        - logvar (Tensor): Log variance tensor from the encoder's latent space.
+        - **aux (Tensor): Must contain 'mu' and 'logvar' auxiliary tensors from the VAE encoder.
         
         Returns:
         - Tensor: the VAE loss (reconstruction + beta * KL) value as a tensor
-        """
+        
+        Raises:
+        - KeyError: If 'mu' or 'logvar' are not found in aux tensors.
+        """  
+        
+        # Extract mu and logvar from auxiliary tensors
+        mu = aux['mu']
+        logvar = aux['logvar']
         
         # Compute reconstruction loss using binary cross-entropy
         bce = self.bce_loss(y_true, y_pred)

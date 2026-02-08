@@ -30,13 +30,14 @@ class BinaryCrossEntropy(LossFn):
         self.from_sequence = from_sequence
         
 
-    def __call__(self, y_true: Tensor, y_pred: Tensor) -> Tensor:
+    def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> Tensor:
         """
         Compute the binary cross-entropy loss.
         
         Parameters:
         - y_true (Tensor): True target variable
         - y_pred (Tensor): Predicted target variable
+        - **aux (Tensor): Auxiliary tensors (unused, accepted for interface compatibility).
         
         Returns:
         - Tensor: the binary cross-entropy loss

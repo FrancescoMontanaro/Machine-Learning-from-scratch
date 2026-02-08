@@ -3,10 +3,10 @@ from typing import Optional, List
 
 from ..layers import Dropout
 from ..activations import Activation, Tanh
-from ..core import Tensor, SingleOutputModule, TensorsList
+from ..core import Tensor, Module, ModuleOutput, TensorsList
 
 
-class RNN(SingleOutputModule):
+class RNN(Module):
     
     ### Magic methods ###
     
@@ -127,7 +127,7 @@ class RNN(SingleOutputModule):
             hidden_states_prev_t = h_t
 
             # Append the last layer's output for the current time step to the outputs list
-            outputs.append(h_ti)
+            outputs.append(h_ti.output if isinstance(h_ti, ModuleOutput) else h_ti)
             
         # Stack the outputs along the time dimension
         out = Tensor.stack(outputs, axis=1)

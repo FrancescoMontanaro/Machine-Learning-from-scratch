@@ -1,11 +1,11 @@
 import math
 import time
-from typing import Optional, Dict, Tuple, List, Union, cast
+from typing import Optional, Dict, Tuple, List, Union
 
 from ..base import Architecture
 from ...models import TrainingArguments
-from ...core import Tensor, Module, ModuleList
 from ...core.utils.context_manager import no_grad
+from ...core import Tensor, Module, ModuleList, ModuleOutput
 from ...core.utils.data_processing import shuffle_data, concat
 
 
@@ -18,7 +18,7 @@ class Sequential(Architecture):
         Class constructor
         
         Parameters:
-        - modules (list[SingleOutputModule]): List of modules to add to the sequential model
+        - modules (list[Module]): List of modules to add to the sequential model
         """
         
         # Initialize the parent class
@@ -225,15 +225,10 @@ class Sequential(Architecture):
             
             # Forward pass
             batch_kwargs = dict(zip(input_names, x_batch))
-            output = self.forward(**batch_kwargs)
+            result = self.forward(**batch_kwargs)
 
-            # Handle multiple outputs by separating main output and additional outputs
-            additional_outputs = ()
-            if isinstance(output, tuple):
-                output, *additional_outputs = output
-            
             # Compute loss and backpropagate gradients
-            loss = train_args.loss_fn(y_batch, output, *additional_outputs) # Pass additional outputs if any
+            loss = train_args.loss_fn(y_batch, result.output, **result.aux)
             (loss / train_args.gradient_accumulation_steps).backward()
             
             # Update parameters if needed
@@ -247,7 +242,7 @@ class Sequential(Architecture):
             # Accumulate metrics
             epoch_loss += loss.detach().to_numpy().item()
             for metric in train_args.metrics:
-                epoch_metrics[metric.__name__] += metric(y_batch.detach(), output.detach()).detach().to_numpy().item()
+                epoch_metrics[metric.__name__] += metric(y_batch.detach(), result.output.detach()).detach().to_numpy().item()
             
             # Progress display
             elapsed_time += time.time() - start_time
@@ -319,20 +314,15 @@ class Sequential(Architecture):
                 
                 # Forward pass
                 batch_kwargs = dict(zip(input_names, x_batch))
-                output= self.forward(**batch_kwargs)
-                
-                # Handle multiple outputs by separating main output and additional outputs
-                additional_outputs = ()
-                if isinstance(output, tuple):
-                    output, *additional_outputs = output
+                result = self.forward(**batch_kwargs)
                 
                 # Compute loss for this batch
-                batch_loss = train_args.loss_fn(y_batch, output, *additional_outputs).detach().to_numpy().item()
+                batch_loss = train_args.loss_fn(y_batch, result.output, **result.aux).detach().to_numpy().item()
                 
                 # Accumulate metrics
                 epoch_loss += batch_loss
                 for metric in train_args.metrics:
-                    epoch_metrics[metric.__name__] += metric(y_batch.detach(), output.detach()).detach().to_numpy().item()
+                    epoch_metrics[metric.__name__] += metric(y_batch.detach(), result.output.detach()).detach().to_numpy().item()
                 
                 # Progress display for validation
                 elapsed_time += time.time() - start_time
@@ -399,7 +389,7 @@ class Sequential(Architecture):
         tensors_to_batch: Optional[list[str]] = None,
         verbose: bool = False, 
         **kwargs
-    ) -> Union[Tensor, Tuple[Tensor, ...]]:
+    ) -> Union[Tensor, 'ModuleOutput']:
         """
         Forward pass of the model
         
@@ -410,7 +400,7 @@ class Sequential(Architecture):
         - **kwargs: Named input tensors and additional parameters
         
         Returns:
-        - Tensor: Output of the neural network
+        - Union[Tensor, ModuleOutput]: Output of the neural network
         
         Note:
         - All arguments must be passed as keyword arguments (no positional arguments allowed)
@@ -447,7 +437,7 @@ class Sequential(Architecture):
         
         # Compute batching
         num_steps = max(1, math.ceil(total_samples / batch_size)) if batch_size else 1
-        outputs: List[Union[Tensor, Tuple[Tensor, ...]]] = []
+        outputs: List[ModuleOutput] = []
         elapsed_time = 0.0
         
         # Process in batches
@@ -490,28 +480,18 @@ class Sequential(Architecture):
                 # Print the progress
                 print(f"\rProcessing batch {step + 1}/{num_steps} - {round(ms_per_step, 2)} ms/step", end="")
         
-        # After processing all batches, concatenate outputs if there are multiple batches
-        if isinstance(outputs[0], tuple):
-            # Cast outputs to List[Tuple[Tensor, ...]] for type checking
-            tuple_outputs = cast(List[Tuple[Tensor, ...]], outputs)
-
-            # If outputs are tuples, we need to concatenate each element separately
-            num_outputs = len(tuple_outputs[0])
-            concatenated_outputs = []
-            for i in range(num_outputs):
-                # Extract the i-th element from each output tuple and concatenate
-                output_i = [output[i] for output in tuple_outputs]
-                concatenated_outputs.append(concat(output_i, axis=0))
-
-            # Return a tuple of concatenated outputs
-            return tuple(concatenated_outputs)
+        # After processing all batches, concatenate ModuleOutput results
+        # Concatenate the primary tensors
+        concatenated_x = concat([r.output for r in outputs], axis=0)
         
-        else:
-            # Cast outputs to List[Tensor] for type checking
-            tensor_outputs = cast(List[Tensor], outputs)
-            
-            # Concatenate outputs and return the result
-            return concat(tensor_outputs, axis=0)
+        # Concatenate auxiliary tensors (if any)
+        concatenated_aux = {}
+        if outputs[0].has_aux:
+            for key in outputs[0].aux:
+                concatenated_aux[key] = concat([r.aux[key] for r in outputs], axis=0)
+        
+        # Return a ModuleOutput with concatenated results
+        return ModuleOutput(output=concatenated_x, **concatenated_aux)
     
     
     def _lazy_init(self, *args, **kwargs) -> None:

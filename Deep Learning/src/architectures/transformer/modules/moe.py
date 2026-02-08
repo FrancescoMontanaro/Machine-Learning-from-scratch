@@ -1,13 +1,12 @@
 import numpy as np
-from typing import cast
 
 from ..config import MOEConfig
 from ....activations import SiLU
 from ....layers import Dense, Dropout
-from ....core import Tensor, SingleOutputModule, MultiOutputModule, ModuleList
+from ....core import Tensor, Module, ModuleOutput, ModuleList
 
 
-class Gate(MultiOutputModule):
+class Gate(Module):
     """
     Gating mechanism for Mixture of Experts (MoE) layers.
     """
@@ -44,7 +43,7 @@ class Gate(MultiOutputModule):
         
     ### Protected methods ###
 
-    def _forward(self, x: Tensor, *args, **kwargs) -> tuple[Tensor, Tensor]:
+    def _forward(self, x: Tensor, *args, **kwargs) -> 'ModuleOutput':
         """
         Foward pass of the layer
         
@@ -52,7 +51,7 @@ class Gate(MultiOutputModule):
         - x (Tensor): Features of the dataset
         
         Returns:
-        - tuple[Tensor, Tensor]: Weights and indices of the selected experts
+        - ModuleOutput: Primary tensor is weights, auxiliary contains indices of selected experts
         
         Raises:
         - AssertionError: If the shape of the input data is not valid
@@ -110,8 +109,8 @@ class Gate(MultiOutputModule):
         # Scale the weights
         weights *= self.route_scale
             
-        # Return the weights and indices
-        return weights, indices
+        # Return the weights and indices as ModuleOutput
+        return ModuleOutput(output=weights, indices=indices)
     
     
     def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
@@ -150,10 +149,7 @@ class Gate(MultiOutputModule):
         
 
      
-class MLP(SingleOutputModule):
-    """
-    Simple Multi-Layer Perceptron (MLP) for MoE layers.
-    """
+class MLP(Module):
     
     ### Magic methods ###
     
@@ -203,10 +199,10 @@ class MLP(SingleOutputModule):
         """
         
         # Compute the output of the MLP (SwiGLU activation: w2(SiLU(w1(x)) * w3(x)))
-        out = self.w2(cast(Tensor, self.w1(x)) * cast(Tensor, self.w3(x)))
+        out = self.w2(self.w1(x).output * self.w3(x).output).output
         
         # Apply dropout and return the output
-        return cast(Tensor, self.dropout(out))
+        return self.dropout(out).output
     
 
     def _lazy_init(self, x: Tensor, *args, **kwargs) -> None:
@@ -233,10 +229,7 @@ class MLP(SingleOutputModule):
         
         
 
-class MoE(SingleOutputModule):
-    """
-    Mixture of Experts (MoE) layer.
-    """
+class MoE(Module):
     
     ### Magic methods ###
     
@@ -301,7 +294,9 @@ class MoE(SingleOutputModule):
         x = x.reshape((-1, E)) # (B, S, E) -> (B * S, E)
         
         # Compute the gating weights and selected expert indices
-        weights, indices = self.gate.forward(x) # (B * S, top_k), (B * S, top_k)
+        gate_out = self.gate.forward(x) # ModuleOutput with weights (.output) and indices (.indices)
+        weights = gate_out.output  # (B * S, top_k)
+        indices = gate_out.indices  # (B * S, top_k)
         
         # Convert indices to integer for numpy operations
         indices_np = indices.flatten().to_numpy().astype(np.int64)
@@ -325,10 +320,10 @@ class MoE(SingleOutputModule):
             idx, top = np.where(indices.to_numpy().astype(np.int64) == i)
             
             # Scatter the expert's output to the final output tensor
-            routed_experts_out[idx] += cast(Tensor, expert(x[idx])) * weights[idx, top].unsqueeze(-1)
+            routed_experts_out[idx] += expert(x[idx]).output * weights[idx, top].unsqueeze(-1)
             
         # Compute the output of the shared experts
-        shared_experts_out = cast(Tensor, self.shared_experts(x)) # (B * S, E)
+        shared_experts_out = self.shared_experts(x).output # (B * S, E)
 
         # Combine the outputs of the routed and shared experts and reshape back
         # to the original batch and sequence dimensions

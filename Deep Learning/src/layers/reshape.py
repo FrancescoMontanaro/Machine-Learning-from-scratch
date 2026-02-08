@@ -1,7 +1,7 @@
-from ..core import Tensor, SingleOutputModule
+from ..core import Tensor, Module
 
 
-class Reshape(SingleOutputModule):
+class Reshape(Module):
     
     ### Magic methods ###
     

@@ -1,7 +1,8 @@
-from typing import Generic, TypeVar, Union, Tuple, Iterator, overload, cast
+from typing import Generic, TypeVar, Union, Optional, Iterator, overload, cast
 
 from . import Tensor
 from .module import Module
+from .module_output import ModuleOutput
 
 # Define a type variable T that is bound to the Module class
 T = TypeVar('T', bound=Module)
@@ -19,7 +20,7 @@ class ModuleList(Module, Generic[T]):
         - modules (list[T]): List of modules to be stored in the ModuleList.
         
         Raises:
-        - TypeError: If any of the elements in the list are not of type SingleOutputModule.
+        - TypeError: If any of the elements in the list are not of type Module.
         """
         
         # Call the parent class constructor
@@ -56,7 +57,7 @@ class ModuleList(Module, Generic[T]):
         - idx (int): The index of the module to be returned.
         
         Returns:
-        - SingleOutputModule: The module at the specified index.
+        - Module: The module at the specified index.
         """
         
         # Just to satisfy the overload
@@ -72,7 +73,7 @@ class ModuleList(Module, Generic[T]):
         - idx (slice): The slice of the modules to be returned.
         
         Returns:
-        - list[SingleOutputModule]: A list of modules at the specified slice.
+        - list[Module]: A list of modules at the specified slice.
         """
         
         # Just to satisfy the overload
@@ -134,7 +135,7 @@ class ModuleList(Module, Generic[T]):
 
     ### Protected Methods ###
     
-    def _forward(self, **kwargs) -> Union[Tensor, Tuple[Tensor, ...]]:
+    def _forward(self, **kwargs) -> Union[Tensor, 'ModuleOutput']:
         """
         Forward pass through all modules in sequence.
         
@@ -142,20 +143,20 @@ class ModuleList(Module, Generic[T]):
         - **kwargs: Named input tensors and additional parameters
         
         Returns:
-        - Union[Tensor, Tuple[Tensor, ...]]: The output of the last module after processing through all modules in sequence.
+        - Union[Tensor, ModuleOutput]: The output of the last module after processing through all modules in sequence.
+          Returns the raw result (Tensor or ModuleOutput) - Module.forward() handles wrapping.
         
         Note:
         - All arguments must be passed as keyword arguments
         - The first module receives all kwargs
-        - Subsequent modules receive the output of the previous module as 'x' plus any non-tensor kwargs
-        - If a module returns a tuple, the first element is passed as 'x' and additional elements as positional args
+        - Subsequent modules receive the primary output (.output) of the previous module as 'x' plus any non-tensor kwargs
         """
         
         # Separate tensor inputs from other params (non-tensor params are passed to all modules)
         other_params = {k: v for k, v in kwargs.items() if not isinstance(v, Tensor)}
         
         # Initialize the current output
-        current_output: Union[Tensor, Tuple[Tensor, ...], None] = None
+        current_output: Optional[ModuleOutput] = None
         
         # Iterate through the modules
         for i, module in enumerate(self._modules.values()):
@@ -163,28 +164,17 @@ class ModuleList(Module, Generic[T]):
                 # First module gets all named inputs
                 current_output = module.forward(**kwargs)
             else:
-                # Subsequent modules get the output of the previous module as 'x' plus other non-tensor params
-                if isinstance(current_output, tuple):
-                    # If the current output is a tuple, unpack: first as 'x', rest as positional args
-                    main_output, *additional_outputs = current_output
-                    current_output = module.forward(main_output, *additional_outputs, **other_params)
-                else:
-                    # Single tensor output
-                    current_output = module.forward(x=current_output, **other_params)
+                # Subsequent modules get the primary tensor from the previous output as 'x'
+                assert current_output is not None
+                current_output = module.forward(x=current_output.output, **other_params)
             
             # Validate output type
-            if not isinstance(current_output, (Tensor, tuple)):
-                raise ValueError(f"Module {i} must return a Tensor or Tuple[Tensor, ...], got {type(current_output)}")
-            
-            # If tuple, validate all elements are Tensors
-            if isinstance(current_output, tuple):
-                for j, out in enumerate(current_output):
-                    if not isinstance(out, Tensor):
-                        raise ValueError(f"Module {i} output[{j}] must be a Tensor, got {type(out)}")
+            if not isinstance(current_output, ModuleOutput):
+                raise ValueError(f"Module {i} must return a ModuleOutput, got {type(current_output)}")
                 
         # Return the final output after processing through all modules
         if current_output is None:
             raise ValueError("No modules in the list to process.")
         
-        # Return the final output
+        # Return the raw output (Tensor .output) so that the parent Module.forward() can wrap it
         return current_output

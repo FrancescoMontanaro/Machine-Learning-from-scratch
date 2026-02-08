@@ -1,10 +1,10 @@
 import numpy as np
 from typing import Optional, Literal
 
-from ..core import Tensor, SingleOutputModule
+from ..core import Tensor, Module
 
 
-class MaxPool2D(SingleOutputModule):
+class MaxPool2D(Module):
     
     ### Magic methods ###
     

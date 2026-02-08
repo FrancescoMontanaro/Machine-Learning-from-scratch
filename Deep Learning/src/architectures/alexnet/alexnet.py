@@ -1,6 +1,6 @@
 from .config import AlexNetConfig
+from ...core import Tensor, Module
 from ..sequential import Sequential
-from ...core import Tensor, SingleOutputModule
 from ...layers import Dense, LocalResponseNormalization, Flatten, Dropout, MaxPool2D, Conv2D
 
 
@@ -23,7 +23,7 @@ class AlexNet(Sequential):
         )
 
 
-class AlexNetModule(SingleOutputModule):
+class AlexNetModule(Module):
     
     ### Magic methods ###
     
@@ -139,31 +139,31 @@ class AlexNetModule(SingleOutputModule):
         """
         
         # Conv1 -> ReLU -> LRN -> MaxPool
-        x = self.max_pooling(self.norm(self.conv_1(x)))
+        x = self.max_pooling(self.norm(self.conv_1(x).output).output).output
         
         # Conv2 -> ReLU -> LRN -> MaxPool
-        x = self.max_pooling(self.norm(self.conv_2(x)))
+        x = self.max_pooling(self.norm(self.conv_2(x).output).output).output
         
         # Conv3 -> ReLU (no LRN, no pooling)
-        x = self.conv_3(x)
+        x = self.conv_3(x).output
         
         # Conv4 -> ReLU (no LRN, no pooling)
-        x = self.conv_4(x)
+        x = self.conv_4(x).output
         
         # Conv5 -> ReLU -> MaxPool (no LRN!)
-        x = self.max_pooling(self.conv_5(x))
+        x = self.max_pooling(self.conv_5(x).output).output
         
         # Flatten the output
-        x = self.flatten(x)
+        x = self.flatten(x).output
         
         # FC1 -> ReLU -> Dropout
-        x = self.dropout(self.fc_1(x))
+        x = self.dropout(self.fc_1(x).output).output
         
         # FC2 -> ReLU -> Dropout
-        x = self.dropout(self.fc_2(x))
+        x = self.dropout(self.fc_2(x).output).output
         
         # FC3 -> Output logits
-        x = self.fc_3(x)
+        x = self.fc_3(x).output
         
         # Return the output tensor
         return x

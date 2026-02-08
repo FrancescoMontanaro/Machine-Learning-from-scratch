@@ -76,7 +76,7 @@ class TestSGDOptimizer(Test):
         """
         
         # Forward pass - Custom
-        y_pred_custom = self.model_custom(self.x_tensor)
+        y_pred_custom = self.model_custom(self.x_tensor).output
         loss_custom = ((y_pred_custom - self.y_tensor) ** 2).mean()
         
         # Forward pass - PyTorch
@@ -137,7 +137,7 @@ class TestSGDOptimizer(Test):
         """
         
         # Forward pass - Custom
-        y_pred_custom = self.model_custom(self.x_tensor)
+        y_pred_custom = self.model_custom(self.x_tensor).output
         loss_custom = ((y_pred_custom - self.y_tensor) ** 2).mean()
         
         # Forward pass - PyTorch

@@ -1,10 +1,10 @@
 import numpy as np
 
+from ..core import Tensor, Module
 from ..core.utils.constants import EPSILON
-from ..core import Tensor, SingleOutputModule
 
 
-class RMSNorm(SingleOutputModule):
+class RMSNorm(Module):
     
     ### Magic methods ###
 

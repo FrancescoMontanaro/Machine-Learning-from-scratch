@@ -1,12 +1,12 @@
 import numpy as np
 
+from ....core import Tensor, Module
 from ..config import LatentAttentionConfig
-from ....core import Tensor, SingleOutputModule
 from ....layers import Dense, RMSNorm, Dropout, RoPE
 from ....core.utils.data_processing import split, einsum
 
 
-class SelfMultiHeadLatentAttention(SingleOutputModule):
+class SelfMultiHeadLatentAttention(Module):
     
     ### Magic methods ###
     
@@ -125,27 +125,27 @@ class SelfMultiHeadLatentAttention(SingleOutputModule):
         # Compute the query projection
         if self.q_lora_rank == 0:
             # Standard query projection
-            q = self.wq(x) # (B, S, E) -> (B, S, num_heads * Hqk)
+            q = self.wq(x).output # (B, S, E) -> (B, S, num_heads * Hqk)
         else:
             # Low-rank query projection
-            q = self.q_norm(self.wq_a(x)) # (B, S, E) -> (B, S, r)
-            q = self.wq_b(q) # (B, S, r) -> (B, S, num_heads * (Hqk_nope + Hv))
+            q = self.q_norm(self.wq_a(x).output).output # (B, S, E) -> (B, S, r)
+            q = self.wq_b(q).output # (B, S, r) -> (B, S, num_heads * (Hqk_nope + Hv))
 
         # Reshape the query tensor to separate the heads
         # and separate the NoPE and RoPE parts
         q = q.reshape((B, S, self.num_heads, self.qk_head_dim)) # (B, S, num_heads, Hqk)
         q_nope, q_rope = split(q, [self.qk_nope_head_dim], axis=-1)
-        q_rope = self.rope(q_rope, start_pos=start_pos) # (B, S, num_heads, Hqk_rope)
+        q_rope = self.rope(q_rope, start_pos=start_pos).output # (B, S, num_heads, Hqk_rope)
         
         ### Continue with the key and value projections ###
         
         # Compute the key and value projections
-        kv = self.wkv_a(x) # (B, S, E) -> (B, S, r + Hqk_rope)
+        kv = self.wkv_a(x).output # (B, S, E) -> (B, S, r + Hqk_rope)
         kv, k_pe = split(kv, [self.kv_lora_rank], axis=-1) # (B, S, r), (B, S, Hqk_rope)
-        k_pe: Tensor = self.rope(k_pe.unsqueeze(2), start_pos=start_pos) # (B, S, Hqk_rope)
+        k_pe: Tensor = self.rope(k_pe.unsqueeze(2), start_pos=start_pos).output # (B, S, Hqk_rope)
 
         # Normalize the key-value representations
-        kv_normalized = self.kv_norm(kv) # (B, S, r)
+        kv_normalized = self.kv_norm(kv).output # (B, S, r)
 
         # Compute the key and value projections using the low-rank representation
         wkv_b = self.wkv_b.weights
@@ -192,7 +192,7 @@ class SelfMultiHeadLatentAttention(SingleOutputModule):
         attention_scores = scores.softmax(axis=-1) # (B, S, num_heads, S)
         
         # Apply dropout to the attention weights
-        attention_scores = self.attn_dropout(attention_scores) # (B, S, num_heads, S)
+        attention_scores = self.attn_dropout(attention_scores).output # (B, S, num_heads, S)
         
         # Apply dropout to the attention weights
         if self.training:
@@ -206,10 +206,10 @@ class SelfMultiHeadLatentAttention(SingleOutputModule):
         out = einsum("bshc,hdc->bshd", out, wkv_b[:, -self.v_head_dim:]) # (B, S, num_heads, Hqk_nope + Hv) -> (B, S, num_heads, Hv)
         
         # Final linear projection
-        out = self.wo(out.flatten(2)) # (B, S, num_heads * Hv) -> (B, S, E)
+        out = self.wo(out.flatten(2)).output # (B, S, num_heads * Hv) -> (B, S, E)
         
         # Apply dropout to the output projection
-        out = self.proj_dropout(out) # (B, S, E)
+        out = self.proj_dropout(out).output # (B, S, E)
         
         # Return the output of the layer
         return out # (B, S, E)
