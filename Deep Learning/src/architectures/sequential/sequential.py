@@ -376,6 +376,9 @@ class Sequential(Architecture):
         for callback in train_args.callbacks:
             callback(self)
         
+        # Notify loss function of epoch completion (e.g., for KL annealing in VAE)
+        train_args.loss_fn.step_epoch()
+        
         # Clear cache
         self.clear_cache()
 

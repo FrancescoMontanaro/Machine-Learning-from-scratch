@@ -95,7 +95,7 @@ class Module:
         if len(args) == 1:
             # Validate that the positional argument is a Tensor and 'x' is not already in kwargs
             if not isinstance(args[0], Tensor):
-                raise ValueError("The single positional argument must be a Tensor.")
+                raise ValueError(f"The single positional argument must be a Tensor. Got {type(args[0])} instead.")
             
             # If 'x' is already in kwargs, raise an error
             if 'x' in kwargs:

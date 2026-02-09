@@ -23,3 +23,18 @@ class LossFn:
         
         # Raise an error if the method is not implemented
         raise NotImplementedError("The method '__call__' is not implemented.")
+
+
+    ### Public methods ###
+
+    def step_epoch(self):
+        """
+        Optional method to be called at the end of each epoch during training.
+        Can be used for tasks like KL annealing in VAEs.
+
+        Raises:
+        - NotImplementedError: If the method is not implemented
+        """
+        
+        # Raise an error if the method is not implemented
+        raise NotImplementedError("The method 'step_epoch' is not implemented.")

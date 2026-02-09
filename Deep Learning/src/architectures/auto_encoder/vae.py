@@ -75,7 +75,10 @@ class VAEEncoder(Module):
         # Save shape before flatten (excluding batch dimension)
         self.pre_flatten_shape = x.shape[1:]
         
+        # Flatten the convolutional output
         x = self.flatten(x).output
+
+        # Forward pass through the fully connected layer
         x = self.fc(x).output
 
         # Compute the mean and log variance for the latent space
