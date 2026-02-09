@@ -5,3 +5,4 @@ venv/
 .dev/
 *.npz
 *.pkl
+.github/copilot-instructions.md
