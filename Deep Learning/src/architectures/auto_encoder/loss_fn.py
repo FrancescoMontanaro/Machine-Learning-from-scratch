@@ -1,4 +1,4 @@
-from ...core import Tensor
+from ...core import Tensor, ModuleOutput
 from ...loss_functions import LossFn, BinaryCrossEntropy
 
 
@@ -41,7 +41,7 @@ class VAELoss(LossFn):
         self.current_epoch = 0
     
 
-    def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> Tensor:
+    def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> ModuleOutput:
         """
         Compute the VAE loss, which is the sum of the reconstruction loss (BCE) and the weighted KL divergence.
         
@@ -51,7 +51,7 @@ class VAELoss(LossFn):
         - **aux (Tensor): Must contain 'mu' and 'logvar' auxiliary tensors from the VAE encoder.
         
         Returns:
-        - Tensor: the VAE loss (reconstruction + beta * KL) value as a tensor
+        - ModuleOutput: the VAE loss (reconstruction + beta * KL) value as a ModuleOutput containing a single tensor
         
         Raises:
         - KeyError: If 'mu' or 'logvar' are not found in aux tensors.
@@ -62,7 +62,7 @@ class VAELoss(LossFn):
         logvar = aux['logvar']
         
         # Compute reconstruction loss using binary cross-entropy
-        bce = self.bce_loss(y_true, y_pred)
+        bce = self.bce_loss(y_true, y_pred).output
         
         if self.normalize_reconstruction:
             # Mean over all dimensions
@@ -81,7 +81,10 @@ class VAELoss(LossFn):
             kl = kl / latent_dim
 
         # Compute total loss with beta weighting on KL term
-        return rec + self.beta * kl
+        loss = rec + self.beta * kl
+
+        # Return the loss as a ModuleOutput
+        return ModuleOutput(output=loss, rec_loss=rec, kl_divergence=kl)
 
 
     ### Public methods ###

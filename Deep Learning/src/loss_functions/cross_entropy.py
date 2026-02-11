@@ -2,7 +2,7 @@ import numpy as np
 from typing import Literal, Optional
 
 from .base import LossFn
-from ..core import Tensor
+from ..core import Tensor, ModuleOutput
 from ..core.utils.constants import EPSILON
 
 
@@ -32,7 +32,7 @@ class CrossEntropy(LossFn):
         self.from_logits = from_logits
 
 
-    def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> Tensor:
+    def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> ModuleOutput:
         """
         Compute the cross-entropy loss.
         
@@ -40,6 +40,9 @@ class CrossEntropy(LossFn):
         - y_true (Tensor): Target labels.
         - y_pred (Tensor): Predicted logits or probabilities.
         - **aux (Tensor): Auxiliary tensors (unused, accepted for interface compatibility).
+
+        Returns:
+        - ModuleOutput: the cross-entropy loss as a ModuleOutput containing a single tensor
         """
         
         # If from_sequence is True, reshape the tensors for sequence-to-sequence loss
@@ -84,10 +87,10 @@ class CrossEntropy(LossFn):
         # Apply reduction
         if self.reduction == "mean":
             # Return the mean loss
-            return loss.mean()
+            return ModuleOutput(loss.mean())
         elif self.reduction == "sum":
             # Return the sum loss
-            return loss.sum()
+            return ModuleOutput(loss.sum())
         
         # Return the per-sample loss
-        return loss
+        return ModuleOutput(loss)

@@ -59,7 +59,7 @@ class TestKLDivergenceLoss(Test):
         """
 
         # Compute the loss values for custom and torch implementations
-        loss_custom_val = self.loss_custom(self.y_target_tensor, self.y_pred_tensor)
+        loss_custom_val = self.loss_custom(self.y_target_tensor, self.y_pred_tensor).output
         loss_torch_val = self.loss_torch(
             torch.log_softmax(self.y_pred_torch, dim=-1),
             self.y_target_torch
@@ -83,7 +83,7 @@ class TestKLDivergenceLoss(Test):
         """
 
         # Compute the losses
-        loss_custom_val = self.loss_custom(self.y_target_tensor, self.y_pred_tensor)
+        loss_custom_val = self.loss_custom(self.y_target_tensor, self.y_pred_tensor).output
         loss_torch_val = self.loss_torch(
             torch.log_softmax(self.y_pred_torch, dim=-1),
             self.y_target_torch

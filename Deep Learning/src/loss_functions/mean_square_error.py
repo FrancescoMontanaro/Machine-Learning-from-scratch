@@ -1,5 +1,5 @@
 from .base import LossFn
-from ..core import Tensor
+from ..core import Tensor, ModuleOutput
 
 
 class MeanSquareError(LossFn):
@@ -18,7 +18,7 @@ class MeanSquareError(LossFn):
         self.from_sequence = from_sequence
         
 
-    def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> Tensor:
+    def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> ModuleOutput:
         """
         Compute the mean squared error loss.
         
@@ -27,7 +27,7 @@ class MeanSquareError(LossFn):
         - y_pred (Tensor): Predicted target variable
         
         Returns:
-        - Tensor: Loss value
+        - ModuleOutput: the mean squared error loss as a ModuleOutput containing a single tensor
         """
         
         # If from_sequence is True, reshape the tensors for sequence-to-sequence loss
@@ -42,4 +42,4 @@ class MeanSquareError(LossFn):
             y_true = y_true.reshape((-1, features_size))
         
         # Compute and return the loss
-        return ((y_true - y_pred) ** 2).mean()
+        return ModuleOutput(((y_true - y_pred) ** 2).mean())

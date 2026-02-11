@@ -82,20 +82,26 @@ class Sequential(Architecture):
             )
             
             # Training phase
-            self._run_training_epoch(
+            train_loss_aux = self._run_training_epoch(
                 train_inputs_epoch, y_train_epoch, train_input_names,
                 train_args, n_training_steps
             )
             
             # Validation phase
+            val_loss_aux = None
             if valid_inputs is not None and y_valid is not None:
-                self._run_validation_epoch(
+                val_loss_aux = self._run_validation_epoch(
                     valid_inputs, y_valid, train_input_names,
                     train_args, n_valid_steps
                 )
             
             # End of epoch
-            self._end_epoch(train_args, valid_inputs is not None)
+            self._end_epoch(
+                train_args = train_args,
+                has_validation = valid_inputs is not None,
+                train_loss_aux = train_loss_aux,
+                val_loss_aux = val_loss_aux
+            )
         
         # Return training history
         return self.history
@@ -186,7 +192,7 @@ class Sequential(Architecture):
         input_names: list[str],
         train_args: TrainingArguments,
         n_steps: int
-    ) -> None:
+    ) -> Dict[str, float]:
         """
         Run a single training epoch
         
@@ -196,6 +202,9 @@ class Sequential(Architecture):
         - input_names (list[str]): Names of input tensors
         - train_args (TrainingArguments): Training configuration
         - n_steps (int): Number of training steps
+        
+        Returns:
+        - Dict[str, float]: Mean auxiliary loss values for the epoch
         """
         
         # Set model to training mode
@@ -205,6 +214,7 @@ class Sequential(Architecture):
         elapsed_time = 0.0
         epoch_loss = 0.0
         epoch_metrics = {metric.__name__: 0.0 for metric in train_args.metrics}
+        epoch_loss_aux: Dict[str, float] = {}
         
         # Iterate over training steps
         for step in range(n_steps):
@@ -227,9 +237,9 @@ class Sequential(Architecture):
             batch_kwargs = dict(zip(input_names, x_batch))
             result = self.forward(**batch_kwargs)
 
-            # Compute loss and backpropagate gradients
-            loss = train_args.loss_fn(y_batch, result.output, **result.aux)
-            (loss / train_args.gradient_accumulation_steps).backward()
+            # Compute loss and backpropagate gradients on primary loss tensor only
+            loss = self._normalize_loss_output(train_args.loss_fn(y_batch, result.output, **result.aux))
+            (loss.output / train_args.gradient_accumulation_steps).backward()
             
             # Update parameters if needed
             if (step + 1) % train_args.gradient_accumulation_steps == 0 or step == n_steps - 1:
@@ -240,7 +250,8 @@ class Sequential(Architecture):
                 train_args.optimizer.zero_grad()
             
             # Accumulate metrics
-            epoch_loss += loss.detach().to_numpy().item()
+            epoch_loss += loss.output.detach().to_numpy().item()
+            self._accumulate_aux_losses(epoch_loss_aux, loss.aux)
             for metric in train_args.metrics:
                 epoch_metrics[metric.__name__] += metric(y_batch.detach(), result.output.detach()).detach().to_numpy().item()
             
@@ -249,13 +260,16 @@ class Sequential(Architecture):
             ms_per_step = elapsed_time / (step + 1) * 1000
             self._progress_printer.print_progress(
                 f"\rEpoch {self.epoch + 1}/{train_args.num_epochs} - Training ({round((step + 1) / n_steps * 100, 2)}%) | "
-                f"{self.tensors_in_memory} tensors | {round(ms_per_step, 2)} ms/step --> loss: {loss.to_numpy():.5g}"
+                f"{self.tensors_in_memory} tensors | {round(ms_per_step, 2)} ms/step --> {self._format_loss_progress(loss, 'loss')}"
             )
         
         # Store epoch results
         self.history["loss"].append(epoch_loss / n_steps)
         for metric in train_args.metrics:
             self.history[metric.__name__].append(epoch_metrics[metric.__name__] / n_steps)
+        
+        # Return mean auxiliary loss values for epoch-end summary
+        return {key: value / n_steps for key, value in epoch_loss_aux.items()}
     
     
     def _run_validation_epoch(
@@ -265,7 +279,7 @@ class Sequential(Architecture):
         input_names: list[str],
         train_args: TrainingArguments,
         n_steps: int
-    ) -> None:
+    ) -> Dict[str, float]:
         """
         Run validation for the current epoch
         
@@ -275,6 +289,9 @@ class Sequential(Architecture):
         - input_names (list[str]): Names of input tensors
         - train_args (TrainingArguments): Training configuration
         - n_steps (int): Number of validation steps
+        
+        Returns:
+        - Dict[str, float]: Mean auxiliary validation loss values for the epoch
         """
         
         # Disable gradient computation during validation
@@ -290,6 +307,7 @@ class Sequential(Architecture):
             elapsed_time = 0.0
             epoch_loss = 0.0
             epoch_metrics = {metric.__name__: 0.0 for metric in train_args.metrics}
+            epoch_loss_aux: Dict[str, float] = {}
             
             # Move to a new line for validation progress
             print()
@@ -317,10 +335,12 @@ class Sequential(Architecture):
                 result = self.forward(**batch_kwargs)
                 
                 # Compute loss for this batch
-                batch_loss = train_args.loss_fn(y_batch, result.output, **result.aux).detach().to_numpy().item()
+                batch_loss_out = self._normalize_loss_output(train_args.loss_fn(y_batch, result.output, **result.aux))
+                batch_loss = batch_loss_out.output.detach().to_numpy().item()
                 
                 # Accumulate metrics
                 epoch_loss += batch_loss
+                self._accumulate_aux_losses(epoch_loss_aux, batch_loss_out.aux)
                 for metric in train_args.metrics:
                     epoch_metrics[metric.__name__] += metric(y_batch.detach(), result.output.detach()).detach().to_numpy().item()
                 
@@ -329,19 +349,146 @@ class Sequential(Architecture):
                 ms_per_step = elapsed_time / (step + 1) * 1000
                 self._progress_printer.print_progress(
                     f"\r    Epoch {self.epoch + 1}/{train_args.num_epochs} - Validation ({round((step + 1) / n_steps * 100, 2)}%) | "
-                    f"{round(ms_per_step, 2)} ms/step --> val_loss: {batch_loss:.5g}"
+                    f"{round(ms_per_step, 2)} ms/step --> {self._format_loss_progress(batch_loss_out, 'val_loss')}"
                 )
             
             # Store validation results
             self.history["val_loss"].append(epoch_loss / n_steps)
             for metric in train_args.metrics:
                 self.history[f"val_{metric.__name__}"].append(epoch_metrics[metric.__name__] / n_steps)
+        
+        # Return mean auxiliary loss values for epoch-end summary
+        return {key: value / n_steps for key, value in epoch_loss_aux.items()}
+
+
+    def _normalize_loss_output(self, loss_out: Union[Tensor, ModuleOutput]) -> ModuleOutput:
+        """
+        Normalize loss output to ModuleOutput for backward/progress compatibility.
+        
+        Parameters:
+        - loss_out (Union[Tensor, ModuleOutput]): Loss returned by loss function.
+        
+        Returns:
+        - ModuleOutput: Normalized loss container.
+        """
+        
+        # If the loss function already returns a ModuleOutput, use it directly
+        if isinstance(loss_out, ModuleOutput):
+            return loss_out
+        
+        # If the loss function returns a Tensor, wrap it in a ModuleOutput
+        if isinstance(loss_out, Tensor):
+            return ModuleOutput(output=loss_out)
+        
+        # If the loss function returns something else, raise an error
+        raise TypeError(f"Loss function must return Tensor or ModuleOutput, got {type(loss_out).__name__}")
+
+
+    def _format_loss_progress(self, loss_out: ModuleOutput, label: str) -> str:
+        """
+        Build progress string for loss output, including auxiliary tensors if present.
+        
+        Parameters:
+        - loss_out (ModuleOutput): Loss container.
+        - label (str): Label for primary loss value (e.g., 'loss', 'val_loss').
+        
+        Returns:
+        - str: Formatted progress snippet.
+        """
+        
+        # Start with primary loss value
+        message = f"{label}: {self._format_progress_tensor(loss_out.output)}"
+        
+        # Append auxiliary loss terms (if any) for progress visibility
+        if loss_out.has_aux:
+            message += " - " + " - ".join(
+                f"{key}: {self._format_progress_tensor(tensor)}"
+                for key, tensor in loss_out.aux.items()
+            )
+        
+        # Return the formatted message
+        return message
+    
+    
+    def _accumulate_aux_losses(self, accum: Dict[str, float], aux_losses: Dict[str, Tensor]) -> None:
+        """
+        Accumulate auxiliary loss terms converted to scalars.
+        
+        Parameters:
+        - accum (Dict[str, float]): Running accumulator for auxiliary loss terms.
+        - aux_losses (Dict[str, Tensor]): Auxiliary loss tensors from ModuleOutput.
+        """
+        
+        # Convert each auxiliary loss tensor to a scalar and accumulate
+        for key, tensor in aux_losses.items():
+            accum[key] = accum.get(key, 0.0) + self._progress_scalar_value(tensor)
+
+
+    def _format_epoch_aux(self, aux_losses: Optional[Dict[str, float]], prefix: str = "") -> str:
+        """
+        Format mean auxiliary loss terms for epoch-end summary.
+        
+        Parameters:
+        - aux_losses (Optional[Dict[str, float]]): Auxiliary losses averaged over the epoch.
+        - prefix (str): Optional key prefix (e.g., 'val_').
+        
+        Returns:
+        - str: Formatted suffix to append to epoch summary message.
+        """
+        
+        # If no auxiliary losses, return empty string
+        if not aux_losses:
+            return ""
+        
+        # Format each auxiliary loss term with its prefix and value
+        return "".join(
+            f" - {prefix}{key}: {value:.5g}"
+            for key, value in aux_losses.items()
+        )
+
+
+    @staticmethod
+    def _format_progress_tensor(tensor: Tensor) -> str:
+        """
+        Format tensor value for progress display.
+        Scalars are printed directly; non-scalars are summarized by mean.
+        """
+        
+        # Convert tensor to numpy for formatting
+        value = tensor.detach().to_numpy()
+        
+        # If it's a scalar, format directly; if not, format the mean value
+        if value.size == 1:
+            return f"{value.item():.5g}"
+        
+        # For non-scalar tensors, return the mean value for progress display
+        return f"{value.mean():.5g} (mean)"
+
+
+    @staticmethod
+    def _progress_scalar_value(tensor: Tensor) -> float:
+        """
+        Convert tensor to scalar for aggregation.
+        If non-scalar, the mean value is used.
+        """
+        
+        # Convert tensor to numpy for aggregation
+        value = tensor.detach().to_numpy()
+        
+        # If it's a scalar, return its value; if not, return the mean value for aggregation
+        if value.size == 1:
+            return float(value.item())
+        
+        # For non-scalar tensors, return the mean value for aggregation
+        return float(value.mean())
     
     
     def _end_epoch(
         self, 
         train_args: TrainingArguments, 
-        has_validation: bool
+        has_validation: bool,
+        train_loss_aux: Optional[Dict[str, float]] = None,
+        val_loss_aux: Optional[Dict[str, float]] = None
     ) -> None:
         """
         End of epoch: print progress, execute callbacks, clear cache
@@ -349,6 +496,8 @@ class Sequential(Architecture):
         Parameters:
         - train_args (TrainingArguments): Training configuration
         - has_validation (bool): Whether validation was performed
+        - train_loss_aux (Optional[Dict[str, float]]): Mean auxiliary training losses for current epoch
+        - val_loss_aux (Optional[Dict[str, float]]): Mean auxiliary validation losses for current epoch
         """
         
         # If validation was performed, move cursor up one line and clear it
@@ -357,16 +506,18 @@ class Sequential(Architecture):
         
         # Build progress message
         msg = f"\rEpoch {self.epoch + 1}/{train_args.num_epochs} --> loss: {self.history['loss'][-1]:.5g}"
+        msg += self._format_epoch_aux(train_loss_aux)
         
         # Add metrics to message
         for metric in train_args.metrics:
-            msg += f" - {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__][-1]:.5g}"
+            msg += f" - {metric.__name__}: {self.history[metric.__name__][-1]:.5g}"
         
         # Add validation results if available
         if has_validation:
             msg += f" | val_loss: {self.history['val_loss'][-1]:.5g}"
+            msg += self._format_epoch_aux(val_loss_aux, prefix="val_")
             for metric in train_args.metrics:
-                msg += f" - val_{metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'][-1]:.5g}"
+                msg += f" - val_{metric.__name__}: {self.history[f'val_{metric.__name__}'][-1]:.5g}"
         
         # Print final epoch results
         self._progress_printer.print_final(msg.ljust(150))

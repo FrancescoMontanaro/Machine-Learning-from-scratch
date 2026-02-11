@@ -44,7 +44,7 @@ class TestBCELoss(Test):
         """
         
         # Compute the loss values for custom and TensorFlow implementations.
-        loss_custom_val = self.loss_custom(self.y_target_tensor, self.y_pred_tensor)
+        loss_custom_val = self.loss_custom(self.y_target_tensor, self.y_pred_tensor).output
         loss_tf_val = self.loss_tf(self.y_target_tf, self.y_pred_tf)
 
         # Compare the forward loss values
@@ -65,7 +65,7 @@ class TestBCELoss(Test):
         """
         
         # Compute the gradients for the custom loss
-        loss_custom_val = self.loss_custom(self.y_target_tensor, self.y_pred_tensor)
+        loss_custom_val = self.loss_custom(self.y_target_tensor, self.y_pred_tensor).output
         loss_custom_val.backward()
         
         # Compute the gradients for the TensorFlow loss using GradientTape.

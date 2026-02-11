@@ -1,7 +1,7 @@
 from typing import Literal, Optional
 
 from .base import LossFn
-from ..core import Tensor
+from ..core import Tensor, ModuleOutput
 from ..core.utils.constants import EPSILON
 
 
@@ -30,7 +30,7 @@ class BinaryCrossEntropy(LossFn):
         self.from_sequence = from_sequence
         
 
-    def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> Tensor:
+    def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> ModuleOutput:
         """
         Compute the binary cross-entropy loss.
         
@@ -40,7 +40,7 @@ class BinaryCrossEntropy(LossFn):
         - **aux (Tensor): Auxiliary tensors (unused, accepted for interface compatibility).
         
         Returns:
-        - Tensor: the binary cross-entropy loss
+        - ModuleOutput: the binary cross-entropy loss as a ModuleOutput containing a single tensor
         """
         
         # If from_sequence is True, reshape the tensors for sequence-to-sequence loss
@@ -68,10 +68,10 @@ class BinaryCrossEntropy(LossFn):
         # Apply the reduction method
         if self.reduction == "sum":
             # Return the sum loss
-            return loss.sum()
+            return ModuleOutput(loss.sum())
         elif self.reduction == "mean":
             # Return the mean loss
-            return loss.mean()
+            return ModuleOutput(loss.mean())
 
         # Return the per-sample loss
-        return loss
+        return ModuleOutput(loss)
