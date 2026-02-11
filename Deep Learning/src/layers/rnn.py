@@ -113,7 +113,7 @@ class RNN(Module):
             # Iterate over the number of layers
             for i in range(self.num_layers):
                 # Compute the hidden state for the current time step and layer
-                h_ti = self.activation(compute_hidden(h_ti, i))
+                h_ti = self.activation(compute_hidden(h_ti.output if isinstance(h_ti, ModuleOutput) else h_ti, i))
 
                 # Append the hidden state to the list without applying dropout
                 h_t.append(h_ti)

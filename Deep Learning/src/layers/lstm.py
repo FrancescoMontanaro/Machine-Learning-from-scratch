@@ -124,7 +124,7 @@ class LSTM(Module):
             # Iterate over the number of layers
             for i in range(self.num_layers):
                 # Compute the gates for the current time step and layer
-                gates = compute_gates(h_ti, i)
+                gates = compute_gates(h_ti.output if isinstance(h_ti, ModuleOutput) else h_ti, i)
 
                 # Compute the input, forget, cell, and output gates
                 i_t = self.sigmoid(gates[:, :self.num_units]) # Input gate

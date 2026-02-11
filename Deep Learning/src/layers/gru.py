@@ -115,7 +115,7 @@ class GRU(Module):
             # Iterate over the number of layers
             for i in range(self.num_layers):
                 # Compute the gates for the current time step and layer
-                gates_ih, gates_hh = compute_gates(h_ti, i)
+                gates_ih, gates_hh = compute_gates(h_ti.output if isinstance(h_ti, ModuleOutput) else h_ti, i)
 
                 # Split gates: reset, update, new
                 gi_r = gates_ih[:, :self.num_units] # reset input
