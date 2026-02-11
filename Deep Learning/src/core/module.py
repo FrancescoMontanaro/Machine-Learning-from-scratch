@@ -2,12 +2,16 @@ import os
 import re
 import numpy as np
 import dill as pickle
-from typing import Optional, Any, Union
+from typing import Optional, Any, Union, TypeVar, Type, cast
 
 from .tensor import Tensor
 from .tensors_list import TensorsList
 from .module_output import ModuleOutput
 from .utils.data_analysis import format_summary_output
+
+# Define a type variable for the Module class to use in type hints 
+# for class methods that return instances of the class
+M = TypeVar("M", bound="Module")
 
 
 class Module:
@@ -412,12 +416,15 @@ class Module:
         
         
     @classmethod
-    def load(cls, path: str) -> 'Module':
+    def load(cls: Type[M], path: str) -> M:
         """
         Method to load the state of the module from a file
         
         Parameters:
         - path (str): Path to the file containing the state of the module
+        
+        Returns:
+        - Module: Loaded module
         """
         
         # Check if the path exists and is a directory
@@ -426,7 +433,7 @@ class Module:
             raise ValueError(f"Path '{path}' must be a directory.")
         
         # Load the module from a file
-        module = cls.load_module(os.path.join(path, f"module.pkl"))
+        module = cast(M, cls.load_module(os.path.join(path, f"module.pkl")))
         
         # Load the weights of the module from a file
         module.load_weights(os.path.join(path, f"params.npz"))
