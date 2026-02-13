@@ -98,4 +98,4 @@ class Encoder(Module):
             return out
         
         # If the model is not set to return the full sequence, return only the last output
-        return out[:, -1:, ...] # (B, S, E) -> (B, 1, E)
+        return out[:, -1, ...] # (B, S, E) -> (B, E)

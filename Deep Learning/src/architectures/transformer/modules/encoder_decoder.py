@@ -59,4 +59,4 @@ class EncoderDecoder(Module):
             return decoder_output # (B, S_dec, O)
         
         # If the model is not set to return the full sequence, take only the last output
-        return decoder_output[:, -1, :] # (B, S_dec, O) -> (B, 1, O)
+        return decoder_output[:, -1, :] # (B, S_dec, O) -> (B, O)
