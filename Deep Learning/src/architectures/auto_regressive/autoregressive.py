@@ -31,6 +31,7 @@ class AutoRegressive(Sequential):
         self.max_sequence_length = config.max_sequence_length
         self.return_sequence = config.return_sequence
         self.input_type = config.input_type
+        self.use_cache = config.use_cache
     
     
     ### Public Methods ###
@@ -42,6 +43,7 @@ class AutoRegressive(Sequential):
         concat_axis: int = 1, 
         stream: bool = False,
         do_sample: bool = False,
+        use_cache: Optional[bool] = None,
         preprocess_fn: Optional[Callable[[Tensor], Tensor]] = None,
         postprocess_fn: Optional[Callable[[Tensor], Tensor]] = None,
         *args, **kwargs
@@ -55,6 +57,9 @@ class AutoRegressive(Sequential):
         - concat_axis (int): The axis to concatenate the generated data.
         - stream (bool): Whether to generate the data in a streaming fashion.
         - do_sample (bool, optional): Whether to use sampling during generation.
+        - use_cache (bool, optional): If True, feed only the last token after the first step
+            and use start_pos for cache-aware models. If False, feed the full cropped window at
+            every step (default for recurrent models without cache).
         - preprocess_fn (Callable, optional): Function to normalize input before model forward pass.
         - postprocess_fn (Callable, optional): Function to denormalize model output.
         """
@@ -75,6 +80,7 @@ class AutoRegressive(Sequential):
                     num_steps = num_steps, 
                     concat_axis = concat_axis, 
                     do_sample = do_sample,
+                    use_cache = use_cache,
                     preprocess_fn = preprocess_fn, 
                     postprocess_fn = postprocess_fn
                 )
@@ -88,9 +94,11 @@ class AutoRegressive(Sequential):
                         num_steps = num_steps, 
                         concat_axis = concat_axis, 
                         do_sample = do_sample,
+                        use_cache = use_cache,
                         preprocess_fn = preprocess_fn, 
                         postprocess_fn = postprocess_fn
-                    )
+                    ),
+                    concat_axis = concat_axis
                 )
 
             
@@ -127,6 +135,7 @@ class AutoRegressive(Sequential):
         num_steps: int, 
         concat_axis: int = 1,
         do_sample: bool = False,
+        use_cache: Optional[bool] = None,
         preprocess_fn: Optional[Callable[[Tensor], Tensor]] = None,
         postprocess_fn: Optional[Callable[[Tensor], Tensor]] = None,
         *args, **kwargs
@@ -139,6 +148,8 @@ class AutoRegressive(Sequential):
         - num_steps (int): The number of steps to generate.
         - concat_axis (int): The axis to concatenate the generated data.
         - do_sample (bool, optional): Whether to use sampling during generation.
+        - use_cache (bool, optional): If True, feed only the last token after step 0.
+            If False, feed the full cropped context window each step.
         - preprocess_fn (Callable, optional): Function to normalize input before model forward pass.
         - postprocess_fn (Callable, optional): Function to denormalize model output.
         
@@ -146,6 +157,11 @@ class AutoRegressive(Sequential):
         - Tensor: The generated data at each step.
         """
         
+        # If not provided, default to the instance flag when available.
+        # Fallback to False to avoid cache-specific behavior on models without cache.
+        if use_cache is None:
+            use_cache = self.use_cache
+
         # Iterate over the maximum number of new steps to generate
         for step in range(num_steps):
             # Crop the input sequence to the sequence length if larger
@@ -155,15 +171,15 @@ class AutoRegressive(Sequential):
             if preprocess_fn is not None:
                 cropped_x = preprocess_fn(cropped_x)
                 
-            # Compute the start position for the current input
-            if step == 0:
-                # First step: process the entire input sequence
-                start_pos = 0
-                model_input = cropped_x
-            else:
-                # Subsequent steps: only pass the last token (KV-cache handles the rest)
+            # Compute model input for the current step.
+            if use_cache and step > 0:
+                # Cache-aware path: feed only the newest token.
                 start_pos = min(cropped_x.shape[1] - 1, self.max_sequence_length - 1)
                 model_input = cropped_x[:, -1:, ...]
+            else:
+                # Non-cache path: feed the full context window every step.
+                start_pos = 0
+                model_input = cropped_x
 
             # Get the prediction from the model
             result = self(x=model_input, start_pos=start_pos)
