@@ -120,4 +120,4 @@ class Decoder(Module):
             return out
         
         # If the model is not set to return the full sequence, return only the last output
-        return out[:, -1:, ...] # (B, S, O) -> (B, 1, O)
+        return out[:, -1, ...] # (B, S, O) -> (B, O)
