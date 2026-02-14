@@ -12,8 +12,7 @@ class BinaryCrossEntropy(LossFn):
     def __init__(
         self, 
         from_logits: bool = False, 
-        reduction: Optional[Literal["sum", "mean"]] = "mean",
-        from_sequence: bool = False
+        reduction: Optional[Literal["sum", "mean"]] = "mean"
     ) -> None:
         """
         Initialize the binary cross-entropy loss function.
@@ -21,13 +20,11 @@ class BinaryCrossEntropy(LossFn):
         Parameters:
         - from_logits (bool): Whether the input is logits or probabilities. Default is False
         - reduction (Literal["sum", "mean"]): Reduction method. Default is "mean"
-        - from_sequence (bool): If True, the loss function is applied to sequences. Default is False
         """
         
         # Store the attributes
         self.from_logits = from_logits
         self.reduction = reduction
-        self.from_sequence = from_sequence
         
 
     def __call__(self, y_true: Tensor, y_pred: Tensor, **aux: Tensor) -> ModuleOutput:
@@ -43,16 +40,11 @@ class BinaryCrossEntropy(LossFn):
         - ModuleOutput: the binary cross-entropy loss as a ModuleOutput containing a single tensor
         """
         
-        # If from_sequence is True, reshape the tensors for sequence-to-sequence loss
-        if self.from_sequence:
-            # Get the features size from the predictions
-            features_size = y_pred.shape[-1]
-            
-            # Reshape predictions from (B, S, F) to (B*S, F)
-            y_pred = y_pred.reshape((-1, features_size))
-            
-            # Reshape targets from (B, S) to (B*S,)
-            y_true = y_true.reshape((-1,))
+        # Check if the shapes of y_true and y_pred match for binary classification
+        if y_true.shape != y_pred.shape:
+            raise ValueError(
+                f"BinaryCrossEntropy expects matching shapes. Got y_true={y_true.shape}, y_pred={y_pred.shape}."
+            )
         
         # Check if the input is logits
         if self.from_logits:
