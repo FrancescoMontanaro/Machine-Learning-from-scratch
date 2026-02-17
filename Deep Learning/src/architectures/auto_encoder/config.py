@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Tuple, Literal, Optional
+from dataclasses import dataclass, field
+from typing import Tuple, List, Literal, Optional
 
 from ...activations import Activation, ReLU
 
@@ -66,14 +66,12 @@ class VAEEncoderConfig:
     Configuration for the VAE Encoder architecture.
     
     Attributes:
-    - conv_1 (Conv2DConfig): Configuration for the first convolutional layer.
-    - conv_2 (Conv2DConfig): Configuration for the second convolutional layer.
-    - fc (DenseConfig): Configuration for the fully connected layer.
+    - conv (List[Conv2DConfig]): Configuration for additional convolutional layers.
+    - fc (List[DenseConfig]): Configuration for the fully connected layers.
     """
 
-    conv_1: Conv2DConfig
-    conv_2: Conv2DConfig
-    fc: DenseConfig
+    conv: List[Conv2DConfig] = field(default_factory=list)
+    fc: List[DenseConfig] = field(default_factory=list)
 
 
 @dataclass
@@ -82,16 +80,12 @@ class VAEDecoderConfig:
     Configuration for the VAE Decoder architecture.
     
     Attributes:
-    - fc (DenseConfig): Configuration for the fully connected layer (activation only, units computed automatically).
-    - deconv_1 (ConvTranspose2DConfig): Configuration for the first transposed convolutional layer.
-    - deconv_2 (ConvTranspose2DConfig): Configuration for the second transposed convolutional layer.
-    - deconv_3 (ConvTranspose2DConfig): Configuration for the third transposed convolutional layer.
+    - fc (List[DenseConfig]): Configuration for the fully connected layers.
+    - deconv (List[ConvTranspose2DConfig]): Configuration for additional transposed convolutional layers.
     """
     
-    fc: DenseConfig
-    deconv_1: ConvTranspose2DConfig
-    deconv_2: ConvTranspose2DConfig
-    deconv_3: ConvTranspose2DConfig
+    fc: List[DenseConfig] = field(default_factory=list)
+    deconv: List[ConvTranspose2DConfig] = field(default_factory=list)
 
 
 @dataclass

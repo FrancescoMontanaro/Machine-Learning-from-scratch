@@ -1,6 +1,6 @@
 import numpy as np
 
-from ...core import Tensor, Module, ModuleOutput
+from ...core import Tensor, Module, ModuleList, ModuleOutput
 from .config import VAEConfig, VAEEncoderConfig, VAEDecoderConfig
 from ...layers import Dense, Flatten, Conv2D, ConvTranspose2D, Reshape
 
@@ -27,29 +27,27 @@ class VAEEncoder(Module):
         # Shape before flatten (to be set during forward pass)
         self.pre_flatten_shape: tuple = ()
 
-        # Initialize layers based on the configuration
-        self.conv1 = Conv2D(
-            num_filters = encoder_config.conv_1.num_filters,
-            kernel_size = encoder_config.conv_1.kernel_size,
-            padding = encoder_config.conv_1.padding,
-            stride = encoder_config.conv_1.stride,
-            activation = encoder_config.conv_1.activation
-        )
+        # Initialize convolutional layers based on the provided configuration
+        self.conv_layers = ModuleList([
+            Conv2D(
+                num_filters = conv_config.num_filters,
+                kernel_size = conv_config.kernel_size,
+                padding = conv_config.padding,
+                stride = conv_config.stride,
+                activation = conv_config.activation
+            ) for conv_config in encoder_config.conv
+        ])
 
-        self.conv2 = Conv2D(
-            num_filters = encoder_config.conv_2.num_filters,
-            kernel_size = encoder_config.conv_2.kernel_size,
-            padding = encoder_config.conv_2.padding,
-            stride = encoder_config.conv_2.stride,
-            activation = encoder_config.conv_2.activation
-        )
-
+        # Initialize the flatten layer
         self.flatten = Flatten()
 
-        self.fc = Dense(
-            num_units = encoder_config.fc.num_units,
-            activation = encoder_config.fc.activation
-        )
+        # Initialize the fully connected layers
+        self.fc_layers = ModuleList([
+            Dense(
+                num_units = fc_config.num_units,
+                activation = fc_config.activation
+            ) for fc_config in encoder_config.fc
+        ])
 
         self.fc_mu = Dense(self.latent_dim)
         self.fc_logvar = Dense(self.latent_dim)
@@ -68,9 +66,9 @@ class VAEEncoder(Module):
         - ModuleOutput: Output with z (reparameterized) as primary, mu and logvar as auxiliary.
         """
         
-        # Forward pass through the layers
-        x = self.conv1(x).output
-        x = self.conv2(x).output
+        # Forward pass through convolutional layers
+        for conv in self.conv_layers:
+            x = conv(x).output
         
         # Save shape before flatten (excluding batch dimension)
         self.pre_flatten_shape = x.shape[1:]
@@ -78,8 +76,9 @@ class VAEEncoder(Module):
         # Flatten the convolutional output
         x = self.flatten(x).output
 
-        # Forward pass through the fully connected layer
-        x = self.fc(x).output
+        # Forward pass through the fully connected layers
+        for fc in self.fc_layers:
+            x = fc(x).output
 
         # Compute the mean and log variance for the latent space
         mu = self.fc_mu(x).output
@@ -135,34 +134,24 @@ class VAEDecoder(Module):
         self.reshape: Reshape # Will be set in set_reshape_shape()
         
         # FC layer will also be initialized lazily (needs reshape shape to compute units)
-        self.fc: Dense # Will be set in set_reshape_shape()
+        self.fc = ModuleList([
+            Dense(
+                num_units = fc_config.num_units,
+                activation = fc_config.activation
+            ) for fc_config in decoder_config.fc
+        ])
 
-        self.deconv_1 = ConvTranspose2D(
-            num_filters = decoder_config.deconv_1.num_filters,
-            kernel_size = decoder_config.deconv_1.kernel_size,
-            padding = decoder_config.deconv_1.padding,
-            stride = decoder_config.deconv_1.stride,
-            output_padding = decoder_config.deconv_1.output_padding,
-            activation = decoder_config.deconv_1.activation
-        )
-
-        self.deconv_2 = ConvTranspose2D(
-            num_filters = decoder_config.deconv_2.num_filters,
-            kernel_size = decoder_config.deconv_2.kernel_size,
-            padding = decoder_config.deconv_2.padding,
-            stride = decoder_config.deconv_2.stride,
-            output_padding = decoder_config.deconv_2.output_padding,
-            activation = decoder_config.deconv_2.activation
-        )
-        
-        self.deconv_3 = ConvTranspose2D(
-            num_filters = decoder_config.deconv_3.num_filters,
-            kernel_size = decoder_config.deconv_3.kernel_size,
-            padding = decoder_config.deconv_3.padding,
-            stride = decoder_config.deconv_3.stride,
-            output_padding = decoder_config.deconv_3.output_padding,
-            activation = decoder_config.deconv_3.activation
-        )
+        # Initialize transposed convolutional layers based on the provided configuration
+        self.deconv_layers = ModuleList([
+            ConvTranspose2D(
+                num_filters = deconv_config.num_filters,
+                kernel_size = deconv_config.kernel_size,
+                padding = deconv_config.padding,
+                stride = deconv_config.stride,
+                output_padding = deconv_config.output_padding,
+                activation = deconv_config.activation
+            ) for deconv_config in decoder_config.deconv
+        ])
     
     
     ### Public methods ###
@@ -174,15 +163,6 @@ class VAEDecoder(Module):
         Parameters:
         - shape (tuple): Shape to reshape to (H, W, C) - excluding batch dimension.
         """
-        
-        # Calculate the number of units for the fc layer
-        fc_units = int(np.prod(shape))
-        
-        # Initialize the fc layer with the correct number of units
-        self.fc = Dense(
-            num_units = fc_units, 
-            activation = self.decoder_config.fc.activation
-        )
         
         # Initialize the reshape layer
         self.reshape = Reshape(shape=shape)
@@ -201,12 +181,16 @@ class VAEDecoder(Module):
         - Tensor: Reconstructed output tensor after passing through the decoder.
         """
         
-        # Forward pass through the layers
-        x = self.fc(x).output
+        # Forward pass through the fully connected layers (if any)
+        for fc in self.fc:
+            x = fc(x).output
+
+        # Forward pass through the reshape layer to get back to convolutional feature map shape
         x = self.reshape(x).output
-        x = self.deconv_1(x).output
-        x = self.deconv_2(x).output
-        x = self.deconv_3(x).output
+
+        # Forward pass through transposed convolutional layers
+        for deconv in self.deconv_layers:
+            x = deconv(x).output
 
         # Return the reconstructed output
         return x

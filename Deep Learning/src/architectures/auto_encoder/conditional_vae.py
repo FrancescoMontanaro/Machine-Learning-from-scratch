@@ -39,8 +39,8 @@ class ConditionalVAEEncoder(VAEEncoder):
         """
         
         # Forward pass through the layers
-        x = self.conv1(x).output
-        x = self.conv2(x).output
+        for conv in self.conv_layers:
+            x = conv(x).output
         
         # Save shape before flatten (excluding batch dimension)
         self.pre_flatten_shape = x.shape[1:]
@@ -51,8 +51,9 @@ class ConditionalVAEEncoder(VAEEncoder):
         # Concatenate the flattened output with the class labels
         x = Tensor.concat([x, y], axis=1)
 
-        # Forward pass through the fully connected layer
-        x = self.fc(x).output
+        # Forward pass through the fully connected layers
+        for fc in self.fc_layers:
+            x = fc(x).output
 
         # Compute the mean and log variance for the latent space
         mu = self.fc_mu(x).output
@@ -103,11 +104,15 @@ class ConditionalVAEDecoder(VAEDecoder):
         z = Tensor.concat([x, y], axis=1)
         
         # Forward pass through the layers
-        x = self.fc(z).output
-        x = self.reshape(x).output
-        x = self.deconv_1(x).output
-        x = self.deconv_2(x).output
-        x = self.deconv_3(x).output
+        for fc in self.fc:
+            z = fc(z).output
+        
+        # Reshape the output to match the pre-flatten shape from the encoder
+        x = self.reshape(z).output
+
+        # Forward pass through the deconvolutional layers
+        for deconv in self.deconv_layers:
+            x = deconv(x).output
 
         # Return the reconstructed output
         return x
