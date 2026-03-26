@@ -15,6 +15,7 @@ class TransformerConfig(AutoRegressiveConfig):
     - input_dim (int): Dimension of the input features (e.g., vocabulary size for text or number of features for tabular data).
     - embed_dim (int): Dimension of the embedding space.
     - num_blocks (int): Number of Transformer blocks.
+    - use_positional_encoding (bool, optional): Whether to use positional encoding. Default is True.
     - positional_encoding_type (str): Type of positional encoding ("learned" or "sinusoidal").
     - block_config (Union[TransformerBlockConfig, DeepSeekTransformerBlockConfig]): Configuration for the Transformer blocks.
     - output_dim (Optional[int]): Dimension of the output features. If None, defaults to input_dim.
@@ -24,6 +25,7 @@ class TransformerConfig(AutoRegressiveConfig):
     input_dim: int
     embed_dim: int
     num_blocks: int
+    use_positional_encoding: bool = True
     positional_encoding_type: str = "learned"
     block_config: Union[TransformerBlockConfig, DeepSeekTransformerBlockConfig]
     output_dim: Optional[int] = None # If None, defaults to input_dim

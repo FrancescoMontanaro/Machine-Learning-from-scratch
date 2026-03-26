@@ -35,11 +35,16 @@ class Decoder(Module):
         else:
             self.input_proj = Dense(config.embed_dim) # (B, S, F) -> (B, S, E)
 
-        # Define the positional embedding layer
-        if config.positional_encoding_type == "learned":
-            self.positional_encoding = Embedding(config.max_sequence_length, config.embed_dim) # (B, S) -> (B, S, E)
-        else:
-            self.positional_encoding = PositionalEncoding(config.max_sequence_length) # (B, S) -> (B, S, E)
+        # Initialize positional encoding to None; it will be set based on the configuration
+        self.positional_encoding = None
+
+        # Add positional encoding if specified in the configuration
+        if config.use_positional_encoding:
+            # Define the positional embedding layer
+            if config.positional_encoding_type == "learned":
+                self.positional_encoding = Embedding(config.max_sequence_length, config.embed_dim) # (B, S) -> (B, S, E)
+            else:
+                self.positional_encoding = PositionalEncoding(config.max_sequence_length) # (B, S) -> (B, S, E)
         
         # Instantiate the decoder blocks
         self.decoder_blocks: ModuleList[Block] = ModuleList([ # (B, S, E) -> (B, S, E)
@@ -92,17 +97,19 @@ class Decoder(Module):
         # Project the input data to the embedding space
         embeddings = self.input_proj(x).output # (B, S) -> (B, S, E)
         
-        # Add positional encoding
-        if isinstance(self.positional_encoding, PositionalEncoding):
-            # Use sinusoidal positional encoding (adds directly to embeddings)
-            embeddings = self.positional_encoding(embeddings).output # (B, S, E) -> (B, S, E)
-        else:
-            # Use trainable positional embeddings
-            positions = Tensor(np.arange(start_pos, start_pos + S)) # Create position indices (S,)
-            pos_embeddings = self.positional_encoding(positions).output # (S,) -> (S, E)
+        # If positional encoding is used, add it to the input embeddings
+        if self.positional_encoding is not None:
+            # Add positional encoding
+            if isinstance(self.positional_encoding, PositionalEncoding):
+                # Use sinusoidal positional encoding (adds directly to embeddings)
+                embeddings = self.positional_encoding(embeddings).output # (B, S, E) -> (B, S, E)
+            else:
+                # Use trainable positional embeddings
+                positions = Tensor(np.arange(start_pos, start_pos + S)) # Create position indices (S,)
+                pos_embeddings = self.positional_encoding(positions).output # (S,) -> (S, E)
             
-            # Add positional embeddings to input embeddings
-            embeddings = embeddings + pos_embeddings # (B, S, E) + (S, E) -> (B, S, E)
+                # Add positional embeddings to input embeddings
+                embeddings = embeddings + pos_embeddings # (B, S, E) + (S, E) -> (B, S, E)
         
         # Apply the decoder blocks
         for block in self.decoder_blocks:
