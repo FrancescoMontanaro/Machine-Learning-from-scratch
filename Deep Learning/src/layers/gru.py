@@ -3,7 +3,7 @@ from typing import Optional, List
 
 from ..layers import Dropout
 from ..activations import Tanh, Sigmoid
-from ..core import Tensor, Module, TensorsList
+from ..core import Tensor, Module, ModuleOutput, TensorsList
 
 
 class GRU(Module):
@@ -115,7 +115,7 @@ class GRU(Module):
             # Iterate over the number of layers
             for i in range(self.num_layers):
                 # Compute the gates for the current time step and layer
-                gates_ih, gates_hh = compute_gates(h_ti, i)
+                gates_ih, gates_hh = compute_gates(h_ti.output if isinstance(h_ti, ModuleOutput) else h_ti, i)
 
                 # Split gates: reset, update, new
                 gi_r = gates_ih[:, :self.num_units] # reset input
@@ -149,7 +149,7 @@ class GRU(Module):
             h_t_prev = h_t
 
             # Append the last layer's output for the current time step to the outputs list
-            outputs.append(h_ti)
+            outputs.append(h_ti.output if isinstance(h_ti, ModuleOutput) else h_ti)
             
         # Stack the outputs along the time dimension
         out = Tensor.stack(outputs, axis=1)

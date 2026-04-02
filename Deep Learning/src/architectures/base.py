@@ -1,5 +1,5 @@
 import gc
-from typing import Callable, Dict
+from typing import Callable, Dict, TYPE_CHECKING
 
 from ..core import Module, Tensor
 from ..core.utils.progress_printer import ProgressPrinter

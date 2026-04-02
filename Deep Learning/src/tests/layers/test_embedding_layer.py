@@ -53,7 +53,7 @@ class TestEmbeddingLayer(Test):
         """
         
         # Forward pass through both layers
-        y_custom = self.layer_custom(self.x_tensor)
+        y_custom = self.layer_custom(self.x_tensor).output
         y_torch = self.layer_torch(self.x_torch)
 
         # Compare the outputs: both should be of shape (batch_size, embedding_dim)
@@ -73,7 +73,7 @@ class TestEmbeddingLayer(Test):
         """
         
         # Forward pass
-        y_custom = self.layer_custom(self.x_tensor)
+        y_custom = self.layer_custom(self.x_tensor).output
         y_torch = self.layer_torch(self.x_torch)
 
         # Define a simple loss as the sum of all outputs and perform backward pass

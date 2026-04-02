@@ -3,7 +3,7 @@ from typing import Optional, List, Tuple
 
 from ..layers import Dropout
 from ..activations import Tanh, Sigmoid
-from ..core import Tensor, Module, TensorsList
+from ..core import Tensor, Module, ModuleOutput, TensorsList
 
 
 class LSTM(Module):
@@ -124,7 +124,7 @@ class LSTM(Module):
             # Iterate over the number of layers
             for i in range(self.num_layers):
                 # Compute the gates for the current time step and layer
-                gates = compute_gates(h_ti, i)
+                gates = compute_gates(h_ti.output if isinstance(h_ti, ModuleOutput) else h_ti, i)
 
                 # Compute the input, forget, cell, and output gates
                 i_t = self.sigmoid(gates[:, :self.num_units]) # Input gate
@@ -150,7 +150,7 @@ class LSTM(Module):
             c_t_prev = c_t
 
             # Append the last layer's output for the current time step to the outputs list
-            outputs.append(h_ti)
+            outputs.append(h_ti.output if isinstance(h_ti, ModuleOutput) else h_ti)
             
         # Stack the outputs along the time dimension
         out = Tensor.stack(outputs, axis=1)

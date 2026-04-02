@@ -1,9 +1,11 @@
+from typing import Tuple
 from dataclasses import dataclass, field
-from typing import Optional, Callable, Dict
+from typing import Optional, Callable, Dict, TYPE_CHECKING
 
 from ..core import Tensor
 from ..optimizers import Optimizer
 from ..loss_functions import LossFn
+if TYPE_CHECKING: from .data_loader import DataLoader
 
 
 @dataclass
@@ -14,10 +16,39 @@ class LabeledData:
     Parameters:
     - input (Dict[str, Tensor]): Dictionary of named input tensors
     - target (Tensor): Target tensor (labels)
+
+    Properties:
+    - input_tuple (Tuple[Tensor, ...]): Tuple of input tensors extracted from the input dictionary
+    - input_keys (Tuple[str, ...]): Tuple of keys corresponding to the input tensors
     """
     
     input: Dict[str, Tensor]
     target: Tensor
+
+    @property
+    def input_tuple(self) -> Tuple[Tensor, ...]:
+        """
+        Convert the input dictionary to a tuple of tensors.
+        
+        Returns:
+            Tuple[Tensor, ...]: A tuple containing the input tensors in the order they were defined in the dictionary.
+        """
+
+        # Return the input tensors as a tuple, preserving the order of the dictionary values.
+        return tuple(self.input.values())
+    
+
+    @property
+    def input_keys(self) -> Tuple[str, ...]:
+        """
+        Get the keys of the input dictionary as a tuple.
+        
+        Returns:
+            Tuple[str, ...]: A tuple containing the keys of the input dictionary.
+        """
+
+        # Return the keys of the input dictionary as a tuple.
+        return tuple(self.input.keys())
 
 
 @dataclass
@@ -26,10 +57,9 @@ class TrainingArguments:
     Configuration for training parameters.
     
     Parameters:
-    - train_data (LabeledData): Training data containing inputs and targets
+    - data_loader (DataLoader): DataLoader instance containing training and validation data
     - optimizer (Optimizer): Optimizer to use for training
     - loss_fn (LossFn): Loss function to use for training
-    - valid_data (Optional[LabeledData]): Validation data containing inputs and targets (default: None)
     - train_batch_size (int): Number of samples per training batch (default: 32)
     - eval_batch_size (Optional[int]): Number of samples per evaluation batch (default: None, uses train_batch_size)
     - num_epochs (int): Number of epochs to train the model (default: 10)
@@ -40,14 +70,11 @@ class TrainingArguments:
     """
     
     # Mandatory parameters - Data
-    train_data: LabeledData
+    data_loader: "DataLoader"
     
     # Mandatory parameters - Training
     optimizer: Optimizer
     loss_fn: LossFn
-    
-    # Optional parameters - Validation data
-    valid_data: Optional[LabeledData] = None
     
     # Optional parameters - Training configuration
     train_batch_size: int = 32
@@ -68,34 +95,30 @@ class TrainingArguments:
         if self.eval_batch_size is None:
             self.eval_batch_size = self.train_batch_size
         
-        # Validate train_data
-        if not isinstance(self.train_data, LabeledData):
-            raise ValueError("train_data must be a LabeledData instance")
-        
-        if not isinstance(self.train_data.input, dict) or len(self.train_data.input) == 0:
+        if not isinstance(self.data_loader.train_data.input, dict) or len(self.data_loader.train_data.input) == 0:
             raise ValueError("train_data.input must be a non-empty dictionary of Tensors")
         
         # Validate that all values in train_data.input are Tensors
-        for key, value in self.train_data.input.items():
+        for key, value in self.data_loader.train_data.input.items():
             if not isinstance(value, Tensor):
                 raise ValueError(f"All values in train_data.input must be Tensors. Got {type(value)} for key '{key}'")
         
         # Validate valid_data if provided
-        if self.valid_data is not None:
-            if not isinstance(self.valid_data, LabeledData):
+        if self.data_loader.valid_data is not None:
+            if not isinstance(self.data_loader.valid_data, LabeledData):
                 raise ValueError("valid_data must be a LabeledData instance")
             
-            if not isinstance(self.valid_data.input, dict) or len(self.valid_data.input) == 0:
+            if not isinstance(self.data_loader.valid_data.input, dict) or len(self.data_loader.valid_data.input) == 0:
                 raise ValueError("valid_data.input must be a non-empty dictionary of Tensors")
             
             # Validate that all values in valid_data.input are Tensors
-            for key, value in self.valid_data.input.items():
+            for key, value in self.data_loader.valid_data.input.items():
                 if not isinstance(value, Tensor):
                     raise ValueError(f"All values in valid_data.input must be Tensors. Got {type(value)} for key '{key}'")
             
             # Ensure that train_data and valid_data have the same input keys
-            if set(self.valid_data.input.keys()) != set(self.train_data.input.keys()):
+            if set(self.data_loader.valid_data.input.keys()) != set(self.data_loader.train_data.input.keys()):
                 raise ValueError(
-                    f"Validation data input keys {list(self.valid_data.input.keys())} "
-                    f"must match training data input keys {list(self.train_data.input.keys())}"
+                    f"Validation data input keys {list(self.data_loader.valid_data.input.keys())} "
+                    f"must match training data input keys {list(self.data_loader.train_data.input.keys())}"
                 )

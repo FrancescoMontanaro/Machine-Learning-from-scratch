@@ -1,8 +1,8 @@
-from typing import Generic, TypeVar, Union, overload
+from typing import Generic, TypeVar, Union, Optional, Iterator, overload, cast
 
 from . import Tensor
-
 from .module import Module
+from .module_output import ModuleOutput
 
 # Define a type variable T that is bound to the Module class
 T = TypeVar('T', bound=Module)
@@ -12,12 +12,12 @@ class ModuleList(Module, Generic[T]):
     
     ### Magic Methods ###
     
-    def __init__(self, modules: list[Module], *args, **kwargs) -> None:
+    def __init__(self, modules: list[T], *args, **kwargs) -> None:
         """
         Class constructor.
         
         Parameters:
-        - modules (list[Module]): List of modules to be stored in the ModuleList.
+        - modules (list[T]): List of modules to be stored in the ModuleList.
         
         Raises:
         - TypeError: If any of the elements in the list are not of type Module.
@@ -36,20 +36,20 @@ class ModuleList(Module, Generic[T]):
             setattr(self, str(i), module)
 
     
-    def __iter__(self):
+    def __iter__(self) -> Iterator[T]:
         """
         Returns an iterator over the modules in the ModuleList.
         
         Returns:
-        - iterator: An iterator over the modules in the ModuleList.
+        - Iterator[T]: An iterator over the modules in the ModuleList.
         """
         
-        # Iterate over the modules
-        return iter(self._modules.values())
+        # Iterate over the modules (cast needed because _modules stores Module, not T)
+        return cast(Iterator[T], iter(self._modules.values()))
     
     
     @overload
-    def __getitem__(self, idx: int) -> Module: 
+    def __getitem__(self, idx: int) -> T: 
         """
         Returns the module at the specified index.
         
@@ -65,7 +65,7 @@ class ModuleList(Module, Generic[T]):
     
     
     @overload
-    def __getitem__(self, idx: slice) -> list[Module]: 
+    def __getitem__(self, idx: slice) -> list[T]: 
         """
         Returns a list of modules at the specified slice.
         
@@ -80,7 +80,7 @@ class ModuleList(Module, Generic[T]):
         ...
     
     
-    def __getitem__(self, idx: Union[int, slice]) -> Union[Module, list[Module]]:
+    def __getitem__(self, idx: Union[int, slice]) -> Union[T, list[T]]:
         """
         Returns the module at the specified index or a list of modules at the specified slice.
         
@@ -88,11 +88,15 @@ class ModuleList(Module, Generic[T]):
         - idx (Union[int, slice]): The index or slice of the modules to be returned.
         
         Returns:
-        - Union[Module, list[Module]]: The module at the specified index or a list of modules at the specified slice.
+        - Union[T, list[T]]: The module at the specified index or a list of modules at the specified slice.
         """
         
-        # Return the module at the specified index
-        return list(self._modules.values())[idx]
+        # Get the module(s) at the specified index or slice
+        out = list(self._modules.values())[idx]
+        out = cast(Union[T, list[T]], out)
+
+        # Return the output
+        return out
     
     
     def __len__(self) -> int:
@@ -131,7 +135,7 @@ class ModuleList(Module, Generic[T]):
 
     ### Protected Methods ###
     
-    def _forward(self, **kwargs) -> Tensor:
+    def _forward(self, **kwargs) -> Union[Tensor, 'ModuleOutput']:
         """
         Forward pass through all modules in sequence.
         
@@ -139,19 +143,20 @@ class ModuleList(Module, Generic[T]):
         - **kwargs: Named input tensors and additional parameters
         
         Returns:
-        - Tensor: Output of the last module in the sequence
+        - Union[Tensor, ModuleOutput]: The output of the last module after processing through all modules in sequence.
+          Returns the raw result (Tensor or ModuleOutput) - Module.forward() handles wrapping.
         
         Note:
         - All arguments must be passed as keyword arguments
         - The first module receives all kwargs
-        - Subsequent modules receive the output of the previous module as 'x' plus any non-tensor kwargs
+        - Subsequent modules receive the primary output (.output) of the previous module as 'x' plus any non-tensor kwargs
         """
         
         # Separate tensor inputs from other params (non-tensor params are passed to all modules)
         other_params = {k: v for k, v in kwargs.items() if not isinstance(v, Tensor)}
         
         # Initialize the current output
-        current_output = None
+        current_output: Optional[ModuleOutput] = None
         
         # Iterate through the modules
         for i, module in enumerate(self._modules.values()):
@@ -159,16 +164,17 @@ class ModuleList(Module, Generic[T]):
                 # First module gets all named inputs
                 current_output = module.forward(**kwargs)
             else:
-                # Subsequent modules get single tensor output as 'x' + other params
-                current_output = module.forward(x=current_output, **other_params)
+                # Subsequent modules get the primary tensor from the previous output as 'x'
+                assert current_output is not None
+                current_output = module.forward(x=current_output.output, **other_params)
             
-            # Ensure the output is a Tensor
-            if not isinstance(current_output, Tensor):
-                raise ValueError(f"Module {i} must return a Tensor, got {type(current_output)}")
+            # Validate output type
+            if not isinstance(current_output, ModuleOutput):
+                raise ValueError(f"Module {i} must return a ModuleOutput, got {type(current_output)}")
                 
         # Return the final output after processing through all modules
-        if not isinstance(current_output, Tensor):
-            raise ValueError("Final output must be a Tensor.")
+        if current_output is None:
+            raise ValueError("No modules in the list to process.")
         
-        # Return the final output tensor
+        # Return the raw output (Tensor .output) so that the parent Module.forward() can wrap it
         return current_output

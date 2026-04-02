@@ -1,5 +1,6 @@
 from ..core import Tensor, Module
 
+
 class LocalResponseNormalization(Module):
     
     ### Magic methods ###

@@ -6,6 +6,46 @@ from numba import njit, prange
 #### Internal Functions ####
 ############################
 
+@njit(fastmath=True)
+def _col2im_add(
+    col_data: np.ndarray,
+    out_buffer: np.ndarray,
+    kernel_height: int,
+    kernel_width: int,
+    stride_h: int,
+    stride_w: int,
+    pad_h: int,
+    pad_w: int,
+    in_height: int,
+    in_width: int,
+    out_height: int,
+    out_width: int,
+    out_channels: int
+) -> None:
+    """
+    Scatter-add column data back to image format for a single batch.
+    
+    Parameters:
+    - col_data (np.ndarray): Column data of shape (in_height * in_width, out_channels * kernel_height * kernel_width)
+    - out_buffer (np.ndarray): Output buffer of shape (out_height, out_width, out_channels)
+    - Other params: convolution parameters
+    """
+
+    col_idx = 0
+    for i_in in range(in_height):
+        for j_in in range(in_width):
+            flat_idx = 0
+            for c_out in range(out_channels):
+                for kh in range(kernel_height):
+                    i_out = i_in * stride_h - pad_h + kh
+                    for kw in range(kernel_width):
+                        j_out = j_in * stride_w - pad_w + kw
+                        if 0 <= i_out < out_height and 0 <= j_out < out_width:
+                            out_buffer[i_out, j_out, c_out] += col_data[col_idx, flat_idx]
+                        flat_idx += 1
+            col_idx += 1
+
+
 @njit(parallel=True, fastmath=True)
 def conv_transpose_2d_forward_internal(
     x_data: np.ndarray,
@@ -26,7 +66,7 @@ def conv_transpose_2d_forward_internal(
     out_width: int
 ) -> None:
     """
-    Internal function for transposed convolution forward pass.
+    Internal function for transposed convolution forward pass using GEMM + col2im.
     
     Parameters:
     - x_data (np.ndarray): Input data of shape (batch_size, in_height, in_width, in_channels)
@@ -39,30 +79,67 @@ def conv_transpose_2d_forward_internal(
     - in_height, in_width (int): Input spatial dimensions
     - out_height, out_width (int): Output spatial dimensions
     """
+
+    # Reshape kernel for GEMM: (in_channels, out_channels * kH * kW)
+    kernel_flat = kernel_data.reshape(in_channels, out_channels * kernel_height * kernel_width)
     
-    # Iterate over batches in parallel
+    # Process batches in parallel
     for b in prange(batch_size):
-        # Iterate over input spatial positions
-        for i_in in range(in_height):
-            for j_in in range(in_width):
-                # Iterate over input channels
-                for c_in in range(in_channels):
-                    # Get input value
-                    x_val = x_data[b, i_in, j_in, c_in]
-                    
-                    # Iterate over kernel positions
-                    for kh in range(kernel_height):
-                        for kw in range(kernel_width):
-                            # Calculate output position
-                            i_out = i_in * stride_h - pad_h + kh
-                            j_out = j_in * stride_w - pad_w + kw
-                            
-                            # Check bounds
-                            if 0 <= i_out < out_height and 0 <= j_out < out_width:
-                                # Iterate over output channels
-                                for c_out in range(out_channels):
-                                    # Kernel layout: (in_channels, out_channels, kH, kW)
-                                    out_data[b, i_out, j_out, c_out] += x_val * kernel_data[c_in, c_out, kh, kw]
+        # Make batch slice contiguous and reshape: (in_height * in_width, in_channels)
+        x_batch = np.ascontiguousarray(x_data[b]).reshape(in_height * in_width, in_channels)
+        
+        # GEMM: (in_height * in_width, in_channels) @ (in_channels, out_channels * kH * kW)
+        # Result: (in_height * in_width, out_channels * kH * kW)
+        col_data = np.dot(x_batch, kernel_flat)
+        
+        # Scatter-add to output using col2im
+        _col2im_add(
+            col_data, out_data[b],
+            kernel_height, kernel_width,
+            stride_h, stride_w, pad_h, pad_w,
+            in_height, in_width, out_height, out_width, out_channels
+        )
+
+
+@njit(fastmath=True)
+def _im2col_backward_x(
+    out_grad: np.ndarray,
+    col_buffer: np.ndarray,
+    kernel_height: int,
+    kernel_width: int,
+    stride_h: int,
+    stride_w: int,
+    pad_h: int,
+    pad_w: int,
+    in_height: int,
+    in_width: int,
+    out_height: int,
+    out_width: int,
+    out_channels: int
+) -> None:
+    """
+    Gather gradient patches for backward pass (im2col for gradient).
+    
+    Parameters:
+    - out_grad (np.ndarray): Gradient of output of shape (out_height, out_width, out_channels)
+    - col_buffer (np.ndarray): Buffer of shape (in_height * in_width, out_channels * kernel_height * kernel_width)
+    """
+
+    col_idx = 0
+    for i_in in range(in_height):
+        for j_in in range(in_width):
+            flat_idx = 0
+            for c_out in range(out_channels):
+                for kh in range(kernel_height):
+                    i_out = i_in * stride_h - pad_h + kh
+                    for kw in range(kernel_width):
+                        j_out = j_in * stride_w - pad_w + kw
+                        if 0 <= i_out < out_height and 0 <= j_out < out_width:
+                            col_buffer[col_idx, flat_idx] = out_grad[i_out, j_out, c_out]
+                        else:
+                            col_buffer[col_idx, flat_idx] = 0.0
+                        flat_idx += 1
+            col_idx += 1
 
 
 @njit(parallel=True, fastmath=True)
@@ -85,7 +162,7 @@ def conv_transpose_2d_backward_x_internal(
     out_width: int
 ) -> None:
     """
-    Backward pass for transposed convolution with respect to input.
+    Backward pass for transposed convolution with respect to input using GEMM.
     
     Parameters:
     - out_grad (np.ndarray): Gradient of output of shape (batch_size, out_height, out_width, out_channels)
@@ -94,29 +171,28 @@ def conv_transpose_2d_backward_x_internal(
     - Other parameters: Same as forward
     """
     
-    # Iterate over batches in parallel
+    # Reshape kernel for GEMM: (in_channels, out_channels * kH * kW)
+    kernel_flat = kernel_data.reshape(in_channels, out_channels * kernel_height * kernel_width)
+    
+    # Process batches in parallel
     for b in prange(batch_size):
-        # Iterate over input spatial positions
-        for i_in in range(in_height):
-            for j_in in range(in_width):
-                # Iterate over input channels
-                for c_in in range(in_channels):
-                    grad_sum = 0.0
-                    
-                    # Iterate over kernel positions
-                    for kh in range(kernel_height):
-                        for kw in range(kernel_width):
-                            # Calculate output position
-                            i_out = i_in * stride_h - pad_h + kh
-                            j_out = j_in * stride_w - pad_w + kw
-                            
-                            # Check bounds
-                            if 0 <= i_out < out_height and 0 <= j_out < out_width:
-                                # Sum contributions from all output channels
-                                for c_out in range(out_channels):
-                                    grad_sum += out_grad[b, i_out, j_out, c_out] * kernel_data[c_in, c_out, kh, kw]
-                    
-                    dx_buffer[b, i_in, j_in, c_in] += grad_sum
+        # Allocate column buffer for this batch
+        col_buffer = np.empty((in_height * in_width, out_channels * kernel_height * kernel_width), dtype=out_grad.dtype)
+        
+        # Gather gradient patches using im2col pattern
+        _im2col_backward_x(
+            out_grad[b], col_buffer,
+            kernel_height, kernel_width,
+            stride_h, stride_w, pad_h, pad_w,
+            in_height, in_width, out_height, out_width, out_channels
+        )
+        
+        # GEMM: (in_height * in_width, out_channels * kH * kW) @ (out_channels * kH * kW, in_channels)
+        # Result: (in_height * in_width, in_channels)
+        dx_flat = np.dot(col_buffer, kernel_flat.T)
+        
+        # Reshape and add to buffer
+        dx_buffer[b] += dx_flat.reshape(in_height, in_width, in_channels)
 
 
 @njit(parallel=True, fastmath=True)
@@ -139,7 +215,7 @@ def conv_transpose_2d_backward_w_internal(
     out_width: int
 ) -> None:
     """
-    Backward pass for transposed convolution with respect to kernel weights.
+    Backward pass for transposed convolution with respect to kernel weights using GEMM.
     
     Parameters:
     - out_grad (np.ndarray): Gradient of output of shape (batch_size, out_height, out_width, out_channels)
@@ -147,27 +223,34 @@ def conv_transpose_2d_backward_w_internal(
     - x_data (np.ndarray): Input data of shape (batch_size, in_height, in_width, in_channels)
     - Other parameters: Same as forward
     """
-    
-    # Iterate over kernel positions and channels in parallel
+
+    # Accumulate gradients per input channel (parallelize over in_channels)
     for c_in in prange(in_channels):
-        for c_out in range(out_channels):
-            for kh in range(kernel_height):
-                for kw in range(kernel_width):
-                    grad_sum = 0.0
+        # Local accumulator for this channel
+        local_dw = np.zeros((out_channels, kernel_height, kernel_width), dtype=dw_buffer.dtype)
+        
+        for b in range(batch_size):
+            for i_in in range(in_height):
+                for j_in in range(in_width):
+                    x_val = x_data[b, i_in, j_in, c_in]
                     
-                    # Sum over batches and spatial positions
-                    for b in range(batch_size):
-                        for i_in in range(in_height):
-                            for j_in in range(in_width):
-                                # Calculate output position
-                                i_out = i_in * stride_h - pad_h + kh
-                                j_out = j_in * stride_w - pad_w + kw
-                                
-                                # Check bounds
-                                if 0 <= i_out < out_height and 0 <= j_out < out_width:
-                                    grad_sum += x_data[b, i_in, j_in, c_in] * out_grad[b, i_out, j_out, c_out]
+                    # Skip if input is zero (common in sparse inputs)
+                    if x_val == 0.0:
+                        continue
                     
-                    dw_buffer[c_in, c_out, kh, kw] += grad_sum
+                    for kh in range(kernel_height):
+                        i_out = i_in * stride_h - pad_h + kh
+                        if i_out < 0 or i_out >= out_height:
+                            continue
+                        for kw in range(kernel_width):
+                            j_out = j_in * stride_w - pad_w + kw
+                            if j_out < 0 or j_out >= out_width:
+                                continue
+                            for c_out in range(out_channels):
+                                local_dw[c_out, kh, kw] += x_val * out_grad[b, i_out, j_out, c_out]
+        
+        # Write accumulated gradients
+        dw_buffer[c_in] += local_dw
 
 
 #############################

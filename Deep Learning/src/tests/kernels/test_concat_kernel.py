@@ -24,7 +24,10 @@ class TestConcatKernel(Test):
         self.x_raw = np.random.rand(100, 30, 40).astype(np.float32)
         self.y_raw = np.random.rand(100, 30, 40).astype(np.float32)
 
-        # Concatenate along this axis
+        # Axes to validate for correctness
+        self.concat_axes = [0, 1, 2]
+        
+        # Keep performance benchmark on axis 0 for stability
         self.concat_axis = 0
 
 
@@ -32,89 +35,95 @@ class TestConcatKernel(Test):
         """
         Test that concat_forward matches torch.cat on forward pass.
         """
-        
-        # Custom tensors
-        x_tensor = Tensor(self.x_raw, dtype=np.float32, requires_grad=False)
-        y_tensor = Tensor(self.y_raw, dtype=np.float32, requires_grad=False)
 
-        # Torch tensors
-        x_torch = torch.tensor(self.x_raw, dtype=torch.float32, requires_grad=False)
-        y_torch = torch.tensor(self.y_raw, dtype=torch.float32, requires_grad=False)
-        
-        # PyTorch forward
-        z_torch = torch.cat([x_torch, y_torch], dim=self.concat_axis)
-        out_torch = z_torch.detach().numpy()
+        # Evaluate multiple axes
+        for axis in self.concat_axes:
+            with self.subTest(axis=axis):
+                # Custom tensors
+                x_tensor = Tensor(self.x_raw, dtype=np.float32, requires_grad=False)
+                y_tensor = Tensor(self.y_raw, dtype=np.float32, requires_grad=False)
 
-        # Custom forward
-        out_custom = Tensor.concat([x_tensor, y_tensor], axis=self.concat_axis)
-        out_custom = out_custom.detach().to_numpy()
+                # Torch tensors
+                x_torch = torch.tensor(self.x_raw, dtype=torch.float32, requires_grad=False)
+                y_torch = torch.tensor(self.y_raw, dtype=torch.float32, requires_grad=False)
 
-        # Assert values are close
-        self.assertTrue(
-            np.allclose(out_custom, out_torch, atol=1e-1),
-            msg=(
-                f"❌ Forward outputs differ!\n"
-                f"Custom: {out_custom}\n"
-                f"Torch: {out_torch}"
-            )
-        )
+                # PyTorch forward
+                z_torch = torch.cat([x_torch, y_torch], dim=axis)
+                out_torch = z_torch.detach().numpy()
+
+                # Custom forward
+                out_custom = Tensor.concat([x_tensor, y_tensor], axis=axis)
+                out_custom = out_custom.detach().to_numpy()
+
+                # Assert values are close
+                self.assertTrue(
+                    np.allclose(out_custom, out_torch, atol=1e-6),
+                    msg=(
+                        f"❌ Forward outputs differ on axis={axis}!\n"
+                        f"Custom: {out_custom}\n"
+                        f"Torch: {out_torch}"
+                    )
+                )
         
         
     def test_concat_backward_values(self):
         """
         Test that concat_forward matches torch.cat backward gradients.
         """
-        
-        # Setup tensors with grad
-        x_torch = torch.tensor(self.x_raw, dtype=torch.float32, requires_grad=True)
-        y_torch = torch.tensor(self.y_raw, dtype=torch.float32, requires_grad=True)
-        
-        # Custom tensors
-        x_custom = Tensor(self.x_raw, dtype=np.float32, requires_grad=True)
-        y_custom = Tensor(self.y_raw, dtype=np.float32, requires_grad=True)
 
-        # PyTorch forward + backward
-        z_torch = torch.cat([x_torch, y_torch], dim=self.concat_axis)
-        grad_output = torch.ones_like(z_torch)
-        z_torch.backward(grad_output)
-        
-        # Check gradients
-        assert x_torch.grad is not None, "Gradient for z is None"
-        assert y_torch.grad is not None, "Gradient for z is None"
+        # Evaluate multiple axes
+        for axis in self.concat_axes:
+            with self.subTest(axis=axis):
+                # Setup tensors with grad
+                x_torch = torch.tensor(self.x_raw, dtype=torch.float32, requires_grad=True)
+                y_torch = torch.tensor(self.y_raw, dtype=torch.float32, requires_grad=True)
 
-        # Detach gradients to numpy
-        grad_x_torch = x_torch.grad.detach().numpy()
-        grad_y_torch = y_torch.grad.detach().numpy()
+                # Custom tensors
+                x_custom = Tensor(self.x_raw, dtype=np.float32, requires_grad=True)
+                y_custom = Tensor(self.y_raw, dtype=np.float32, requires_grad=True)
 
-        # Custom forward + backward
-        z_custom = Tensor.concat([x_custom, y_custom], axis=self.concat_axis)
-        z_custom.backward()
-        
-        # Check gradients
-        assert x_custom.grad is not None, "Gradient for z is None"
-        assert y_custom.grad is not None, "Gradient for z is None"
-        
-        # Detach gradients to numpy
-        grad_x_custom = x_custom.grad
-        grad_y_custom = y_custom.grad
+                # PyTorch forward + backward
+                z_torch = torch.cat([x_torch, y_torch], dim=axis)
+                grad_output = torch.ones_like(z_torch)
+                z_torch.backward(grad_output)
 
-        # Assert gradients are equal
-        self.assertTrue(
-            np.allclose(grad_x_custom, grad_x_torch, atol=1e-6),
-            msg = (
-                f"❌ Backward grad_x differ!\n"
-                f"Custom:\n{grad_x_custom}\n"
-                f"Torch:\n{grad_x_torch}"
-            )
-        )
-        self.assertTrue(
-            np.allclose(grad_y_custom, grad_y_torch, atol=1e-6),
-            msg = (
-                f"❌ Backward grad_y differ!\n"
-                f"Custom:\n{grad_y_custom}\n"
-                f"Torch:\n{grad_y_torch}"
-            )
-        )
+                # Check gradients
+                assert x_torch.grad is not None, "Gradient for z is None"
+                assert y_torch.grad is not None, "Gradient for z is None"
+
+                # Detach gradients to numpy
+                grad_x_torch = x_torch.grad.detach().numpy()
+                grad_y_torch = y_torch.grad.detach().numpy()
+
+                # Custom forward + backward
+                z_custom = Tensor.concat([x_custom, y_custom], axis=axis)
+                z_custom.backward()
+
+                # Check gradients
+                assert x_custom.grad is not None, "Gradient for z is None"
+                assert y_custom.grad is not None, "Gradient for z is None"
+
+                # Detach gradients to numpy
+                grad_x_custom = x_custom.grad
+                grad_y_custom = y_custom.grad
+
+                # Assert gradients are equal
+                self.assertTrue(
+                    np.allclose(grad_x_custom, grad_x_torch, atol=1e-6),
+                    msg = (
+                        f"❌ Backward grad_x differ on axis={axis}!\n"
+                        f"Custom:\n{grad_x_custom}\n"
+                        f"Torch:\n{grad_x_torch}"
+                    )
+                )
+                self.assertTrue(
+                    np.allclose(grad_y_custom, grad_y_torch, atol=1e-6),
+                    msg = (
+                        f"❌ Backward grad_y differ on axis={axis}!\n"
+                        f"Custom:\n{grad_y_custom}\n"
+                        f"Torch:\n{grad_y_torch}"
+                    )
+                )
         
     
     def test_concat_performance(self):

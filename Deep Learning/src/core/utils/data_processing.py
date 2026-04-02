@@ -142,7 +142,7 @@ def split_data(data: Union[Tensor, Tuple[Tensor, ...]], split_pct: float = 0.1, 
         raise ValueError("data must be a tensor or a tuple of two tensors")
 
 
-def one_hot_encoding(y: Tensor, n_classes: int) -> Tensor:
+def one_hot_encoding(y: Tensor, n_classes: int, dtype: type = np.int8) -> Tensor:
     """
     Method to perform one-hot encoding on the target variable
     
@@ -161,7 +161,7 @@ def one_hot_encoding(y: Tensor, n_classes: int) -> Tensor:
     one_hot[np.arange(y.shape[0]), y.data.flatten().astype(int)] = 1
     
     # Return the one-hot encoded target variable
-    return Tensor(one_hot, requires_grad=False, dtype=np.int8)
+    return Tensor(one_hot, requires_grad=False, dtype=dtype)
 
 
 def compute_stats(X: Tensor, axis: Optional[Union[int, Tuple[int, ...]]] = None) -> Tuple[Tensor, Tensor, Tensor, Tensor]:

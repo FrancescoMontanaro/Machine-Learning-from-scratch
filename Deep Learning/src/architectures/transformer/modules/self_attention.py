@@ -1,7 +1,7 @@
 import numpy as np
 
-from ....layers import Dense, Dropout
 from ..config import AttentionConfig
+from ....layers import Dense, Dropout
 from ....core import Tensor, Module, ModuleList
 from ....core.utils.data_processing import concat
 
@@ -70,9 +70,9 @@ class SelfSingleHeadAttention(Module):
         
         # Apply the key, query and value matrices to the embeddings
         # It will be projected into a lower dimansional space H < E (even H << E)
-        k = self.key(x) # (B, S, E) -> (B, S, H)
-        q = self.query(x) # (B, S, E) -> (B, S, H)
-        v = self.value(x) # (B, S, E) -> (B, S, H)
+        k = self.key(x).output # (B, S, E) -> (B, S, H)
+        q = self.query(x).output # (B, S, E) -> (B, S, H)
+        v = self.value(x).output # (B, S, E) -> (B, S, H)
         
         # Compute the attention scores by taking the dot product of the query and key matrices
         scores: Tensor = q @ k.transpose((0, 2, 1)) * (self.head_size ** -0.5)
@@ -89,7 +89,7 @@ class SelfSingleHeadAttention(Module):
         attention_weights = scores.softmax(axis=-1)
         
         # Apply dropout to the attention weights
-        attention_weights = self.dropout(attention_weights) # (B, S, S) -> (B, S, S)
+        attention_weights = self.dropout(attention_weights).output # (B, S, S) -> (B, S, S)
         
         # Compute the contextual embeddings by applying the attention weights to the value embeddings
         contextual_embeddings = attention_weights @ v # (B, S, S) @ (B, S, H) -> (B, S, H)
@@ -175,10 +175,10 @@ class SelfMultiHeadAttention(Module):
         # - H: head size (embedding dimension of the key, query and value matrices)
         
         # Apply each head to the embeddings
-        out = concat([head(x) for head in self.heads], axis=-1) # (B, S, E) -> (B, S, H * n_heads)
+        out = concat([head(x).output for head in self.heads], axis=-1) # (B, S, E) -> (B, S, H * n_heads)
         
         # Apply the output linear layer to project the embeddings back to the original size
-        return self.dropout(self.output_linear(out)) # (B, S, H * n_heads) -> (B, S, E)
+        return self.dropout(self.output_linear(out).output).output # (B, S, H * n_heads) -> (B, S, E)
         
     
     def _lazy_init(self, x: Tensor) -> None:

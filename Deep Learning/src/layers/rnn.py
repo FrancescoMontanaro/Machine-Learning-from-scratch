@@ -3,7 +3,7 @@ from typing import Optional, List
 
 from ..layers import Dropout
 from ..activations import Activation, Tanh
-from ..core import Tensor, Module, TensorsList
+from ..core import Tensor, Module, ModuleOutput, TensorsList
 
 
 class RNN(Module):
@@ -113,7 +113,7 @@ class RNN(Module):
             # Iterate over the number of layers
             for i in range(self.num_layers):
                 # Compute the hidden state for the current time step and layer
-                h_ti = self.activation(compute_hidden(h_ti, i))
+                h_ti = self.activation(compute_hidden(h_ti.output if isinstance(h_ti, ModuleOutput) else h_ti, i))
 
                 # Append the hidden state to the list without applying dropout
                 h_t.append(h_ti)
@@ -127,7 +127,7 @@ class RNN(Module):
             hidden_states_prev_t = h_t
 
             # Append the last layer's output for the current time step to the outputs list
-            outputs.append(h_ti)
+            outputs.append(h_ti.output if isinstance(h_ti, ModuleOutput) else h_ti)
             
         # Stack the outputs along the time dimension
         out = Tensor.stack(outputs, axis=1)

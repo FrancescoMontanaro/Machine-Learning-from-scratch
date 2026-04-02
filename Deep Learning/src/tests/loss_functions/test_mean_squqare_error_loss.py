@@ -45,7 +45,7 @@ class TestMSELoss(Test):
         """
         
         # Compute the loss values for custom and torch implementations
-        loss_custom_val = self.loss_custom(self.y_pred_tensor, self.y_target_tensor)
+        loss_custom_val = self.loss_custom(self.y_pred_tensor, self.y_target_tensor).output
         loss_torch_val = self.loss_torch(self.y_pred_torch, self.y_target_torch)
 
         # Compare the forward loss values
@@ -66,7 +66,7 @@ class TestMSELoss(Test):
         """
         
         # Compute the losses
-        loss_custom_val = self.loss_custom(self.y_pred_tensor, self.y_target_tensor)
+        loss_custom_val = self.loss_custom(self.y_pred_tensor, self.y_target_tensor).output
         loss_torch_val = self.loss_torch(self.y_pred_torch, self.y_target_torch)
 
         # Perform the backward pass on both losses

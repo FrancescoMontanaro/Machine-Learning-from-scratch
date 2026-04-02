@@ -1,17 +1,20 @@
 import math
 import time
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, List, Union
 
 from ..base import Architecture
+from ...models.data_loader import Split
 from ...models import TrainingArguments
-from ...core import Tensor, Module, ModuleList
+from ...core.utils.data_processing import concat
 from ...core.utils.context_manager import no_grad
-from ...core.utils.data_processing import shuffle_data, concat
+from ...core import Tensor, Module, ModuleList, ModuleOutput
 
 
 class Sequential(Architecture):
     
+    #####################
     ### Magic methods ###
+    #####################
     
     def __init__(self, modules: list[Module], *args, **kwargs) -> None:
         """
@@ -27,13 +30,12 @@ class Sequential(Architecture):
         # List of modules of the sequential model
         self.modules: ModuleList = ModuleList(modules)
 
-        
-    ### Public methods ###      
+    
+    ######################
+    ### Public methods ###
+    ######################      
 
-    def fit(
-        self, 
-        train_args: TrainingArguments
-    ) -> Dict[str, list[float]]:
+    def fit(self, train_args: TrainingArguments) -> Dict[str, list[float]]:
         """
         Method to train the model
         
@@ -44,78 +46,43 @@ class Sequential(Architecture):
         - Dict[str, list[float]]: History of the training with losses and metrics
         """
         
-        # Extract data from train_args
-        train_data = train_args.train_data.input
-        y_train = train_args.train_data.target
-        valid_data = train_args.valid_data.input if train_args.valid_data else None
-        y_valid = train_args.valid_data.target if train_args.valid_data else None
-
-        # Extract and validate input data (validation already done in TrainingArguments)
-        train_input_names = list(train_data.keys())
-        train_inputs = tuple(train_data.values())
-        
-        # Validate input consistency
-        num_samples = self._validate_input_consistency(*train_inputs)
-        if y_train.shape[0] != num_samples:
-            raise ValueError(f"Target tensor has {y_train.shape[0]} samples, but input tensors have {num_samples} samples")
-        
-        # Process validation data
-        valid_inputs: Optional[Tuple[Tensor, ...]] = None
-        if valid_data is not None:
-            valid_inputs = tuple(valid_data[name] for name in train_input_names)
-            valid_num_samples = self._validate_input_consistency(*valid_inputs)
-            if y_valid is not None and y_valid.shape[0] != valid_num_samples:
-                raise ValueError(f"Validation target has {y_valid.shape[0]} samples, but inputs have {valid_num_samples} samples")
-        
         # Initialize training state
-        self._init_training_state(train_args, train_inputs, train_input_names)
-        
-        # Compute number of steps
-        n_training_steps = max(1, math.ceil(train_inputs[0].shape[0] / train_args.train_batch_size))
-        n_valid_steps = max(1, math.ceil(valid_inputs[0].shape[0] / train_args.eval_batch_size)) if valid_inputs else 0
+        self._init_training_state(train_args)
         
         # Main training loop
         while self.epoch < train_args.num_epochs and not self.stop_training:
-            # Prepare epoch data (shuffle if needed)
-            train_inputs_epoch, y_train_epoch = self._prepare_epoch_data(
-                train_inputs, y_train, train_args.shuffle
-            )
+            # Shuffle the training data at the beginning of each epoch if shuffle is enabled
+            if train_args.shuffle:
+                train_args.data_loader.shuffle(Split.TRAIN)
             
             # Training phase
-            self._run_training_epoch(
-                train_inputs_epoch, y_train_epoch, train_input_names,
-                train_args, n_training_steps
-            )
+            train_loss_aux = self._run_training_epoch(train_args)
             
             # Validation phase
-            if valid_inputs is not None and y_valid is not None:
-                self._run_validation_epoch(
-                    valid_inputs, y_valid, train_input_names,
-                    train_args, n_valid_steps
-                )
+            val_loss_aux = self._run_validation_epoch(train_args)
             
             # End of epoch
-            self._end_epoch(train_args, valid_inputs is not None)
+            self._end_epoch(
+                train_args = train_args,
+                train_loss_aux = train_loss_aux,
+                val_loss_aux = val_loss_aux
+            )
         
         # Return training history
         return self.history
     
 
-    ### Private training methods ###
+    ##################################
+    ### Protected training methods ###
+    ##################################
     
-    def _init_training_state(
-        self,
-        train_args: TrainingArguments,
-        train_inputs: Tuple[Tensor, ...],
-        train_input_names: list[str]
-    ) -> None:
+    def _init_training_state(self, train_args: TrainingArguments) -> None:
         """
         Initialize training state: history, control variables, lazy init, optimizer
         
         Parameters:
         - train_args (TrainingArguments): Training configuration
-        - train_inputs (Tuple[Tensor, ...]): Training input tensors
-        - train_input_names (list[str]): Names of training inputs
+        - train_input_names (Iterable[str]): Names of training inputs
         """
         
         # Initialize history and control variables
@@ -130,9 +97,13 @@ class Sequential(Architecture):
                 # Set model to evaluation mode
                 self.eval()
 
-                # Perform a forward pass with a small batch to initialize parameters
+                # Retrieve a small sample from the data loader for initialization
+                train_inputs = train_args.data_loader.train_data.input_tuple
+                train_input_names = train_args.data_loader.train_data.input_keys
+
+                # Determine sample size for lazy initialization (use batch size or total samples if smaller)
                 sample_size = min(train_args.train_batch_size, train_inputs[0].shape[0])
-                sample_inputs = self._slice_inputs(0, sample_size, *train_inputs)
+                sample_inputs = tuple(tensor[0:sample_size] for tensor in train_inputs)
                 forward_kwargs = dict(zip(train_input_names, sample_inputs))
                 
                 # Perform forward pass
@@ -142,97 +113,48 @@ class Sequential(Architecture):
         train_args.optimizer.set_parameters(self.parameters)
     
     
-    def _prepare_epoch_data(
-        self,
-        train_inputs: Tuple[Tensor, ...],
-        y_train: Tensor,
-        shuffle: bool
-    ) -> Tuple[Tuple[Tensor, ...], Tensor]:
-        """
-        Prepare data for the current epoch (optionally shuffle)
-        
-        Parameters:
-        - train_inputs (Tuple[Tensor, ...]): Training input tensors
-        - y_train (Tensor): Target tensor
-        - shuffle (bool): Whether to shuffle the data
-        
-        Returns:
-        - Tuple of shuffled/original inputs and targets
-        """
-        
-        # Shuffle data if required
-        if shuffle:
-            # Shuffle the data
-            shuffled_data, _ = shuffle_data((*train_inputs, y_train))
-            
-            # Cast since we know shuffle_data returns a tuple when given a tuple
-            assert isinstance(shuffled_data, tuple), "shuffle_data should return a tuple"
-
-            # Extract shuffled inputs and targets
-            inputs_shuffled: Tuple[Tensor, ...] = shuffled_data[:-1] 
-            y_shuffled: Tensor = shuffled_data[-1]
-
-            # Return shuffled inputs and targets
-            return inputs_shuffled, y_shuffled
-        
-        # Return original data if no shuffling
-        return train_inputs, y_train
-    
-    
-    def _run_training_epoch(
-        self,
-        train_inputs: Tuple[Tensor, ...],
-        y_train: Tensor,
-        input_names: list[str],
-        train_args: TrainingArguments,
-        n_steps: int
-    ) -> None:
+    def _run_training_epoch(self, train_args: TrainingArguments) -> Dict[str, float]:
         """
         Run a single training epoch
         
         Parameters:
-        - train_inputs (Tuple[Tensor, ...]): Training input tensors
-        - y_train (Tensor): Target tensor
-        - input_names (list[str]): Names of input tensors
         - train_args (TrainingArguments): Training configuration
         - n_steps (int): Number of training steps
+        
+        Returns:
+        - Dict[str, float]: Mean auxiliary loss values for the epoch
         """
         
         # Set model to training mode
         self.train()
         
+        # Get input names from data loader
+        input_names = list(train_args.data_loader.train_data.input.keys())
+        
         # Initialize epoch tracking variables
         elapsed_time = 0.0
         epoch_loss = 0.0
         epoch_metrics = {metric.__name__: 0.0 for metric in train_args.metrics}
+        epoch_loss_aux: Dict[str, float] = {}
+
+        # Get the number of training steps for progress tracking
+        num_steps = train_args.data_loader.num_batches(Split.TRAIN, train_args.train_batch_size)
         
-        # Iterate over training steps
-        for step in range(n_steps):
+        # Iterate over training batches from the data loader
+        for step, (x_batch, y_batch) in enumerate(train_args.data_loader.get_batch(Split.TRAIN, train_args.train_batch_size)):
             # Start timing for the step
             start_time = time.time()
             
-            # Get batch of training data and targets
-            x_batch = self._slice_inputs(
-                step * train_args.train_batch_size, 
-                (step + 1) * train_args.train_batch_size, 
-                *train_inputs
-            )
-            # Slice y_batch directly on .data to avoid computational graph overhead
-            y_batch = Tensor(
-                y_train.data[step * train_args.train_batch_size:(step + 1) * train_args.train_batch_size],
-                requires_grad=False
-            )
-            
             # Forward pass
             batch_kwargs = dict(zip(input_names, x_batch))
-            output = self.forward(**batch_kwargs)
-            
-            # Compute loss and backpropagate gradients
-            loss = train_args.loss_fn(y_batch, output)
-            (loss / train_args.gradient_accumulation_steps).backward()
+            result = self.forward(**batch_kwargs)
+
+            # Compute loss and backpropagate gradients on primary loss tensor only
+            loss = self._normalize_loss_output(train_args.loss_fn(y_batch, result.output, **result.aux))
+            (loss.output / train_args.gradient_accumulation_steps).backward()
             
             # Update parameters if needed
-            if (step + 1) % train_args.gradient_accumulation_steps == 0 or step == n_steps - 1:
+            if (step + 1) % train_args.gradient_accumulation_steps == 0 or step == num_steps - 1:
                 # Update parameters
                 train_args.optimizer.update()
 
@@ -240,42 +162,43 @@ class Sequential(Architecture):
                 train_args.optimizer.zero_grad()
             
             # Accumulate metrics
-            epoch_loss += loss.detach().to_numpy().item()
+            epoch_loss += loss.output.detach().to_numpy().item() 
+            self._accumulate_aux_losses(epoch_loss_aux, loss.aux)
             for metric in train_args.metrics:
-                epoch_metrics[metric.__name__] += metric(y_batch.detach(), output.detach()).detach().to_numpy().item()
+                epoch_metrics[metric.__name__] += metric(y_batch.detach(), result.output.detach()).detach().to_numpy().item()
             
             # Progress display
             elapsed_time += time.time() - start_time
             ms_per_step = elapsed_time / (step + 1) * 1000
             self._progress_printer.print_progress(
-                f"\rEpoch {self.epoch + 1}/{train_args.num_epochs} - Training ({round((step + 1) / n_steps * 100, 2)}%) | "
-                f"{self.tensors_in_memory} tensors | {round(ms_per_step, 2)} ms/step --> loss: {loss.to_numpy():.5g}"
+                f"\rEpoch {self.epoch + 1}/{train_args.num_epochs} - Training ({round((step + 1) / num_steps * 100, 2)}%) | "
+                f"{self.tensors_in_memory} tensors | {round(ms_per_step, 2)} ms/step --> {self._format_loss_progress(loss, 'loss')}"
             )
         
         # Store epoch results
-        self.history["loss"].append(epoch_loss / n_steps)
+        self.history["loss"].append(epoch_loss / num_steps)
         for metric in train_args.metrics:
-            self.history[metric.__name__].append(epoch_metrics[metric.__name__] / n_steps)
+            self.history[metric.__name__].append(epoch_metrics[metric.__name__] / num_steps)
+        
+        # Return mean auxiliary loss values for epoch-end summary
+        return {key: value / num_steps for key, value in epoch_loss_aux.items()}
     
     
-    def _run_validation_epoch(
-        self,
-        valid_inputs: Tuple[Tensor, ...],
-        y_valid: Tensor,
-        input_names: list[str],
-        train_args: TrainingArguments,
-        n_steps: int
-    ) -> None:
+    def _run_validation_epoch(self, train_args: TrainingArguments) -> Optional[Dict[str, float]]:
         """
         Run validation for the current epoch
         
         Parameters:
-        - valid_inputs (Tuple[Tensor, ...]): Validation input tensors
-        - y_valid (Tensor): Validation target tensor
-        - input_names (list[str]): Names of input tensors
         - train_args (TrainingArguments): Training configuration
         - n_steps (int): Number of validation steps
+        
+        Returns:
+        - Optional[Dict[str, float]]: Mean auxiliary loss values for the validation epoch, or None if no validation data is provided
         """
+
+        # If no validation data is provided, return None
+        if train_args.data_loader.valid_data is None:
+            return None
         
         # Disable gradient computation during validation
         with no_grad():
@@ -284,72 +207,75 @@ class Sequential(Architecture):
             
             # Ensure eval_batch_size is set
             assert train_args.eval_batch_size is not None, "eval_batch_size must be set for validation"
-            eval_batch_size = train_args.eval_batch_size
+            
+            # Get input names from data loader
+            input_names = list(train_args.data_loader.train_data.input.keys())
             
             # Initialize epoch tracking variables
             elapsed_time = 0.0
             epoch_loss = 0.0
             epoch_metrics = {metric.__name__: 0.0 for metric in train_args.metrics}
+            epoch_loss_aux: Dict[str, float] = {}
             
             # Move to a new line for validation progress
             print()
+
+            # Get the number of validation steps for progress tracking
+            num_steps = train_args.data_loader.num_batches(Split.VALID, train_args.eval_batch_size)
             
-            # Iterate over validation steps
-            for step in range(n_steps):
+            # Iterate over validation batches from the data loader
+            for step, (x_batch, y_batch) in enumerate(train_args.data_loader.get_batch(Split.VALID, train_args.eval_batch_size)):
                 # Start timing for the step
                 start_time = time.time()
                 
-                # Get batch of validation data and targets
-                x_batch = self._slice_inputs(
-                    step * eval_batch_size,
-                    (step + 1) * eval_batch_size,
-                    *valid_inputs
-                )
-                
-                # Slice y_batch directly on .data to avoid computational graph overhead
-                y_batch = Tensor(
-                    y_valid.data[step * eval_batch_size:(step + 1) * eval_batch_size],
-                    requires_grad=False
-                )
-                
                 # Forward pass
                 batch_kwargs = dict(zip(input_names, x_batch))
-                output = self.forward(**batch_kwargs)
+                result = self.forward(**batch_kwargs)
                 
                 # Compute loss for this batch
-                batch_loss = train_args.loss_fn(y_batch, output).detach().to_numpy().item()
+                batch_loss_out = self._normalize_loss_output(train_args.loss_fn(y_batch, result.output, **result.aux))
+                batch_loss = batch_loss_out.output.detach().to_numpy().item()
                 
                 # Accumulate metrics
                 epoch_loss += batch_loss
+                self._accumulate_aux_losses(epoch_loss_aux, batch_loss_out.aux)
                 for metric in train_args.metrics:
-                    epoch_metrics[metric.__name__] += metric(y_batch.detach(), output.detach()).detach().to_numpy().item()
+                    epoch_metrics[metric.__name__] += metric(y_batch.detach(), result.output.detach()).detach().to_numpy().item()
                 
                 # Progress display for validation
                 elapsed_time += time.time() - start_time
                 ms_per_step = elapsed_time / (step + 1) * 1000
                 self._progress_printer.print_progress(
-                    f"\r    Epoch {self.epoch + 1}/{train_args.num_epochs} - Validation ({round((step + 1) / n_steps * 100, 2)}%) | "
-                    f"{round(ms_per_step, 2)} ms/step --> val_loss: {batch_loss:.5g}"
+                    f"\r    Epoch {self.epoch + 1}/{train_args.num_epochs} - Validation ({round((step + 1) / num_steps * 100, 2)}%) | "
+                    f"{round(ms_per_step, 2)} ms/step --> {self._format_loss_progress(batch_loss_out, 'val_loss')}"
                 )
             
             # Store validation results
-            self.history["val_loss"].append(epoch_loss / n_steps)
+            self.history["val_loss"].append(epoch_loss / num_steps)
             for metric in train_args.metrics:
-                self.history[f"val_{metric.__name__}"].append(epoch_metrics[metric.__name__] / n_steps)
-    
-    
+                self.history[f"val_{metric.__name__}"].append(epoch_metrics[metric.__name__] / num_steps)
+        
+        # Return mean auxiliary loss values for epoch-end summary
+        return {key: value / num_steps for key, value in epoch_loss_aux.items()}
+
+
     def _end_epoch(
         self, 
         train_args: TrainingArguments, 
-        has_validation: bool
+        train_loss_aux: Optional[Dict[str, float]] = None,
+        val_loss_aux: Optional[Dict[str, float]] = None
     ) -> None:
         """
         End of epoch: print progress, execute callbacks, clear cache
         
         Parameters:
         - train_args (TrainingArguments): Training configuration
-        - has_validation (bool): Whether validation was performed
+        - train_loss_aux (Optional[Dict[str, float]]): Mean auxiliary training losses for current epoch
+        - val_loss_aux (Optional[Dict[str, float]]): Mean auxiliary validation losses for current epoch
         """
+
+        # Check if validation was performed
+        has_validation = train_args.data_loader.valid_data is not None
         
         # If validation was performed, move cursor up one line and clear it
         if has_validation:
@@ -357,16 +283,18 @@ class Sequential(Architecture):
         
         # Build progress message
         msg = f"\rEpoch {self.epoch + 1}/{train_args.num_epochs} --> loss: {self.history['loss'][-1]:.5g}"
+        msg += self._format_epoch_aux(train_loss_aux)
         
         # Add metrics to message
         for metric in train_args.metrics:
-            msg += f" - {metric.__name__.replace('_', ' ')}: {self.history[metric.__name__][-1]:.5g}"
+            msg += f" - {metric.__name__}: {self.history[metric.__name__][-1]:.5g}"
         
         # Add validation results if available
         if has_validation:
             msg += f" | val_loss: {self.history['val_loss'][-1]:.5g}"
+            msg += self._format_epoch_aux(val_loss_aux, prefix="val_")
             for metric in train_args.metrics:
-                msg += f" - val_{metric.__name__.replace('_', ' ')}: {self.history[f'val_{metric.__name__}'][-1]:.5g}"
+                msg += f" - val_{metric.__name__}: {self.history[f'val_{metric.__name__}'][-1]:.5g}"
         
         # Print final epoch results
         self._progress_printer.print_final(msg.ljust(150))
@@ -376,11 +304,138 @@ class Sequential(Architecture):
         for callback in train_args.callbacks:
             callback(self)
         
+        # Notify loss function of epoch completion (e.g., for KL annealing in VAE)
+        train_args.loss_fn.step_epoch()
+        
         # Clear cache
         self.clear_cache()
 
+    
+    #########################
+    ### Protected helpers ###
+    #########################
 
-    ### Protected methods ###
+    def _normalize_loss_output(self, loss_out: Union[Tensor, ModuleOutput]) -> ModuleOutput:
+        """
+        Normalize loss output to ModuleOutput for backward/progress compatibility.
+        
+        Parameters:
+        - loss_out (Union[Tensor, ModuleOutput]): Loss returned by loss function.
+        
+        Returns:
+        - ModuleOutput: Normalized loss container.
+        """
+        
+        # If the loss function already returns a ModuleOutput, use it directly
+        if isinstance(loss_out, ModuleOutput):
+            return loss_out
+        
+        # If the loss function returns a Tensor, wrap it in a ModuleOutput
+        if isinstance(loss_out, Tensor):
+            return ModuleOutput(output=loss_out)
+        
+        # If the loss function returns something else, raise an error
+        raise TypeError(f"Loss function must return Tensor or ModuleOutput, got {type(loss_out).__name__}")
+
+
+    def _format_loss_progress(self, loss_out: ModuleOutput, label: str) -> str:
+        """
+        Build progress string for loss output, including auxiliary tensors if present.
+        
+        Parameters:
+        - loss_out (ModuleOutput): Loss container.
+        - label (str): Label for primary loss value (e.g., 'loss', 'val_loss').
+        
+        Returns:
+        - str: Formatted progress snippet.
+        """
+        
+        # Start with primary loss value
+        message = f"{label}: {self._format_progress_tensor(loss_out.output)}"
+        
+        # Append auxiliary loss terms (if any) for progress visibility
+        if loss_out.has_aux:
+            message += " - " + " - ".join(
+                f"{key}: {self._format_progress_tensor(tensor)}"
+                for key, tensor in loss_out.aux.items()
+            )
+        
+        # Return the formatted message
+        return message
+    
+    
+    def _accumulate_aux_losses(self, accum: Dict[str, float], aux_losses: Dict[str, Tensor]) -> None:
+        """
+        Accumulate auxiliary loss terms converted to scalars.
+        
+        Parameters:
+        - accum (Dict[str, float]): Running accumulator for auxiliary loss terms.
+        - aux_losses (Dict[str, Tensor]): Auxiliary loss tensors from ModuleOutput.
+        """
+        
+        # Convert each auxiliary loss tensor to a scalar and accumulate
+        for key, tensor in aux_losses.items():
+            accum[key] = accum.get(key, 0.0) + self._progress_scalar_value(tensor)
+
+
+    def _format_epoch_aux(self, aux_losses: Optional[Dict[str, float]], prefix: str = "") -> str:
+        """
+        Format mean auxiliary loss terms for epoch-end summary.
+        
+        Parameters:
+        - aux_losses (Optional[Dict[str, float]]): Auxiliary losses averaged over the epoch.
+        - prefix (str): Optional key prefix (e.g., 'val_').
+        
+        Returns:
+        - str: Formatted suffix to append to epoch summary message.
+        """
+        
+        # If no auxiliary losses, return empty string
+        if not aux_losses:
+            return ""
+        
+        # Format each auxiliary loss term with its prefix and value
+        return "".join(
+            f" - {prefix}{key}: {value:.5g}"
+            for key, value in aux_losses.items()
+        )
+
+
+    @staticmethod
+    def _format_progress_tensor(tensor: Tensor) -> str:
+        """
+        Format tensor value for progress display.
+        Scalars are printed directly; non-scalars are summarized by mean.
+        """
+        
+        # Convert tensor to numpy for formatting
+        value = tensor.detach().to_numpy()
+        
+        # If it's a scalar, format directly; if not, format the mean value
+        if value.size == 1:
+            return f"{value.item():.5g}"
+        
+        # For non-scalar tensors, return the mean value for progress display
+        return f"{value.mean():.5g} (mean)"
+
+
+    @staticmethod
+    def _progress_scalar_value(tensor: Tensor) -> float:
+        """
+        Convert tensor to scalar for aggregation.
+        If non-scalar, the mean value is used.
+        """
+        
+        # Convert tensor to numpy for aggregation
+        value = tensor.detach().to_numpy()
+        
+        # If it's a scalar, return its value; if not, return the mean value for aggregation
+        if value.size == 1:
+            return float(value.item())
+        
+        # For non-scalar tensors, return the mean value for aggregation
+        return float(value.mean())
+
 
     def _forward(
         self, 
@@ -389,7 +444,7 @@ class Sequential(Architecture):
         tensors_to_batch: Optional[list[str]] = None,
         verbose: bool = False, 
         **kwargs
-    ) -> Tensor:
+    ) -> Union[Tensor, 'ModuleOutput']:
         """
         Forward pass of the model
         
@@ -400,7 +455,7 @@ class Sequential(Architecture):
         - **kwargs: Named input tensors and additional parameters
         
         Returns:
-        - Tensor: Output of the neural network
+        - Union[Tensor, ModuleOutput]: Output of the neural network
         
         Note:
         - All arguments must be passed as keyword arguments (no positional arguments allowed)
@@ -437,7 +492,7 @@ class Sequential(Architecture):
         
         # Compute batching
         num_steps = max(1, math.ceil(total_samples / batch_size)) if batch_size else 1
-        outputs = []
+        outputs: List[ModuleOutput] = []
         elapsed_time = 0.0
         
         # Process in batches
@@ -480,8 +535,18 @@ class Sequential(Architecture):
                 # Print the progress
                 print(f"\rProcessing batch {step + 1}/{num_steps} - {round(ms_per_step, 2)} ms/step", end="")
         
-        # Concatenate outputs and return the result
-        return concat(outputs, axis=0)
+        # After processing all batches, concatenate ModuleOutput results
+        # Concatenate the primary tensors
+        concatenated_x = concat([r.output for r in outputs], axis=0)
+        
+        # Concatenate auxiliary tensors (if any)
+        concatenated_aux = {}
+        if outputs[0].has_aux:
+            for key in outputs[0].aux:
+                concatenated_aux[key] = concat([r.aux[key] for r in outputs], axis=0)
+        
+        # Return a ModuleOutput with concatenated results
+        return ModuleOutput(output=concatenated_x, **concatenated_aux)
     
     
     def _lazy_init(self, *args, **kwargs) -> None:
@@ -531,25 +596,3 @@ class Sequential(Architecture):
         
         # Return the number of samples (batch size)
         return num_samples
-    
-    
-    def _slice_inputs(self, start_idx: int, end_idx: int, *inputs) -> tuple:
-        """
-        Slice all input tensors with the same indices.
-        Creates new tensors without computational graph to avoid memory overhead.
-        
-        Parameters:
-        - start_idx (int): Start index for slicing
-        - end_idx (int): End index for slicing
-        - *inputs: Variable number of input tensors
-        
-        Returns:
-        - tuple: Sliced input tensors (without gradient tracking)
-        """
-        
-        # Slice directly on .data to avoid __getitem__ overhead
-        # Create new tensors without requires_grad to avoid building computational graph
-        return tuple(
-            Tensor(tensor.data[start_idx:end_idx], requires_grad=False) 
-            for tensor in inputs
-        )

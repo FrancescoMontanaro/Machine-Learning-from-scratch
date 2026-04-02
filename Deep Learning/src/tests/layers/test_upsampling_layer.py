@@ -38,7 +38,7 @@ class TestUpSampling2DLayer(Test):
         """
         
         # Forward pass
-        y_custom = self.layer_custom(self.x_tensor)
+        y_custom = self.layer_custom(self.x_tensor).output
         y_torch = self.layer_torch(self.x_torch.permute(0, 3, 1, 2)).permute(0, 2, 3, 1)
 
         # Compare the forward pass results
@@ -58,7 +58,7 @@ class TestUpSampling2DLayer(Test):
         """
         
         # Forward pass
-        y_custom = self.layer_custom(self.x_tensor)
+        y_custom = self.layer_custom(self.x_tensor).output
         y_torch = self.layer_torch(self.x_torch.permute(0, 3, 1, 2)).permute(0, 2, 3, 1)
         
         # Define a simple loss (sum of all elements) and perform the backward pass
