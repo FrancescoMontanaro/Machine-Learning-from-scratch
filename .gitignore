@@ -6,3 +6,4 @@ venv/
 *.npz
 *.pkl
 .github/copilot-instructions.md
+CLAUDE.md
